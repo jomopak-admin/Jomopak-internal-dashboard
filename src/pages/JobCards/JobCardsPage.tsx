@@ -1,0 +1,378 @@
+import { useEffect, useState } from 'react';
+import { FlagBadge, StatusBadge } from '../../components/Badge';
+import { EmptyState } from '../../components/EmptyState';
+import { SectionTitle } from '../../components/SectionTitle';
+import { JobDetailPanel } from './JobDetailPanel';
+import {
+  Client,
+  DispatchRecord,
+  FinishedGoodsStock,
+  JobCard,
+  JobFilters,
+  JobFormState,
+  MaterialReceipt,
+  PaperLog,
+  PricingTier,
+  Product,
+  ProductionLogEntry,
+  WasteEntry,
+} from '../../types';
+import { JOB_STATUSES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
+
+interface JobCardsPageProps {
+  monthOptions: string[];
+  clients: Client[];
+  products: Product[];
+  pricingTiers: PricingTier[];
+  finishedGoodsStock: FinishedGoodsStock[];
+  jobForm: JobFormState;
+  setJobForm: (value: JobFormState) => void;
+  jobEditingId: string | null;
+  jobMessage: string;
+  onSave: () => void;
+  onReset: () => void;
+  jobFilters: JobFilters;
+  setJobFilters: (value: JobFilters) => void;
+  filteredJobs: JobCard[];
+  selectedJobId: string | null;
+  onSelectJob: (jobId: string) => void;
+  selectedJobMaterials: MaterialReceipt[];
+  selectedJobProductionLogs: ProductionLogEntry[];
+  selectedJobWasteEntries: WasteEntry[];
+  selectedJobPaperLogs: PaperLog[];
+  selectedJobDispatchRecords: DispatchRecord[];
+  onEdit: (job: JobCard) => void;
+  onDuplicate: (job: JobCard) => void;
+  onQuickAddProduction: (job: JobCard) => void;
+  onQuickAddWaste: (job: JobCard) => void;
+  onQuickAddPaper: (job: JobCard) => void;
+  onQuickAddDispatch: (job: JobCard) => void;
+}
+
+export function JobCardsPage(props: JobCardsPageProps) {
+  const {
+    monthOptions,
+    clients,
+    products,
+    pricingTiers,
+    finishedGoodsStock,
+    jobForm,
+    setJobForm,
+    jobEditingId,
+    jobMessage,
+    onSave,
+    onReset,
+    jobFilters,
+    setJobFilters,
+    filteredJobs,
+    selectedJobId,
+    onSelectJob,
+    selectedJobMaterials,
+    selectedJobProductionLogs,
+    selectedJobWasteEntries,
+    selectedJobPaperLogs,
+    selectedJobDispatchRecords,
+    onEdit,
+    onDuplicate,
+    onQuickAddProduction,
+    onQuickAddWaste,
+    onQuickAddPaper,
+    onQuickAddDispatch,
+  } = props;
+  const [mode, setMode] = useState<'list' | 'form'>('list');
+
+  const selectedJob = filteredJobs.find((job) => job.id === selectedJobId) ?? null;
+
+  useEffect(() => {
+    if (jobEditingId) {
+      setMode('form');
+    }
+  }, [jobEditingId]);
+
+  function handleStartCreate() {
+    onReset();
+    setMode('form');
+  }
+
+  function handleStartEdit(job: JobCard) {
+    onEdit(job);
+    setMode('form');
+  }
+
+  function handleBackToList() {
+    onReset();
+    setMode('list');
+  }
+
+  return (
+    <>
+      <SectionTitle
+        title="Job Cards"
+        subtitle="Create, update, duplicate, and search production jobs."
+        action={
+          mode === 'list' ? (
+            <button className="secondary-button" onClick={handleStartCreate}>Add New Job Card</button>
+          ) : (
+            <button className="ghost-button" onClick={handleBackToList}>Back to Job Cards</button>
+          )
+        }
+      />
+
+      {mode === 'form' ? (
+        <section className="card form-card">
+          <div className="card-header">
+            <div>
+              <h3>{jobEditingId ? 'Edit job card' : 'New job card'}</h3>
+              <p className="muted">Job numbers are generated automatically when the record is saved.</p>
+            </div>
+          </div>
+
+          {jobMessage ? <div className="message-strip">{jobMessage}</div> : null}
+
+          <div className="form-grid">
+            <label>
+              Job date
+              <input type="date" value={jobForm.jobDate} onChange={(event) => setJobForm({ ...jobForm, jobDate: event.target.value })} />
+            </label>
+            <label>
+              Due date
+              <input type="date" value={jobForm.dueDate} onChange={(event) => setJobForm({ ...jobForm, dueDate: event.target.value })} />
+            </label>
+            <label>
+              Client
+              <select value={jobForm.clientId} onChange={(event) => setJobForm({ ...jobForm, clientId: event.target.value })}>
+                <option value="">Select client</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Pricing tier
+              <select value={jobForm.pricingTierId} onChange={(event) => setJobForm({ ...jobForm, pricingTierId: event.target.value })}>
+                <option value="">Select pricing tier</option>
+                {pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Customer name
+              <input value={jobForm.customerName} onChange={(event) => setJobForm({ ...jobForm, customerName: event.target.value })} />
+            </label>
+            <label>
+              Customer reference
+              <input value={jobForm.customerReference} onChange={(event) => setJobForm({ ...jobForm, customerReference: event.target.value })} />
+            </label>
+            <label>
+              Product
+              <select value={jobForm.productId} onChange={(event) => setJobForm({ ...jobForm, productId: event.target.value })}>
+                <option value="">Select product</option>
+                {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Product / bag type
+              <input value={jobForm.productName} onChange={(event) => setJobForm({ ...jobForm, productName: event.target.value })} />
+            </label>
+            <label>
+              Size / specification
+              <input value={jobForm.sizeSpec} onChange={(event) => setJobForm({ ...jobForm, sizeSpec: event.target.value })} />
+            </label>
+            <label className="full-span">
+              Product description
+              <textarea value={jobForm.description} onChange={(event) => setJobForm({ ...jobForm, description: event.target.value })} />
+            </label>
+            <label>
+              Paper type
+              <input value={jobForm.paperType} onChange={(event) => setJobForm({ ...jobForm, paperType: event.target.value })} />
+            </label>
+            <label>
+              GSM
+              <input value={jobForm.gsm} onChange={(event) => setJobForm({ ...jobForm, gsm: event.target.value })} />
+            </label>
+            <label>
+              Quantity planned
+              <input type="number" min="0" value={jobForm.quantityPlanned} onChange={(event) => setJobForm({ ...jobForm, quantityPlanned: event.target.value })} />
+            </label>
+            <label>
+              Quantity completed
+              <input type="number" min="0" value={jobForm.quantityCompleted} onChange={(event) => setJobForm({ ...jobForm, quantityCompleted: event.target.value })} />
+            </label>
+            <label>
+              Status
+              <select value={jobForm.status} onChange={(event) => setJobForm({ ...jobForm, status: event.target.value as JobCard['status'] })}>
+                {JOB_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.reserveFromStock} onChange={(event) => setJobForm({ ...jobForm, reserveFromStock: event.target.checked })} />
+              Reserve from finished stock
+            </label>
+            <label>
+              Stock batch
+              <select value={jobForm.reservedFinishedGoodsStockId} onChange={(event) => setJobForm({ ...jobForm, reservedFinishedGoodsStockId: event.target.value })} disabled={!jobForm.reserveFromStock}>
+                <option value="">Select stock batch</option>
+                {finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} · {item.productName} ({formatNumber(item.quantityAvailable)} {item.quantityUnit} available)</option>)}
+              </select>
+            </label>
+            <label>
+              Reserved quantity
+              <input type="number" min="0" value={jobForm.reservedQuantity} onChange={(event) => setJobForm({ ...jobForm, reservedQuantity: event.target.value })} disabled={!jobForm.reserveFromStock} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.artworkReceived} onChange={(event) => setJobForm({ ...jobForm, artworkReceived: event.target.checked })} />
+              Artwork received
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.proofSent} onChange={(event) => setJobForm({ ...jobForm, proofSent: event.target.checked })} />
+              Proof sent
+            </label>
+            <label>
+              Approval status
+              <select value={jobForm.approvalStatus} onChange={(event) => setJobForm({ ...jobForm, approvalStatus: event.target.value as JobFormState['approvalStatus'] })}>
+                <option>Not Sent</option>
+                <option>Awaiting Approval</option>
+                <option>Approved</option>
+                <option>Changes Requested</option>
+              </select>
+            </label>
+            <label>
+              Approval date
+              <input type="date" value={jobForm.approvalDate} onChange={(event) => setJobForm({ ...jobForm, approvalDate: event.target.value })} />
+            </label>
+            <label className="full-span">
+              Changes requested
+              <textarea value={jobForm.changesRequested} onChange={(event) => setJobForm({ ...jobForm, changesRequested: event.target.value })} />
+            </label>
+            <label className="full-span">
+              Artwork / proof notes
+              <textarea value={jobForm.artworkNotes} onChange={(event) => setJobForm({ ...jobForm, artworkNotes: event.target.value })} />
+            </label>
+            <label>
+              Dispatch status
+              <input value={jobForm.dispatchStatus} onChange={(event) => setJobForm({ ...jobForm, dispatchStatus: event.target.value })} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.fscRelated} onChange={(event) => setJobForm({ ...jobForm, fscRelated: event.target.checked })} />
+              FSC-related
+            </label>
+            <label className="full-span">
+              Quality / issue notes
+              <textarea value={jobForm.qualityNotes} onChange={(event) => setJobForm({ ...jobForm, qualityNotes: event.target.value })} />
+            </label>
+            <label className="full-span">
+              Notes
+              <textarea value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} />
+            </label>
+          </div>
+
+          <div className="button-row">
+            <button className="primary-button" onClick={onSave}>{jobEditingId ? 'Save Changes' : 'Save Job Card'}</button>
+            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
+          </div>
+        </section>
+      ) : (
+        <>
+        <section className="card">
+          <SectionTitle title="Saved jobs" subtitle={`${filteredJobs.length} record(s) shown`} />
+
+          <div className="filters-grid">
+            <label>
+              Search
+              <input placeholder="Job, customer, product" value={jobFilters.search} onChange={(event) => setJobFilters({ ...jobFilters, search: event.target.value })} />
+            </label>
+            <label>
+              Month
+              <select value={jobFilters.month} onChange={(event) => setJobFilters({ ...jobFilters, month: event.target.value })}>
+                <option value="">All months</option>
+                {monthOptions.map((option) => <option key={option} value={option}>{getMonthLabel(option)}</option>)}
+              </select>
+            </label>
+            <label>
+              Status
+              <select value={jobFilters.status} onChange={(event) => setJobFilters({ ...jobFilters, status: event.target.value })}>
+                <option value="">All statuses</option>
+                {JOB_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </label>
+            <label>
+              Customer
+              <input value={jobFilters.customer} onChange={(event) => setJobFilters({ ...jobFilters, customer: event.target.value })} />
+            </label>
+            <label>
+              FSC-related
+              <select value={jobFilters.fsc} onChange={(event) => setJobFilters({ ...jobFilters, fsc: event.target.value })}>
+                <option value="all">All</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+          </div>
+
+          {filteredJobs.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Stock</th>
+                    <th>Proofing</th>
+                    <th>Dispatch</th>
+                    <th>Planned</th>
+                    <th>Completed</th>
+                    <th>FSC</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredJobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>
+                        <strong>{job.jobNumber}</strong>
+                        <div className="table-subtext">{job.productName}</div>
+                      </td>
+                      <td>{formatDate(job.jobDate)}</td>
+                      <td>{job.customerName}</td>
+                      <td><StatusBadge status={job.status} /></td>
+                      <td>{job.stockReservationStatus}</td>
+                      <td>{job.approvalStatus}</td>
+                      <td>{job.dispatchStatus || 'Not set'}</td>
+                      <td>{formatNumber(job.quantityPlanned)}</td>
+                      <td>{formatNumber(job.quantityCompleted)}</td>
+                      <td><FlagBadge value={job.fscRelated} /></td>
+                      <td>
+                        <div className="inline-actions">
+                          <button className="table-button" onClick={() => onSelectJob(job.id)}>Open</button>
+                          <button className="table-button" onClick={() => handleStartEdit(job)}>Edit</button>
+                          <button className="table-button" onClick={() => onDuplicate(job)}>Duplicate</button>
+                          <button className="table-button" onClick={() => onQuickAddWaste(job)}>Log waste</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="No jobs match the filters" body="Adjust the search or create a new job card." />
+          )}
+        </section>
+        {selectedJob ? (
+          <JobDetailPanel
+            job={selectedJob}
+            materials={selectedJobMaterials}
+            productionLogs={selectedJobProductionLogs}
+            wasteEntries={selectedJobWasteEntries}
+            paperLogs={selectedJobPaperLogs}
+            dispatchRecords={selectedJobDispatchRecords}
+            onQuickAddProduction={onQuickAddProduction}
+            onQuickAddWaste={onQuickAddWaste}
+            onQuickAddPaper={onQuickAddPaper}
+            onQuickAddDispatch={onQuickAddDispatch}
+          />
+        ) : null}
+        </>
+      )}
+    </>
+  );
+}
