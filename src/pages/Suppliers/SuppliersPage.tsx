@@ -14,6 +14,7 @@ interface SuppliersPageProps {
   setSupplierFilters: (value: SupplierFilters) => void;
   filteredSuppliers: Supplier[];
   onEdit: (supplier: Supplier) => void;
+  onDelete: () => void;
 }
 
 export function SuppliersPage({
@@ -27,6 +28,7 @@ export function SuppliersPage({
   setSupplierFilters,
   filteredSuppliers,
   onEdit,
+  onDelete,
 }: SuppliersPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -133,6 +135,7 @@ export function SuppliersPage({
 
           <div className="button-row">
             <button className="primary-button" onClick={onSave}>{supplierEditingId ? 'Save Changes' : 'Save Supplier'}</button>
+            {supplierEditingId ? <button className="ghost-button" onClick={onDelete}>Delete Supplier</button> : null}
             <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
           </div>
         </section>
@@ -167,7 +170,7 @@ export function SuppliersPage({
                       <td>{supplier.contacts.length ? `${supplier.contactPerson || supplier.contacts[0]?.fullName || 'Primary not set'} (+${supplier.contacts.length} contacts)` : supplier.contactPerson || supplier.phone || 'Not set'}</td>
                       <td>{supplier.email || 'Not set'}</td>
                       <td>{supplier.active ? 'Active' : 'Inactive'}</td>
-                      <td><button className="table-button" onClick={() => handleStartEdit(supplier)}>Edit</button></td>
+                      <td><button className="table-button" aria-label={`Edit ${supplier.name}`} onClick={() => handleStartEdit(supplier)}>✎</button></td>
                     </tr>
                   ))}
                 </tbody>

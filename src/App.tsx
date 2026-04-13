@@ -852,6 +852,38 @@ function App() {
     resetSupplierEditor();
   }
 
+  function handleDeleteSupplier() {
+    if (!supplierEditingId) {
+      return;
+    }
+
+    const supplier = data.suppliers.find((item) => item.id === supplierEditingId);
+    if (!supplier) {
+      return;
+    }
+
+    const isUsedInPaperRates = data.paperRates.some((rate) => rate.supplierId === supplier.id);
+    const isUsedInSpareParts = data.spareParts.some((part) => part.supplierId === supplier.id);
+    const isUsedInMaterialReceipts = data.materialReceipts.some((receipt) => receipt.supplierId === supplier.id);
+    const isUsedInProducts = data.products.some((product) => product.defaultSupplierId === supplier.id);
+
+    if (isUsedInPaperRates || isUsedInSpareParts || isUsedInMaterialReceipts || isUsedInProducts) {
+      setSupplierMessage('This supplier is linked to paper rates, materials, products, or spare parts and cannot be deleted. Mark it inactive or amend it instead.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete supplier ${supplier.name}? This action cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      suppliers: current.suppliers.filter((item) => item.id !== supplier.id),
+    }));
+    resetSupplierEditor();
+  }
+
   function handleSaveMachine() {
     if (!machineForm.name) {
       setMachineMessage('Machine name is required.');
@@ -2313,6 +2345,7 @@ function App() {
           supplierEditingId={supplierEditingId}
           supplierMessage={supplierMessage}
           onSave={handleSaveSupplier}
+          onDelete={handleDeleteSupplier}
           onReset={resetSupplierEditor}
           supplierFilters={supplierFilters}
           setSupplierFilters={setSupplierFilters}
