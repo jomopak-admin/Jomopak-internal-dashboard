@@ -20,5 +20,6 @@ export function buildSeedData(): AppData {
     wasteEntries: [],
     paperLogs: [],
     dispatchRecords: [],
+    stockChangeLogs: [],
   };
 }

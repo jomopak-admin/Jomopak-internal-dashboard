@@ -12,6 +12,7 @@ import {
   ProductionLogEntry,
   QuoteEstimate,
   SparePart,
+  StockChangeLog,
   Supplier,
   WasteEntry,
 } from '../types';
@@ -328,6 +329,24 @@ function normalizeDispatch(raw: any): DispatchRecord {
   };
 }
 
+function normalizeStockChangeLog(raw: any): StockChangeLog {
+  return {
+    id: raw.id ?? `stock-log-${Date.now()}`,
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+    finishedGoodsStockId: raw.finishedGoodsStockId ?? '',
+    stockNumber: raw.stockNumber ?? '',
+    productName: raw.productName ?? '',
+    action: raw.action ?? 'updated',
+    changedByUserId: raw.changedByUserId ?? '',
+    changedByName: raw.changedByName ?? '',
+    previousQuantityOnHand: Number(raw.previousQuantityOnHand ?? 0),
+    nextQuantityOnHand: Number(raw.nextQuantityOnHand ?? 0),
+    previousQuantityReserved: Number(raw.previousQuantityReserved ?? 0),
+    nextQuantityReserved: Number(raw.nextQuantityReserved ?? 0),
+    notes: raw.notes ?? '',
+  };
+}
+
 export function saveData(key: string, data: unknown): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
@@ -384,6 +403,7 @@ export function loadAppData(): AppData {
       wasteEntries: (parsed.wasteEntries ?? []).map(normalizeWaste),
       paperLogs: (parsed.paperLogs ?? []).map(normalizePaper),
       dispatchRecords: (parsed.dispatchRecords ?? []).map(normalizeDispatch),
+      stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
     };
   } catch {
     return buildSeedData();

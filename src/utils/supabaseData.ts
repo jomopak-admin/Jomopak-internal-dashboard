@@ -16,6 +16,7 @@ import {
   ProductionLogEntry,
   QuoteEstimate,
   SparePart,
+  StockChangeLog,
   Supplier,
   WasteEntry,
 } from '../types';
@@ -285,6 +286,24 @@ function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
   };
 }
 
+function mapStockChangeLog(row: any): StockChangeLog {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    finishedGoodsStockId: row.finished_goods_stock_id ?? '',
+    stockNumber: row.stock_number ?? '',
+    productName: row.product_name ?? '',
+    action: row.action ?? 'updated',
+    changedByUserId: row.changed_by_user_id ?? '',
+    changedByName: row.changed_by_name ?? '',
+    previousQuantityOnHand: Number(row.previous_quantity_on_hand ?? 0),
+    nextQuantityOnHand: Number(row.next_quantity_on_hand ?? 0),
+    previousQuantityReserved: Number(row.previous_quantity_reserved ?? 0),
+    nextQuantityReserved: Number(row.next_quantity_reserved ?? 0),
+    notes: row.notes ?? '',
+  };
+}
+
 function mapSparePart(row: any): SparePart {
   return {
     id: row.id,
@@ -458,6 +477,7 @@ export async function fetchAppData(): Promise<AppData> {
     wasteEntries,
     paperLogs,
     dispatchRecords,
+    stockChangeLogs,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -477,6 +497,7 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('waste_entries'),
     safeSelect('paper_logs'),
     safeSelect('dispatch_records'),
+    safeSelect('stock_change_logs'),
   ]);
 
   return {
@@ -498,6 +519,7 @@ export async function fetchAppData(): Promise<AppData> {
     wasteEntries: wasteEntries.map(mapWaste),
     paperLogs: paperLogs.map(mapPaper),
     dispatchRecords: dispatchRecords.map(mapDispatch),
+    stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
   };
 }
 
@@ -845,6 +867,21 @@ export async function syncAppData(data: AppData): Promise<void> {
       delivery_reference: record.deliveryReference || null,
       issue_notes: record.issueNotes || null,
       fsc_related: record.fscRelated,
+    }))),
+    safeUpsert('stock_change_logs', data.stockChangeLogs.map((log) => ({
+      id: log.id,
+      created_at: log.createdAt,
+      finished_goods_stock_id: log.finishedGoodsStockId || null,
+      stock_number: log.stockNumber || null,
+      product_name: log.productName || null,
+      action: log.action,
+      changed_by_user_id: log.changedByUserId || null,
+      changed_by_name: log.changedByName || null,
+      previous_quantity_on_hand: log.previousQuantityOnHand,
+      next_quantity_on_hand: log.nextQuantityOnHand,
+      previous_quantity_reserved: log.previousQuantityReserved,
+      next_quantity_reserved: log.nextQuantityReserved,
+      notes: log.notes || null,
     }))),
   ]);
 }

@@ -1134,6 +1134,8 @@ function App() {
     const linkedJob = stockForm.jobId ? jobsById.get(stockForm.jobId) : undefined;
     const quantityOnHand = Number(stockForm.quantityOnHand);
     const quantityReserved = Number(stockForm.quantityReserved || 0);
+    const actorName = profile?.fullName || profile?.email || 'Unknown user';
+    const actorId = profile?.id || 'unknown-user';
     const payload = {
       storedDate: stockForm.storedDate,
       productId: linkedProduct.id,
@@ -1152,9 +1154,30 @@ function App() {
       notes: stockForm.notes,
     };
     if (stockEditingId) {
+      const previousItem = data.finishedGoodsStock.find((item) => item.id === stockEditingId);
       setData((current) => ({
         ...current,
         finishedGoodsStock: current.finishedGoodsStock.map((item) => item.id === stockEditingId ? { ...item, ...payload } : item),
+        stockChangeLogs: previousItem ? [
+          {
+            id: `stock-log-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            finishedGoodsStockId: previousItem.id,
+            stockNumber: previousItem.stockNumber,
+            productName: linkedProduct.name,
+            action: 'updated',
+            changedByUserId: actorId,
+            changedByName: actorName,
+            previousQuantityOnHand: previousItem.quantityOnHand,
+            nextQuantityOnHand: quantityOnHand,
+            previousQuantityReserved: previousItem.quantityReserved,
+            nextQuantityReserved: quantityReserved,
+            notes: previousItem.quantityOnHand !== quantityOnHand || previousItem.quantityReserved !== quantityReserved
+              ? `Stock amended from ${previousItem.quantityOnHand}/${previousItem.quantityReserved} to ${quantityOnHand}/${quantityReserved}.`
+              : 'Stock details amended with no quantity movement.',
+          },
+          ...current.stockChangeLogs,
+        ] : current.stockChangeLogs,
       }));
     } else {
       const stockNumber = generateCode('FGS', data.finishedGoodsStock.map((item) => item.stockNumber), stockForm.storedDate);
@@ -1164,9 +1187,78 @@ function App() {
         createdAt: new Date().toISOString(),
         ...payload,
       };
-      setData((current) => ({ ...current, finishedGoodsStock: [newItem, ...current.finishedGoodsStock] }));
+      setData((current) => ({
+        ...current,
+        finishedGoodsStock: [newItem, ...current.finishedGoodsStock],
+        stockChangeLogs: [
+          {
+            id: `stock-log-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            finishedGoodsStockId: newItem.id,
+            stockNumber: newItem.stockNumber,
+            productName: newItem.productName,
+            action: 'created',
+            changedByUserId: actorId,
+            changedByName: actorName,
+            previousQuantityOnHand: 0,
+            nextQuantityOnHand: quantityOnHand,
+            previousQuantityReserved: 0,
+            nextQuantityReserved: quantityReserved,
+            notes: 'Finished stock item created.',
+          },
+          ...current.stockChangeLogs,
+        ],
+      }));
     }
     resetStockEditor();
+  }
+
+  function handleDeleteFinishedStock(item: FinishedGoodsStock) {
+    const hasReservedJobs = data.jobs.some((job) => job.reservedFinishedGoodsStockId === item.id);
+    const hasCustomerReleases = data.customerStockReleases.some((release) => release.finishedGoodsStockId === item.id);
+
+    if (hasReservedJobs || hasCustomerReleases) {
+      setStockMessage('This stock item is linked to jobs or customer releases and cannot be deleted. Amend it instead.');
+      setStockEditingId(item.id);
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete finished stock ${item.stockNumber}? This action cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    const actorName = profile?.fullName || profile?.email || 'Unknown user';
+    const actorId = profile?.id || 'unknown-user';
+
+    setData((current) => ({
+      ...current,
+      finishedGoodsStock: current.finishedGoodsStock.filter((stock) => stock.id !== item.id),
+      stockChangeLogs: [
+        {
+          id: `stock-log-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          finishedGoodsStockId: item.id,
+          stockNumber: item.stockNumber,
+          productName: item.productName,
+          action: 'deleted',
+          changedByUserId: actorId,
+          changedByName: actorName,
+          previousQuantityOnHand: item.quantityOnHand,
+          nextQuantityOnHand: 0,
+          previousQuantityReserved: item.quantityReserved,
+          nextQuantityReserved: 0,
+          notes: 'Finished stock item deleted.',
+        },
+        ...current.stockChangeLogs,
+      ],
+    }));
+
+    if (stockEditingId === item.id) {
+      resetStockEditor();
+    } else {
+      setStockMessage('');
+    }
   }
 
   function handleSaveSparePart() {
@@ -1332,6 +1424,33 @@ function App() {
       setData((current) => ({ ...current, products: [{ id: `product-${Date.now()}`, ...productForm }, ...current.products] }));
     }
     resetProductEditor();
+  }
+
+  function handleDeleteProduct(product: Product) {
+    const isUsedInQuotes = data.quoteEstimates.some((quote) => quote.productId === product.id);
+    const isUsedInJobs = data.jobs.some((job) => job.productId === product.id);
+    const isUsedInFinishedStock = data.finishedGoodsStock.some((item) => item.productId === product.id);
+
+    if (isUsedInQuotes || isUsedInJobs || isUsedInFinishedStock) {
+      setProductMessage('This product is linked to quotes, jobs, or finished stock and cannot be deleted. Mark it inactive or amend it instead.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete product ${product.name}? This action cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      products: current.products.filter((item) => item.id !== product.id),
+    }));
+
+    if (productEditingId === product.id) {
+      resetProductEditor();
+    } else {
+      setProductMessage('');
+    }
   }
 
   function handleSaveMaterial() {
@@ -2305,6 +2424,7 @@ function App() {
           setProductFilters={setProductFilters}
           filteredProducts={filteredProducts}
           onEdit={editProduct}
+          onDelete={handleDeleteProduct}
         />
       )}
 
@@ -2353,7 +2473,9 @@ function App() {
           stockFilters={stockFilters}
           setStockFilters={setStockFilters}
           filteredStock={filteredFinishedStock}
+          stockChangeLogs={data.stockChangeLogs}
           onEdit={editFinishedStock}
+          onDelete={handleDeleteFinishedStock}
         />
       )}
 

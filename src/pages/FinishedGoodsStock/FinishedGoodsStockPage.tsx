@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, JobCard, Product } from '../../types';
+import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, JobCard, Product, StockChangeLog } from '../../types';
 import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
 
 interface FinishedGoodsStockPageProps {
@@ -17,7 +17,9 @@ interface FinishedGoodsStockPageProps {
   stockFilters: FinishedGoodsStockFilters;
   setStockFilters: (value: FinishedGoodsStockFilters) => void;
   filteredStock: FinishedGoodsStock[];
+  stockChangeLogs: StockChangeLog[];
   onEdit: (item: FinishedGoodsStock) => void;
+  onDelete: (item: FinishedGoodsStock) => void;
 }
 
 export function FinishedGoodsStockPage({
@@ -33,7 +35,9 @@ export function FinishedGoodsStockPage({
   stockFilters,
   setStockFilters,
   filteredStock,
+  stockChangeLogs,
   onEdit,
+  onDelete,
 }: FinishedGoodsStockPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -167,43 +171,98 @@ export function FinishedGoodsStockPage({
             <label><span>Product</span><input value={stockFilters.product} onChange={(event) => setStockFilters({ ...stockFilters, product: event.target.value })} /></label>
           </div>
           {filteredStock.length ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Stock</th>
-                    <th>Product</th>
-                    <th>Client</th>
-                    <th>Qty On Hand</th>
-                    <th>Available</th>
-                    <th>Days in storage</th>
-                    <th>Aging band</th>
-                    <th>Location</th>
-                    <th>Stored</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStock.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <strong>{item.stockNumber}</strong>
-                        <div className="table-subtext">{item.stockStatus}</div>
-                      </td>
-                      <td>{item.productName}</td>
-                      <td>{item.clientName || 'General stock'}</td>
-                      <td>{formatNumber(item.quantityOnHand)} {item.quantityUnit}</td>
-                      <td>{formatNumber(item.quantityAvailable)} {item.quantityUnit}</td>
-                      <td>{formatNumber(getDaysInStorage(item.storedDate))}</td>
-                      <td>{getStorageAgeBand(getDaysInStorage(item.storedDate))}</td>
-                      <td>{item.storageLocation || 'Not set'}</td>
-                      <td>{formatDate(item.storedDate)}</td>
-                      <td><button className="table-button" onClick={() => handleStartEdit(item)}>Edit</button></td>
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Stock</th>
+                      <th>Product</th>
+                      <th>Client</th>
+                      <th>Qty On Hand</th>
+                      <th>Available</th>
+                      <th>Last change</th>
+                      <th>Changed by</th>
+                      <th>Location</th>
+                      <th>Stored</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredStock.map((item) => {
+                      const itemLogs = stockChangeLogs
+                        .filter((log) => log.finishedGoodsStockId === item.id)
+                        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+                      const latestLog = itemLogs[0];
+
+                      return (
+                        <tr key={item.id}>
+                          <td>
+                            <strong>{item.stockNumber}</strong>
+                            <div className="table-subtext">{item.stockStatus}</div>
+                          </td>
+                          <td>{item.productName}</td>
+                          <td>{item.clientName || 'General stock'}</td>
+                          <td>{formatNumber(item.quantityOnHand)} {item.quantityUnit}</td>
+                          <td>{formatNumber(item.quantityAvailable)} {item.quantityUnit}</td>
+                          <td>{latestLog ? formatDate(latestLog.createdAt) : 'No changes yet'}</td>
+                          <td>{latestLog?.changedByName || 'System'}</td>
+                          <td>{item.storageLocation || 'Not set'}</td>
+                          <td>{formatDate(item.storedDate)}</td>
+                          <td>
+                            <div className="inline-actions">
+                              <button className="table-button" onClick={() => handleStartEdit(item)}>Amend</button>
+                              <button className="ghost-button" onClick={() => onDelete(item)}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <section className="card">
+                <SectionTitle title="Stock change history" subtitle="Audit trail for finished stock quantity changes and deletions." />
+                {stockChangeLogs.length ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Stock</th>
+                          <th>Action</th>
+                          <th>Changed by</th>
+                          <th>Qty on hand</th>
+                          <th>Qty reserved</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockChangeLogs
+                          .filter((log) => filteredStock.some((item) => item.id === log.finishedGoodsStockId))
+                          .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+                          .slice(0, 20)
+                          .map((log) => (
+                            <tr key={log.id}>
+                              <td>{formatDate(log.createdAt)}</td>
+                              <td>
+                                <strong>{log.stockNumber}</strong>
+                                <div className="table-subtext">{log.productName}</div>
+                              </td>
+                              <td>{log.action}</td>
+                              <td>{log.changedByName || 'System'}</td>
+                              <td>{formatNumber(log.previousQuantityOnHand)} → {formatNumber(log.nextQuantityOnHand)}</td>
+                              <td>{formatNumber(log.previousQuantityReserved)} → {formatNumber(log.nextQuantityReserved)}</td>
+                              <td>{log.notes || '-'}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <EmptyState title="No stock changes logged yet" body="Stock amendments and deletions will appear here with the user name and quantity movement." />}
+              </section>
+            </>
           ) : (
             <EmptyState title="No finished stock yet" body="Add stored finished goods here so dispatch planning and stock holding are visible." />
           )}

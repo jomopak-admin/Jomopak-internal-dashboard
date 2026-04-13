@@ -535,6 +535,22 @@ export interface DispatchRecord {
   fscRelated: boolean;
 }
 
+export interface StockChangeLog {
+  id: string;
+  createdAt: string;
+  finishedGoodsStockId: string;
+  stockNumber: string;
+  productName: string;
+  action: 'created' | 'updated' | 'deleted';
+  changedByUserId: string;
+  changedByName: string;
+  previousQuantityOnHand: number;
+  nextQuantityOnHand: number;
+  previousQuantityReserved: number;
+  nextQuantityReserved: number;
+  notes: string;
+ }
+
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
@@ -554,6 +570,7 @@ export interface AppData {
   wasteEntries: WasteEntry[];
   paperLogs: PaperLog[];
   dispatchRecords: DispatchRecord[];
+  stockChangeLogs: StockChangeLog[];
 }
 
 export interface SupplierFormState {

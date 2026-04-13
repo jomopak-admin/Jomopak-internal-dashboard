@@ -14,6 +14,7 @@ interface ProductsPageProps {
   setProductFilters: (value: ProductFilters) => void;
   filteredProducts: Product[];
   onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
 }
 
 export function ProductsPage({
@@ -27,6 +28,7 @@ export function ProductsPage({
   setProductFilters,
   filteredProducts,
   onEdit,
+  onDelete,
 }: ProductsPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -95,7 +97,7 @@ export function ProductsPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Product</th><th>Category</th><th>Supply</th><th>Branding</th><th>Unit</th><th>Actions</th></tr></thead>
-                <tbody>{filteredProducts.map((product) => <tr key={product.id}><td><strong>{product.name}</strong><div className="table-subtext">{product.sku || 'No SKU'}</div></td><td>{product.category}</td><td>{product.supplyType}</td><td>{product.brandingAllowed ? 'Yes' : 'No'}</td><td>{product.defaultUnit}</td><td><button className="table-button" onClick={() => handleStartEdit(product)}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredProducts.map((product) => <tr key={product.id}><td><strong>{product.name}</strong><div className="table-subtext">{product.sku || 'No SKU'}</div></td><td>{product.category}</td><td>{product.supplyType}</td><td>{product.brandingAllowed ? 'Yes' : 'No'}</td><td>{product.defaultUnit}</td><td><div className="inline-actions"><button className="table-button" onClick={() => handleStartEdit(product)}>Edit</button><button className="ghost-button" onClick={() => onDelete(product)}>Delete</button></div></td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No products yet" body="Add your product catalog so jobs and pricing can reference it." />}
