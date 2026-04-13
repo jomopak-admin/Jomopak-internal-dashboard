@@ -2,6 +2,7 @@ export type View =
   | 'dashboard'
   | 'salesDesk'
   | 'calculator'
+  | 'costInputs'
   | 'permissions'
   | 'suppliers'
   | 'quotes'
@@ -26,6 +27,7 @@ export const VIEW_LABELS: Record<View, string> = {
   dashboard: 'Dashboard',
   salesDesk: 'Sales Desk',
   calculator: 'Calculator',
+  costInputs: 'Cost Inputs',
   permissions: 'Permissions',
   suppliers: 'Suppliers',
   quotes: 'Quotes & Estimates',
@@ -51,6 +53,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dashboard',
     'salesDesk',
     'calculator',
+    'costInputs',
     'permissions',
     'suppliers',
     'quotes',

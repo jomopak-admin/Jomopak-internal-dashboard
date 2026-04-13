@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from './components/Layout/AppLayout';
 import { ArtworkPage } from './pages/Artwork/ArtworkPage';
 import { CalculatorPage } from './pages/Calculator/CalculatorPage';
+import { CostInputsPage } from './pages/CostInputs/CostInputsPage';
 import { ClientsPage } from './pages/Clients/ClientsPage';
 import { CustomerStockPage } from './pages/CustomerStock/CustomerStockPage';
 import { LoginPage } from './pages/Auth/LoginPage';
@@ -111,6 +112,7 @@ const VIEW_ORDER: View[] = [
   'dashboard',
   'salesDesk',
   'calculator',
+  'costInputs',
   'permissions',
   'suppliers',
   'machines',
@@ -573,6 +575,8 @@ function App() {
     [profile?.permissions],
   );
   const allowedViews = useMemo(() => new Set(navItems.map((item) => item.key)), [navItems]);
+  const canManageCostInputs = profile?.role === 'admin' || allowedViews.has('costInputs');
+  const canViewInternalCalculatorCosts = canManageCostInputs;
 
   useEffect(() => {
     if (!allowedViews.has(view)) {
@@ -2381,10 +2385,19 @@ function App() {
 
       {view === 'calculator' && (
         <CalculatorPage
-          canManageSettings={profile?.role === 'admin'}
+          canViewInternalCosts={canViewInternalCalculatorCosts}
           clients={data.clients}
           products={data.products}
           pricingTiers={data.pricingTiers}
+          paperRates={data.paperRates}
+          costProfiles={data.costProfiles}
+          quoteForm={calculatorQuoteForm}
+          setQuoteForm={setCalculatorQuoteForm}
+        />
+      )}
+
+      {view === 'costInputs' && canManageCostInputs && (
+        <CostInputsPage
           suppliers={data.suppliers}
           paperRates={data.paperRates}
           costProfiles={data.costProfiles}
@@ -2408,8 +2421,6 @@ function App() {
           setCostProfileFilters={setCostProfileFilters}
           filteredCostProfiles={filteredCostProfiles}
           onEditCostProfile={editCostProfile}
-          quoteForm={calculatorQuoteForm}
-          setQuoteForm={setCalculatorQuoteForm}
         />
       )}
 
