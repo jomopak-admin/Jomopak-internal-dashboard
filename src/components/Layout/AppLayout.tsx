@@ -22,9 +22,6 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
         <div className="brand-block">
           <p className="eyebrow">Internal Production Dashboard</p>
           <h1>JomoPak</h1>
-          <p className="muted sidebar-copy">
-            Phase 1 digitisation for job cards, waste, paper usage, and reporting with FSC-ready flags.
-          </p>
         </div>
 
         <nav className="nav-list">
