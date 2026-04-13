@@ -1297,6 +1297,17 @@ function App() {
     }
   }
 
+  function handleDeleteCurrentFinishedStock() {
+    if (!stockEditingId) {
+      return;
+    }
+    const item = data.finishedGoodsStock.find((entry) => entry.id === stockEditingId);
+    if (!item) {
+      return;
+    }
+    handleDeleteFinishedStock(item);
+  }
+
   function handleSaveSparePart() {
     if (!spareForm.partName || !spareForm.quantityOnHand) {
       setSpareMessage('Part name and quantity on hand are required.');
@@ -1493,6 +1504,17 @@ function App() {
     } else {
       setProductMessage('');
     }
+  }
+
+  function handleDeleteCurrentProduct() {
+    if (!productEditingId) {
+      return;
+    }
+    const product = data.products.find((item) => item.id === productEditingId);
+    if (!product) {
+      return;
+    }
+    handleDeleteProduct(product);
   }
 
   function handleSaveMaterial() {
@@ -2471,7 +2493,7 @@ function App() {
           setProductFilters={setProductFilters}
           filteredProducts={filteredProducts}
           onEdit={editProduct}
-          onDelete={handleDeleteProduct}
+          onDelete={handleDeleteCurrentProduct}
         />
       )}
 
@@ -2522,7 +2544,7 @@ function App() {
           filteredStock={filteredFinishedStock}
           stockChangeLogs={data.stockChangeLogs}
           onEdit={editFinishedStock}
-          onDelete={handleDeleteFinishedStock}
+          onDelete={handleDeleteCurrentFinishedStock}
         />
       )}
 

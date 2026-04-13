@@ -19,7 +19,7 @@ interface FinishedGoodsStockPageProps {
   filteredStock: FinishedGoodsStock[];
   stockChangeLogs: StockChangeLog[];
   onEdit: (item: FinishedGoodsStock) => void;
-  onDelete: (item: FinishedGoodsStock) => void;
+  onDelete: () => void;
 }
 
 export function FinishedGoodsStockPage({
@@ -153,6 +153,7 @@ export function FinishedGoodsStockPage({
           </div>
           <div className="button-row">
             <button className="primary-button" onClick={onSave}>{stockEditingId ? 'Save Changes' : 'Save Stock Item'}</button>
+            {stockEditingId ? <button className="ghost-button" onClick={onDelete}>Delete Stock Item</button> : null}
             <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
           </div>
         </section>
@@ -210,10 +211,7 @@ export function FinishedGoodsStockPage({
                           <td>{item.storageLocation || 'Not set'}</td>
                           <td>{formatDate(item.storedDate)}</td>
                           <td>
-                            <div className="inline-actions">
-                              <button className="table-button" onClick={() => handleStartEdit(item)}>Amend</button>
-                              <button className="ghost-button" onClick={() => onDelete(item)}>Delete</button>
-                            </div>
+                            <button className="table-button" aria-label={`Edit ${item.stockNumber}`} onClick={() => handleStartEdit(item)}>✎</button>
                           </td>
                         </tr>
                       );
