@@ -109,9 +109,30 @@ export function useProfiles(enabled: boolean) {
       },
     });
 
-    if (error) {
-      throw new Error(error.message || 'Failed to create dashboard user.');
+if (error) {
+  const context = (error as { context?: { json?: () => Promise<any>; text?: () => Promise<string> } }).context;
+
+  if (context?.json) {
+    try {
+      const payload = await context.json();
+      throw new Error(payload?.error || error.message || 'Failed to create dashboard user.');
+    } catch {
+      // fall through
     }
+  }
+
+  if (context?.text) {
+    try {
+      const text = await context.text();
+      throw new Error(text || error.message || 'Failed to create dashboard user.');
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error(error.message || 'Failed to create dashboard user.');
+}
+
 
     const row = data as CreateUserResultRow | null;
     if (!row?.id) {
