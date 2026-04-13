@@ -32,7 +32,7 @@ const VIEW_LABELS = {
 } as const;
 
 type View = keyof typeof VIEW_LABELS;
-type UserRole = 'admin' | 'ops' | 'production' | 'sales';
+type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork';
 
 const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   admin: [
@@ -94,6 +94,14 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'calculator',
     'quotes',
     'artwork',
+    'jobs',
+    'products',
+    'reports',
+  ],
+  artwork: [
+    'dashboard',
+    'artwork',
+    'quotes',
     'jobs',
     'products',
     'reports',
@@ -175,7 +183,7 @@ Deno.serve(async (request) => {
       return json({ error: 'Email, password, and full name are required.' }, 400);
     }
 
-    if (!['admin', 'ops', 'production', 'sales'].includes(role)) {
+    if (!['admin', 'ops', 'production', 'sales', 'artwork'].includes(role)) {
       return json({ error: 'Invalid role provided.' }, 400);
     }
 

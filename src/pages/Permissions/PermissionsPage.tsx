@@ -22,8 +22,8 @@ const initialCreateUserForm = (): CreateUserFormState => ({
   email: '',
   password: '',
   fullName: '',
-  role: 'ops',
-  permissions: ROLE_DEFAULT_VIEWS.ops,
+  role: 'artwork',
+  permissions: ROLE_DEFAULT_VIEWS.artwork,
 });
 
 export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: PermissionsPageProps) {
@@ -143,6 +143,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                 <option value="ops">ops</option>
                 <option value="production">production</option>
                 <option value="sales">sales</option>
+                <option value="artwork">artwork</option>
               </select>
             </label>
           </div>
@@ -230,6 +231,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                       <option value="ops">ops</option>
                       <option value="production">production</option>
                       <option value="sales">sales</option>
+                      <option value="artwork">artwork</option>
                     </select>
                   </label>
                   <div className="permission-panel">

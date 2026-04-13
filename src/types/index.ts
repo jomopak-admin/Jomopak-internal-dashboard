@@ -21,7 +21,7 @@ export type View =
   | 'paper'
   | 'dispatch'
   | 'reports';
-export type UserRole = 'admin' | 'ops' | 'production' | 'sales';
+export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork';
 
 export const VIEW_LABELS: Record<View, string> = {
   dashboard: 'Dashboard',
@@ -108,6 +108,14 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'calculator',
     'quotes',
     'artwork',
+    'jobs',
+    'products',
+    'reports',
+  ],
+  artwork: [
+    'dashboard',
+    'artwork',
+    'quotes',
     'jobs',
     'products',
     'reports',
