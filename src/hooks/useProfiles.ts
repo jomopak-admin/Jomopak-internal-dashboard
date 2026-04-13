@@ -82,77 +82,68 @@ export function useProfiles(enabled: boolean) {
     );
   }
 
-  async function createUser(input: CreateUserInput) {
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+async function createUser(input: CreateUserInput) {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-    if (sessionError) {
-      throw sessionError;
-    }
+  if (sessionError) throw sessionError;
+  if (!session?.access_token) {
+    throw new Error('No active admin session found. Please sign in again.');
+  }
 
-    if (!session?.access_token) {
-      throw new Error('No active admin session found. Please sign in again.');
-    }
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    const { data, error } = await supabase.functions.invoke('admin-create-dashboard-user', {
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/admin-create-dashboard-user`,
+    {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: {
+      body: JSON.stringify({
         email: input.email,
         password: input.password,
         fullName: input.fullName,
         role: input.role,
         permissions: input.permissions,
-      },
-    });
+      }),
+    },
+  );
 
-if (error) {
-  const context = (error as { context?: { json?: () => Promise<any>; text?: () => Promise<string> } }).context;
+  const payload = await response.json().catch(() => ({}));
 
-  if (context?.json) {
-    try {
-      const payload = await context.json();
-      throw new Error(payload?.error || error.message || 'Failed to create dashboard user.');
-    } catch {
-      // fall through
-    }
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Failed to create dashboard user.');
   }
 
-  if (context?.text) {
-    try {
-      const text = await context.text();
-      throw new Error(text || error.message || 'Failed to create dashboard user.');
-    } catch {
-      // fall through
-    }
+  const row = payload as CreateUserResultRow;
+  if (!row?.id) {
+    throw new Error('User creation did not return a profile record.');
   }
 
-  throw new Error(error.message || 'Failed to create dashboard user.');
+  const nextProfile: UserProfile = {
+    id: row.id,
+    email: row.email ?? input.email,
+    fullName: row.full_name ?? input.fullName,
+    role: (row.role ?? input.role) as UserProfile['role'],
+    permissions: normalizeProfilePermissions(
+      (row.role ?? input.role) as UserProfile['role'],
+      row.permissions ?? input.permissions,
+    ),
+  };
+
+  setProfiles((current) =>
+    [...current, nextProfile].sort((left, right) =>
+      (left.fullName || left.email).localeCompare(right.fullName || right.email),
+    ),
+  );
 }
 
-
-    const row = data as CreateUserResultRow | null;
-    if (!row?.id) {
-      throw new Error('User creation did not return a profile record.');
-    }
-
-    const nextProfile: UserProfile = {
-      id: row.id,
-      email: row.email ?? input.email,
-      fullName: row.full_name ?? input.fullName,
-      role: (row.role ?? input.role) as UserProfile['role'],
-      permissions: normalizeProfilePermissions((row.role ?? input.role) as UserProfile['role'], row.permissions ?? input.permissions),
-    };
-
-    setProfiles((current) =>
-      [...current, nextProfile].sort((left, right) =>
-        (left.fullName || left.email).localeCompare(right.fullName || right.email),
-      ),
-    );
-  }
 
   return {
     profiles,
