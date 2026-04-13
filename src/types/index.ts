@@ -165,6 +165,9 @@ export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
 export type MachineStatus = 'Active' | 'Maintenance' | 'Offline';
 export type ArtworkStage = 'Awaiting Artwork' | 'Artwork Received' | 'Proof Sent' | 'Approved' | 'Changes Requested';
+export type CertificationType = 'FSC' | 'ISO' | 'Food Safety' | 'Other';
+export type CertificationStatus = 'Active' | 'Expiring Soon' | 'Expired';
+export type CurrencyCode = 'ZAR' | 'USD' | 'EUR' | 'GBP';
 
 export interface SupplierContact {
   id: string;
@@ -172,6 +175,32 @@ export interface SupplierContact {
   role: string;
   phone: string;
   email: string;
+  isPrimary: boolean;
+}
+
+export interface SupplierCertification {
+  id: string;
+  type: CertificationType;
+  certificateNumber: string;
+  issuedDate: string;
+  expiryDate: string;
+  reviewFrequencyMonths: number;
+  reminderDays: number;
+  status: CertificationStatus;
+  notes: string;
+}
+
+export interface SupplierProductLink {
+  id: string;
+  productId: string;
+  productName: string;
+  supplierSku: string;
+  defaultPrice: number;
+  currency: CurrencyCode;
+  minimumOrderQuantity: number;
+  leadTimeDays: number;
+  lastQuotedDate: string;
+  active: boolean;
 }
 
 export interface Supplier {
@@ -182,8 +211,26 @@ export interface Supplier {
   email: string;
   contacts: SupplierContact[];
   address: string;
+  billingAddress: string;
+  city: string;
+  country: string;
+  website: string;
   supplierType: SupplierType;
   certificateCode: string;
+  accountNumber: string;
+  paymentTerms: string;
+  creditLimit: number;
+  currentBalance: number;
+  currency: CurrencyCode;
+  isAlsoClient: boolean;
+  linkedClientId: string;
+  linkedClientName: string;
+  lastCheckInDate: string;
+  nextReviewDate: string;
+  reviewFrequencyMonths: number;
+  internalOwner: string;
+  certifications: SupplierCertification[];
+  suppliedProducts: SupplierProductLink[];
   notes: string;
   active: boolean;
 }
@@ -591,8 +638,25 @@ export interface SupplierFormState {
   email: string;
   contacts: SupplierContact[];
   address: string;
+  billingAddress: string;
+  city: string;
+  country: string;
+  website: string;
   supplierType: SupplierType;
   certificateCode: string;
+  accountNumber: string;
+  paymentTerms: string;
+  creditLimit: string;
+  currentBalance: string;
+  currency: CurrencyCode;
+  isAlsoClient: boolean;
+  linkedClientId: string;
+  lastCheckInDate: string;
+  nextReviewDate: string;
+  reviewFrequencyMonths: string;
+  internalOwner: string;
+  certifications: SupplierCertification[];
+  suppliedProducts: SupplierProductLink[];
   notes: string;
   active: boolean;
 }

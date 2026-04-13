@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Supplier, SupplierFilters, SupplierFormState } from '../../types';
+import { Client, Product, Supplier, SupplierFilters, SupplierFormState } from '../../types';
+import { formatDate, formatNumber } from '../../utils/calculations';
 
 interface SuppliersPageProps {
+  clients: Client[];
+  products: Product[];
   supplierForm: SupplierFormState;
   setSupplierForm: (value: SupplierFormState) => void;
   supplierEditingId: string | null;
@@ -18,6 +21,8 @@ interface SuppliersPageProps {
 }
 
 export function SuppliersPage({
+  clients,
+  products,
   supplierForm,
   setSupplierForm,
   supplierEditingId,
@@ -85,7 +90,22 @@ export function SuppliersPage({
             <label><span>Phone</span><input value={supplierForm.phone} onChange={(event) => setSupplierForm({ ...supplierForm, phone: event.target.value })} /></label>
             <label><span>Email</span><input type="email" value={supplierForm.email} onChange={(event) => setSupplierForm({ ...supplierForm, email: event.target.value })} /></label>
             <label><span>Certificate code</span><input value={supplierForm.certificateCode} onChange={(event) => setSupplierForm({ ...supplierForm, certificateCode: event.target.value })} placeholder="FSC or supplier reference" /></label>
+            <label><span>City</span><input value={supplierForm.city} onChange={(event) => setSupplierForm({ ...supplierForm, city: event.target.value })} /></label>
+            <label><span>Country</span><input value={supplierForm.country} onChange={(event) => setSupplierForm({ ...supplierForm, country: event.target.value })} /></label>
+            <label><span>Website</span><input value={supplierForm.website} onChange={(event) => setSupplierForm({ ...supplierForm, website: event.target.value })} /></label>
+            <label><span>Account number</span><input value={supplierForm.accountNumber} onChange={(event) => setSupplierForm({ ...supplierForm, accountNumber: event.target.value })} /></label>
+            <label><span>Payment terms</span><input value={supplierForm.paymentTerms} onChange={(event) => setSupplierForm({ ...supplierForm, paymentTerms: event.target.value })} placeholder="30 days / COD / EOM" /></label>
+            <label><span>Credit limit</span><input type="number" min="0" value={supplierForm.creditLimit} onChange={(event) => setSupplierForm({ ...supplierForm, creditLimit: event.target.value })} /></label>
+            <label><span>Current balance</span><input type="number" step="0.01" value={supplierForm.currentBalance} onChange={(event) => setSupplierForm({ ...supplierForm, currentBalance: event.target.value })} /></label>
+            <label><span>Currency</span><select value={supplierForm.currency} onChange={(event) => setSupplierForm({ ...supplierForm, currency: event.target.value as SupplierFormState['currency'] })}><option value="ZAR">ZAR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></label>
+            <label><span>Internal owner</span><input value={supplierForm.internalOwner} onChange={(event) => setSupplierForm({ ...supplierForm, internalOwner: event.target.value })} placeholder="Who owns the relationship?" /></label>
+            <label><span>Last check-in</span><input type="date" value={supplierForm.lastCheckInDate} onChange={(event) => setSupplierForm({ ...supplierForm, lastCheckInDate: event.target.value })} /></label>
+            <label><span>Next review</span><input type="date" value={supplierForm.nextReviewDate} onChange={(event) => setSupplierForm({ ...supplierForm, nextReviewDate: event.target.value })} /></label>
+            <label><span>Review frequency (months)</span><input type="number" min="1" value={supplierForm.reviewFrequencyMonths} onChange={(event) => setSupplierForm({ ...supplierForm, reviewFrequencyMonths: event.target.value })} /></label>
+            <label className="checkbox-row"><input type="checkbox" checked={supplierForm.isAlsoClient} onChange={(event) => setSupplierForm({ ...supplierForm, isAlsoClient: event.target.checked, linkedClientId: event.target.checked ? supplierForm.linkedClientId : '' })} />This supplier is also a client</label>
+            {supplierForm.isAlsoClient && <label><span>Linked client</span><select value={supplierForm.linkedClientId} onChange={(event) => setSupplierForm({ ...supplierForm, linkedClientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>}
             <label className="full-span"><span>Address</span><textarea value={supplierForm.address} onChange={(event) => setSupplierForm({ ...supplierForm, address: event.target.value })} /></label>
+            <label className="full-span"><span>Billing address</span><textarea value={supplierForm.billingAddress} onChange={(event) => setSupplierForm({ ...supplierForm, billingAddress: event.target.value })} /></label>
             <label className="checkbox-row"><input type="checkbox" checked={supplierForm.active} onChange={(event) => setSupplierForm({ ...supplierForm, active: event.target.checked })} />Active supplier</label>
             <label className="full-span"><span>Notes</span><textarea value={supplierForm.notes} onChange={(event) => setSupplierForm({ ...supplierForm, notes: event.target.value })} /></label>
           </div>
@@ -96,7 +116,7 @@ export function SuppliersPage({
               subtitle="Add multiple contact people for one supplier."
               action={<button className="secondary-button" type="button" onClick={() => setSupplierForm({
                 ...supplierForm,
-                contacts: [...supplierForm.contacts, { id: `supplier-contact-${Date.now()}`, fullName: '', role: '', phone: '', email: '' }],
+                contacts: [...supplierForm.contacts, { id: `supplier-contact-${Date.now()}`, fullName: '', role: '', phone: '', email: '', isPrimary: false }],
               })}>Add contact</button>}
             />
             {supplierForm.contacts.length ? (
@@ -120,6 +140,10 @@ export function SuppliersPage({
                         ...supplierForm,
                         contacts: supplierForm.contacts.map((entry) => entry.id === contact.id ? { ...entry, email: event.target.value } : entry),
                       })} /></label>
+                      <label className="checkbox-row"><input type="checkbox" checked={contact.isPrimary} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        contacts: supplierForm.contacts.map((entry) => entry.id === contact.id ? { ...entry, isPrimary: event.target.checked } : entry),
+                      })} />Primary contact</label>
                     </div>
                     <div className="inline-actions">
                       <button className="ghost-button" type="button" onClick={() => setSupplierForm({
@@ -131,6 +155,148 @@ export function SuppliersPage({
                 ))}
               </div>
             ) : <EmptyState title="No extra contacts yet" body="Use this section when a supplier has more than one person for sales, logistics, or accounts." />}
+          </section>
+
+          <section className="card">
+            <SectionTitle
+              title="Certifications & compliance"
+              subtitle="Track FSC and other certificates, expiry dates, and reminder windows."
+              action={<button className="secondary-button" type="button" onClick={() => setSupplierForm({
+                ...supplierForm,
+                certifications: [...supplierForm.certifications, {
+                  id: `supplier-cert-${Date.now()}`,
+                  type: 'FSC',
+                  certificateNumber: '',
+                  issuedDate: '',
+                  expiryDate: '',
+                  reviewFrequencyMonths: 12,
+                  reminderDays: 30,
+                  status: 'Active',
+                  notes: '',
+                }],
+              })}>Add certification</button>}
+            />
+            {supplierForm.certifications.length ? (
+              <div className="stack-list">
+                {supplierForm.certifications.map((certification) => (
+                  <div key={certification.id} className="card">
+                    <div className="form-grid">
+                      <label><span>Type</span><select value={certification.type} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, type: event.target.value as typeof certification.type } : entry),
+                      })}><option value="FSC">FSC</option><option value="ISO">ISO</option><option value="Food Safety">Food Safety</option><option value="Other">Other</option></select></label>
+                      <label><span>Certificate number</span><input value={certification.certificateNumber} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, certificateNumber: event.target.value } : entry),
+                      })} /></label>
+                      <label><span>Issued date</span><input type="date" value={certification.issuedDate} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, issuedDate: event.target.value } : entry),
+                      })} /></label>
+                      <label><span>Expiry date</span><input type="date" value={certification.expiryDate} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, expiryDate: event.target.value } : entry),
+                      })} /></label>
+                      <label><span>Review frequency (months)</span><input type="number" min="1" value={certification.reviewFrequencyMonths} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, reviewFrequencyMonths: Number(event.target.value || 0) } : entry),
+                      })} /></label>
+                      <label><span>Reminder days</span><input type="number" min="0" value={certification.reminderDays} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, reminderDays: Number(event.target.value || 0) } : entry),
+                      })} /></label>
+                      <label><span>Status</span><select value={certification.status} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, status: event.target.value as typeof certification.status } : entry),
+                      })}><option value="Active">Active</option><option value="Expiring Soon">Expiring Soon</option><option value="Expired">Expired</option></select></label>
+                      <label className="full-span"><span>Notes</span><textarea value={certification.notes} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.map((entry) => entry.id === certification.id ? { ...entry, notes: event.target.value } : entry),
+                      })} /></label>
+                    </div>
+                    <div className="inline-actions">
+                      <button className="ghost-button" type="button" onClick={() => setSupplierForm({
+                        ...supplierForm,
+                        certifications: supplierForm.certifications.filter((entry) => entry.id !== certification.id),
+                      })}>Remove certification</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <EmptyState title="No certifications yet" body="Track certification expiry dates and annual review reminders here." />}
+          </section>
+
+          <section className="card">
+            <SectionTitle
+              title="Products supplied"
+              subtitle="Track what this supplier supplies and your current default pricing assumptions."
+              action={<button className="secondary-button" type="button" onClick={() => setSupplierForm({
+                ...supplierForm,
+                suppliedProducts: [...supplierForm.suppliedProducts, {
+                  id: `supplier-product-${Date.now()}`,
+                  productId: '',
+                  productName: '',
+                  supplierSku: '',
+                  defaultPrice: 0,
+                  currency: supplierForm.currency,
+                  minimumOrderQuantity: 0,
+                  leadTimeDays: 0,
+                  lastQuotedDate: '',
+                  active: true,
+                }],
+              })}>Add supplied product</button>}
+            />
+            {supplierForm.suppliedProducts.length ? (
+              <div className="stack-list">
+                {supplierForm.suppliedProducts.map((item) => (
+                  <div key={item.id} className="card">
+                    <div className="form-grid">
+                      <label><span>Product</span><select value={item.productId} onChange={(event) => {
+                        const linkedProduct = products.find((product) => product.id === event.target.value);
+                        setSupplierForm({
+                          ...supplierForm,
+                          suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, productId: event.target.value, productName: linkedProduct?.name ?? '' } : entry),
+                        });
+                      }}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+                      <label><span>Supplier SKU</span><input value={item.supplierSku} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, supplierSku: event.target.value } : entry),
+                      })} /></label>
+                      <label><span>Default price</span><input type="number" min="0" step="0.01" value={item.defaultPrice} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, defaultPrice: Number(event.target.value || 0) } : entry),
+                      })} /></label>
+                      <label><span>Currency</span><select value={item.currency} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, currency: event.target.value as typeof item.currency } : entry),
+                      })}><option value="ZAR">ZAR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></label>
+                      <label><span>MOQ</span><input type="number" min="0" value={item.minimumOrderQuantity} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, minimumOrderQuantity: Number(event.target.value || 0) } : entry),
+                      })} /></label>
+                      <label><span>Lead time (days)</span><input type="number" min="0" value={item.leadTimeDays} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, leadTimeDays: Number(event.target.value || 0) } : entry),
+                      })} /></label>
+                      <label><span>Last quoted date</span><input type="date" value={item.lastQuotedDate} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, lastQuotedDate: event.target.value } : entry),
+                      })} /></label>
+                      <label className="checkbox-row"><input type="checkbox" checked={item.active} onChange={(event) => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.map((entry) => entry.id === item.id ? { ...entry, active: event.target.checked } : entry),
+                      })} />Active supplied product</label>
+                    </div>
+                    <div className="inline-actions">
+                      <button className="ghost-button" type="button" onClick={() => setSupplierForm({
+                        ...supplierForm,
+                        suppliedProducts: supplierForm.suppliedProducts.filter((entry) => entry.id !== item.id),
+                      })}>Remove supplied product</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <EmptyState title="No supplied products yet" body="Track which products this supplier supplies and what your last pricing assumptions were." />}
           </section>
 
           <div className="button-row">

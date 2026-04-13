@@ -67,6 +67,34 @@ function normalizeSupplier(raw: any): Supplier {
         role: contact.role ?? '',
         phone: contact.phone ?? '',
         email: contact.email ?? '',
+        isPrimary: Boolean(contact.isPrimary),
+      }))
+    : [];
+  const certifications = Array.isArray(raw.certifications)
+    ? raw.certifications.map((certification: any, index: number) => ({
+        id: certification.id ?? `supplier-cert-${Date.now()}-${index}`,
+        type: certification.type ?? 'FSC',
+        certificateNumber: certification.certificateNumber ?? '',
+        issuedDate: certification.issuedDate ?? '',
+        expiryDate: certification.expiryDate ?? '',
+        reviewFrequencyMonths: Number(certification.reviewFrequencyMonths ?? 12),
+        reminderDays: Number(certification.reminderDays ?? 30),
+        status: certification.status ?? 'Active',
+        notes: certification.notes ?? '',
+      }))
+    : [];
+  const suppliedProducts = Array.isArray(raw.suppliedProducts)
+    ? raw.suppliedProducts.map((item: any, index: number) => ({
+        id: item.id ?? `supplier-product-${Date.now()}-${index}`,
+        productId: item.productId ?? '',
+        productName: item.productName ?? '',
+        supplierSku: item.supplierSku ?? '',
+        defaultPrice: Number(item.defaultPrice ?? 0),
+        currency: item.currency ?? 'ZAR',
+        minimumOrderQuantity: Number(item.minimumOrderQuantity ?? 0),
+        leadTimeDays: Number(item.leadTimeDays ?? 0),
+        lastQuotedDate: item.lastQuotedDate ?? '',
+        active: item.active !== false,
       }))
     : [];
 
@@ -78,8 +106,26 @@ function normalizeSupplier(raw: any): Supplier {
     email: raw.email ?? '',
     contacts,
     address: raw.address ?? '',
+    billingAddress: raw.billingAddress ?? '',
+    city: raw.city ?? '',
+    country: raw.country ?? '',
+    website: raw.website ?? '',
     supplierType: raw.supplierType ?? 'General',
     certificateCode: raw.certificateCode ?? '',
+    accountNumber: raw.accountNumber ?? '',
+    paymentTerms: raw.paymentTerms ?? '',
+    creditLimit: Number(raw.creditLimit ?? 0),
+    currentBalance: Number(raw.currentBalance ?? 0),
+    currency: raw.currency ?? 'ZAR',
+    isAlsoClient: Boolean(raw.isAlsoClient),
+    linkedClientId: raw.linkedClientId ?? '',
+    linkedClientName: raw.linkedClientName ?? '',
+    lastCheckInDate: raw.lastCheckInDate ?? '',
+    nextReviewDate: raw.nextReviewDate ?? '',
+    reviewFrequencyMonths: Number(raw.reviewFrequencyMonths ?? 12),
+    internalOwner: raw.internalOwner ?? '',
+    certifications,
+    suppliedProducts,
     notes: raw.notes ?? '',
     active: raw.active !== false,
   };

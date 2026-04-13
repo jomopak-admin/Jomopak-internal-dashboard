@@ -179,8 +179,25 @@ const createInitialSupplierForm = (): SupplierFormState => ({
   email: '',
   contacts: [],
   address: '',
+  billingAddress: '',
+  city: '',
+  country: '',
+  website: '',
   supplierType: 'General',
   certificateCode: '',
+  accountNumber: '',
+  paymentTerms: '',
+  creditLimit: '',
+  currentBalance: '',
+  currency: 'ZAR',
+  isAlsoClient: false,
+  linkedClientId: '',
+  lastCheckInDate: '',
+  nextReviewDate: '',
+  reviewFrequencyMonths: '12',
+  internalOwner: '',
+  certifications: [],
+  suppliedProducts: [],
   notes: '',
   active: true,
 });
@@ -826,6 +843,7 @@ function App() {
       setSupplierMessage('Supplier name is required.');
       return;
     }
+    const linkedClient = supplierForm.linkedClientId ? clientsById.get(supplierForm.linkedClientId) : undefined;
     const payload = {
       name: supplierForm.name,
       contactPerson: supplierForm.contactPerson,
@@ -833,8 +851,35 @@ function App() {
       email: supplierForm.email,
       contacts: supplierForm.contacts,
       address: supplierForm.address,
+      billingAddress: supplierForm.billingAddress,
+      city: supplierForm.city,
+      country: supplierForm.country,
+      website: supplierForm.website,
       supplierType: supplierForm.supplierType,
       certificateCode: supplierForm.certificateCode,
+      accountNumber: supplierForm.accountNumber,
+      paymentTerms: supplierForm.paymentTerms,
+      creditLimit: Number(supplierForm.creditLimit || 0),
+      currentBalance: Number(supplierForm.currentBalance || 0),
+      currency: supplierForm.currency,
+      isAlsoClient: supplierForm.isAlsoClient,
+      linkedClientId: linkedClient?.id ?? '',
+      linkedClientName: linkedClient?.name ?? '',
+      lastCheckInDate: supplierForm.lastCheckInDate,
+      nextReviewDate: supplierForm.nextReviewDate,
+      reviewFrequencyMonths: Number(supplierForm.reviewFrequencyMonths || 12),
+      internalOwner: supplierForm.internalOwner,
+      certifications: supplierForm.certifications,
+      suppliedProducts: supplierForm.suppliedProducts.map((item) => {
+        const linkedProduct = item.productId ? productsById.get(item.productId) : undefined;
+        return {
+          ...item,
+          productName: linkedProduct?.name ?? item.productName,
+          defaultPrice: Number(item.defaultPrice || 0),
+          minimumOrderQuantity: Number(item.minimumOrderQuantity || 0),
+          leadTimeDays: Number(item.leadTimeDays || 0),
+        };
+      }),
       notes: supplierForm.notes,
       active: supplierForm.active,
     };
@@ -2037,8 +2082,25 @@ function App() {
       email: supplier.email,
       contacts: supplier.contacts,
       address: supplier.address,
+      billingAddress: supplier.billingAddress,
+      city: supplier.city,
+      country: supplier.country,
+      website: supplier.website,
       supplierType: supplier.supplierType,
       certificateCode: supplier.certificateCode,
+      accountNumber: supplier.accountNumber,
+      paymentTerms: supplier.paymentTerms,
+      creditLimit: String(supplier.creditLimit),
+      currentBalance: String(supplier.currentBalance),
+      currency: supplier.currency,
+      isAlsoClient: supplier.isAlsoClient,
+      linkedClientId: supplier.linkedClientId,
+      lastCheckInDate: supplier.lastCheckInDate,
+      nextReviewDate: supplier.nextReviewDate,
+      reviewFrequencyMonths: String(supplier.reviewFrequencyMonths),
+      internalOwner: supplier.internalOwner,
+      certifications: supplier.certifications,
+      suppliedProducts: supplier.suppliedProducts,
       notes: supplier.notes,
       active: supplier.active,
     });
@@ -2362,6 +2424,8 @@ function App() {
 
       {view === 'suppliers' && (
         <SuppliersPage
+          clients={data.clients}
+          products={data.products}
           supplierForm={supplierForm}
           setSupplierForm={setSupplierForm}
           supplierEditingId={supplierEditingId}
