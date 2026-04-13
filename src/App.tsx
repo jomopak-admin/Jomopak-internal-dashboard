@@ -21,6 +21,7 @@ import { ProductsPage } from './pages/Products/ProductsPage';
 import { ProductionLogsPage } from './pages/ProductionLogs/ProductionLogsPage';
 import { QuotesPage } from './pages/Quotes/QuotesPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
+import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
@@ -108,6 +109,7 @@ import { supabase } from './utils/supabase';
 const currentMonth = getCurrentMonthValue();
 const VIEW_ORDER: View[] = [
   'dashboard',
+  'salesDesk',
   'calculator',
   'permissions',
   'suppliers',
@@ -2114,6 +2116,19 @@ function App() {
           dashboardFinishedStock={dashboardFinishedStock}
           dashboardWasteByReason={dashboardWasteByReason}
           dashboardTopPaper={dashboardTopPaper}
+        />
+      )}
+
+      {view === 'salesDesk' && (
+        <SalesDeskPage
+          profile={profile}
+          monthOptions={monthOptions}
+          quotes={filteredQuoteEstimates}
+          jobs={filteredJobs}
+          onOpenQuote={editQuote}
+          onOpenJob={editJob}
+          onOpenQuotesRegister={() => setView('quotes')}
+          onOpenJobsRegister={() => setView('jobs')}
         />
       )}
 

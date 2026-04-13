@@ -1,5 +1,6 @@
 export type View =
   | 'dashboard'
+  | 'salesDesk'
   | 'calculator'
   | 'permissions'
   | 'suppliers'
@@ -23,6 +24,7 @@ export type UserRole = 'admin' | 'ops' | 'production' | 'sales';
 
 export const VIEW_LABELS: Record<View, string> = {
   dashboard: 'Dashboard',
+  salesDesk: 'Sales Desk',
   calculator: 'Calculator',
   permissions: 'Permissions',
   suppliers: 'Suppliers',
@@ -47,6 +49,7 @@ export const VIEW_LABELS: Record<View, string> = {
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   admin: [
     'dashboard',
+    'salesDesk',
     'calculator',
     'permissions',
     'suppliers',
@@ -98,6 +101,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   ],
   sales: [
     'dashboard',
+    'salesDesk',
     'calculator',
     'quotes',
     'artwork',

@@ -79,7 +79,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
       setMessage(
         error instanceof Error
           ? error.message
-          : 'Failed to create user. Confirm the admin_create_dashboard_user function exists in Supabase.',
+          : 'Failed to create user. Confirm the admin-create-dashboard-user edge function is deployed in Supabase.',
       );
     }
   }

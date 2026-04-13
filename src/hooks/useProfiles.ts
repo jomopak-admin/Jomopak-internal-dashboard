@@ -83,21 +83,24 @@ export function useProfiles(enabled: boolean) {
   }
 
   async function createUser(input: CreateUserInput) {
-    const { data, error } = await supabase
-      .rpc('admin_create_dashboard_user', {
-        p_email: input.email,
-        p_password: input.password,
-        p_full_name: input.fullName,
-        p_role: input.role,
-        p_permissions: input.permissions,
-      })
-      .single();
+    const { data, error } = await supabase.functions.invoke('admin-create-dashboard-user', {
+      body: {
+        email: input.email,
+        password: input.password,
+        fullName: input.fullName,
+        role: input.role,
+        permissions: input.permissions,
+      },
+    });
 
     if (error) {
       throw error;
     }
 
-    const row = data as CreateUserResultRow;
+    const row = data as CreateUserResultRow | null;
+    if (!row?.id) {
+      throw new Error('User creation did not return a profile record.');
+    }
 
     const nextProfile: UserProfile = {
       id: row.id,
