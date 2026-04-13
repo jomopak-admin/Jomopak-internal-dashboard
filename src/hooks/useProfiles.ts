@@ -83,7 +83,23 @@ export function useProfiles(enabled: boolean) {
   }
 
   async function createUser(input: CreateUserInput) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    if (!session?.access_token) {
+      throw new Error('No active admin session found. Please sign in again.');
+    }
+
     const { data, error } = await supabase.functions.invoke('admin-create-dashboard-user', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: {
         email: input.email,
         password: input.password,
@@ -94,7 +110,7 @@ export function useProfiles(enabled: boolean) {
     });
 
     if (error) {
-      throw error;
+      throw new Error(error.message || 'Failed to create dashboard user.');
     }
 
     const row = data as CreateUserResultRow | null;
