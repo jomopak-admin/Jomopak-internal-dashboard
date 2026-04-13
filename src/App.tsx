@@ -575,7 +575,7 @@ function App() {
     [profile?.permissions],
   );
   const allowedViews = useMemo(() => new Set(navItems.map((item) => item.key)), [navItems]);
-  const canManageCostInputs = profile?.role === 'admin' || allowedViews.has('costInputs');
+  const canManageCostInputs = allowedViews.has('costInputs');
   const canViewInternalCalculatorCosts = canManageCostInputs;
 
   useEffect(() => {
@@ -2424,7 +2424,7 @@ function App() {
         />
       )}
 
-      {view === 'permissions' && profile?.role === 'admin' && (
+      {view === 'permissions' && allowedViews.has('permissions') && (
         <PermissionsPage
           profiles={profiles}
           loading={profilesLoading}
