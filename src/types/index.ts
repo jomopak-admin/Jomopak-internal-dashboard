@@ -166,12 +166,21 @@ export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' |
 export type MachineStatus = 'Active' | 'Maintenance' | 'Offline';
 export type ArtworkStage = 'Awaiting Artwork' | 'Artwork Received' | 'Proof Sent' | 'Approved' | 'Changes Requested';
 
+export interface SupplierContact {
+  id: string;
+  fullName: string;
+  role: string;
+  phone: string;
+  email: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
   contactPerson: string;
   phone: string;
   email: string;
+  contacts: SupplierContact[];
   address: string;
   supplierType: SupplierType;
   certificateCode: string;
@@ -329,6 +338,8 @@ export interface Product {
   sku: string;
   category: ProductCategory;
   supplyType: ProductSupplyType;
+  defaultSupplierId: string;
+  defaultSupplierName: string;
   brandingAllowed: boolean;
   defaultUnit: QuantityUnit;
   defaultPaperType: string;
@@ -578,6 +589,7 @@ export interface SupplierFormState {
   contactPerson: string;
   phone: string;
   email: string;
+  contacts: SupplierContact[];
   address: string;
   supplierType: SupplierType;
   certificateCode: string;
@@ -714,6 +726,7 @@ export interface ProductFormState {
   sku: string;
   category: ProductCategory;
   supplyType: ProductSupplyType;
+  defaultSupplierId: string;
   brandingAllowed: boolean;
   defaultUnit: QuantityUnit;
   defaultPaperType: string;

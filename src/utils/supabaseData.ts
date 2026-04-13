@@ -43,12 +43,23 @@ async function safeUpsert(table: string, rows: Record<string, unknown>[]) {
 }
 
 function mapSupplier(row: any): Supplier {
+  const contacts = Array.isArray(row.contacts)
+    ? row.contacts.map((contact: any, index: number) => ({
+        id: contact.id ?? `supplier-contact-${row.id}-${index}`,
+        fullName: contact.fullName ?? contact.full_name ?? '',
+        role: contact.role ?? '',
+        phone: contact.phone ?? '',
+        email: contact.email ?? '',
+      }))
+    : [];
+
   return {
     id: row.id,
     name: row.name,
     contactPerson: row.contact_person ?? '',
     phone: row.phone ?? '',
     email: row.email ?? '',
+    contacts,
     address: row.address ?? '',
     supplierType: row.supplier_type ?? 'General',
     certificateCode: row.certificate_code ?? '',
@@ -216,6 +227,8 @@ function mapProduct(row: any): Product {
     sku: row.sku ?? '',
     category: row.category ?? 'Other Packaging',
     supplyType: row.supply_type ?? 'Purchased',
+    defaultSupplierId: row.default_supplier_id ?? '',
+    defaultSupplierName: row.default_supplier_name ?? '',
     brandingAllowed: Boolean(row.branding_allowed),
     defaultUnit: row.default_unit ?? 'units',
     defaultPaperType: row.default_paper_type ?? '',
@@ -531,6 +544,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       contact_person: supplier.contactPerson || null,
       phone: supplier.phone || null,
       email: supplier.email || null,
+      contacts: supplier.contacts,
       address: supplier.address || null,
       supplier_type: supplier.supplierType,
       certificate_code: supplier.certificateCode || null,
@@ -671,6 +685,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       sku: product.sku || null,
       category: product.category,
       supply_type: product.supplyType,
+      default_supplier_id: product.defaultSupplierId || null,
+      default_supplier_name: product.defaultSupplierName || null,
       branding_allowed: product.brandingAllowed,
       default_unit: product.defaultUnit,
       default_paper_type: product.defaultPaperType || null,

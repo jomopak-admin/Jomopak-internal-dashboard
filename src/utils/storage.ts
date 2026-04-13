@@ -60,12 +60,23 @@ function normalizeJob(raw: any): JobCard {
 }
 
 function normalizeSupplier(raw: any): Supplier {
+  const contacts = Array.isArray(raw.contacts)
+    ? raw.contacts.map((contact: any, index: number) => ({
+        id: contact.id ?? `supplier-contact-${Date.now()}-${index}`,
+        fullName: contact.fullName ?? contact.name ?? '',
+        role: contact.role ?? '',
+        phone: contact.phone ?? '',
+        email: contact.email ?? '',
+      }))
+    : [];
+
   return {
     id: raw.id ?? `supplier-${Date.now()}`,
     name: raw.name ?? '',
     contactPerson: raw.contactPerson ?? '',
     phone: raw.phone ?? '',
     email: raw.email ?? '',
+    contacts,
     address: raw.address ?? '',
     supplierType: raw.supplierType ?? 'General',
     certificateCode: raw.certificateCode ?? '',
@@ -394,7 +405,21 @@ export function loadAppData(): AppData {
       costProfiles: parsed.costProfiles ?? [],
       pricingTiers: parsed.pricingTiers ?? [],
       clients: parsed.clients ?? [],
-      products: parsed.products ?? [],
+      products: (parsed.products ?? []).map((product: any) => ({
+        id: product.id ?? `product-${Date.now()}`,
+        name: product.name ?? '',
+        sku: product.sku ?? '',
+        category: product.category ?? 'Other Packaging',
+        supplyType: product.supplyType ?? 'Purchased',
+        defaultSupplierId: product.defaultSupplierId ?? '',
+        defaultSupplierName: product.defaultSupplierName ?? '',
+        brandingAllowed: Boolean(product.brandingAllowed),
+        defaultUnit: product.defaultUnit ?? 'units',
+        defaultPaperType: product.defaultPaperType ?? '',
+        defaultGsm: product.defaultGsm ?? '',
+        notes: product.notes ?? '',
+        active: product.active !== false,
+      })),
       jobs: (parsed.jobs ?? []).map(normalizeJob),
       finishedGoodsStock: parsed.finishedGoodsStock ?? [],
       spareParts: (parsed.spareParts ?? []).map(normalizeSparePart),

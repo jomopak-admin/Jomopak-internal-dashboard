@@ -177,6 +177,7 @@ const createInitialSupplierForm = (): SupplierFormState => ({
   contactPerson: '',
   phone: '',
   email: '',
+  contacts: [],
   address: '',
   supplierType: 'General',
   certificateCode: '',
@@ -427,6 +428,7 @@ const createInitialProductForm = (): ProductFormState => ({
   sku: '',
   category: 'Paper Bags',
   supplyType: 'Manufactured',
+  defaultSupplierId: '',
   brandingAllowed: true,
   defaultUnit: 'units',
   defaultPaperType: '',
@@ -587,7 +589,8 @@ function App() {
   const dashboardFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => getMonthKey(item.storedDate) === dashboardMonth), [dashboardMonth, data.finishedGoodsStock]);
 
   const filteredSuppliers = useMemo(() => data.suppliers.filter((supplier) => {
-    const matchesSearch = !supplierFilters.search || [supplier.name, supplier.contactPerson, supplier.email, supplier.phone].some((value) => matchesText(value, supplierFilters.search));
+    const contactValues = supplier.contacts.flatMap((contact) => [contact.fullName, contact.role, contact.email, contact.phone]);
+    const matchesSearch = !supplierFilters.search || [supplier.name, supplier.contactPerson, supplier.email, supplier.phone, ...contactValues].some((value) => matchesText(value, supplierFilters.search));
     const matchesType = !supplierFilters.supplierType || supplier.supplierType === supplierFilters.supplierType;
     const matchesActive = supplierFilters.active === 'all' || (supplierFilters.active === 'yes' ? supplier.active : !supplier.active);
     return matchesSearch && matchesType && matchesActive;
@@ -828,6 +831,7 @@ function App() {
       contactPerson: supplierForm.contactPerson,
       phone: supplierForm.phone,
       email: supplierForm.email,
+      contacts: supplierForm.contacts,
       address: supplierForm.address,
       supplierType: supplierForm.supplierType,
       certificateCode: supplierForm.certificateCode,
@@ -1418,10 +1422,16 @@ function App() {
       setProductMessage('Product name is required.');
       return;
     }
+    const linkedSupplier = productForm.defaultSupplierId ? suppliersById.get(productForm.defaultSupplierId) : undefined;
+    const payload = {
+      ...productForm,
+      defaultSupplierId: linkedSupplier?.id ?? '',
+      defaultSupplierName: linkedSupplier?.name ?? '',
+    };
     if (productEditingId) {
-      setData((current) => ({ ...current, products: current.products.map((product) => product.id === productEditingId ? { ...product, ...productForm } : product) }));
+      setData((current) => ({ ...current, products: current.products.map((product) => product.id === productEditingId ? { ...product, ...payload } : product) }));
     } else {
-      setData((current) => ({ ...current, products: [{ id: `product-${Date.now()}`, ...productForm }, ...current.products] }));
+      setData((current) => ({ ...current, products: [{ id: `product-${Date.now()}`, ...payload }, ...current.products] }));
     }
     resetProductEditor();
   }
@@ -1971,6 +1981,7 @@ function App() {
       contactPerson: supplier.contactPerson,
       phone: supplier.phone,
       email: supplier.email,
+      contacts: supplier.contacts,
       address: supplier.address,
       supplierType: supplier.supplierType,
       certificateCode: supplier.certificateCode,
@@ -2073,6 +2084,7 @@ function App() {
       sku: product.sku,
       category: product.category,
       supplyType: product.supplyType,
+      defaultSupplierId: product.defaultSupplierId,
       brandingAllowed: product.brandingAllowed,
       defaultUnit: product.defaultUnit,
       defaultPaperType: product.defaultPaperType,
@@ -2414,6 +2426,8 @@ function App() {
 
       {view === 'products' && (
         <ProductsPage
+          suppliers={data.suppliers}
+          canSeeSupplier={profile?.role === 'admin' || profile?.role === 'ops'}
           productForm={productForm}
           setProductForm={setProductForm}
           productEditingId={productEditingId}
