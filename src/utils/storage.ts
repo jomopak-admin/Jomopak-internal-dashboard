@@ -7,6 +7,7 @@ import {
   JobCard,
   Lead,
   Machine,
+  MaterialOrderRequest,
   MaterialReceipt,
   PaperLog,
   PaperRate,
@@ -19,7 +20,7 @@ import {
 } from '../types';
 import { getToday } from './calculations';
 
-const STORAGE_KEY = 'jomopak-dashboard-data-v4';
+const STORAGE_KEY = 'jomopak-dashboard-data-v5';
 
 function normalizeJob(raw: any): JobCard {
   const code = raw.jobNumber ?? raw.id;
@@ -35,6 +36,11 @@ function normalizeJob(raw: any): JobCard {
     quoteNumber: raw.quoteNumber ?? '',
     quickbooksEstimateNumber: raw.quickbooksEstimateNumber ?? '',
     invoiceNumber: raw.invoiceNumber ?? '',
+    orderValue: Number(raw.orderValue ?? 0),
+    paymentRequirement: raw.paymentRequirement ?? '50% Deposit',
+    paymentStatus: raw.paymentStatus ?? 'Pending',
+    creditCheckStatus: raw.creditCheckStatus ?? 'Not Required',
+    availableCreditAtApproval: Number(raw.availableCreditAtApproval ?? 0),
     commercialReleaseStatus: raw.commercialReleaseStatus ?? 'Pending',
     clientId: raw.clientId ?? '',
     pricingTierId: raw.pricingTierId ?? '',
@@ -47,6 +53,10 @@ function normalizeJob(raw: any): JobCard {
     sizeSpec: raw.sizeSpec ?? raw.size ?? '',
     paperType: raw.paperType ?? '',
     gsm: raw.gsm ?? '',
+    paperQuantityRequired: Number(raw.paperQuantityRequired ?? 0),
+    paperQuantityUnit: raw.paperQuantityUnit ?? 'kg',
+    paperAllocationStatus: raw.paperAllocationStatus ?? 'Not Checked',
+    linkedMaterialOrderId: raw.linkedMaterialOrderId ?? '',
     printRequired: Boolean(raw.printRequired),
     printMethod: raw.printMethod ?? 'Plain',
     colorCount: Number(raw.colorCount ?? 0),
@@ -60,6 +70,10 @@ function normalizeJob(raw: any): JobCard {
     proofSent: Boolean(raw.proofSent),
     approvalStatus: raw.approvalStatus ?? 'Not Sent',
     approvalDate: raw.approvalDate ?? '',
+    artworkPreparationStatus: raw.artworkPreparationStatus ?? 'Needs Design',
+    addElementsRequired: Boolean(raw.addElementsRequired),
+    colorChangesRequired: Boolean(raw.colorChangesRequired),
+    artworkChangeSummary: raw.artworkChangeSummary ?? '',
     changesRequested: raw.changesRequested ?? '',
     artworkNotes: raw.artworkNotes ?? '',
     reserveFromStock: Boolean(raw.reserveFromStock),
@@ -73,6 +87,32 @@ function normalizeJob(raw: any): JobCard {
     releasedBy: raw.releasedBy ?? '',
     notes: raw.notes ?? '',
     fscRelated: Boolean(raw.fscRelated),
+  };
+}
+
+function normalizeMaterialOrderRequest(raw: any): MaterialOrderRequest {
+  const code = raw.orderNumber ?? raw.id ?? '';
+  return {
+    id: code,
+    orderNumber: code,
+    createdAt: raw.createdAt ?? new Date(`${raw.requestedDate ?? getToday()}T08:00:00.000Z`).toISOString(),
+    requestedDate: raw.requestedDate ?? getToday(),
+    status: raw.status ?? 'Requested',
+    jobId: raw.jobId ?? '',
+    jobNumber: raw.jobNumber ?? '',
+    clientId: raw.clientId ?? '',
+    clientName: raw.clientName ?? '',
+    productId: raw.productId ?? '',
+    productName: raw.productName ?? '',
+    paperType: raw.paperType ?? '',
+    gsm: raw.gsm ?? '',
+    quantityRequired: Number(raw.quantityRequired ?? 0),
+    quantityUnit: raw.quantityUnit ?? 'kg',
+    shortageQuantity: Number(raw.shortageQuantity ?? 0),
+    supplierId: raw.supplierId ?? '',
+    supplierName: raw.supplierName ?? '',
+    requestedBy: raw.requestedBy ?? '',
+    notes: raw.notes ?? '',
   };
 }
 
@@ -521,6 +561,7 @@ export function loadAppData(): AppData {
       paperLogs: (parsed.paperLogs ?? []).map(normalizePaper),
       dispatchRecords: (parsed.dispatchRecords ?? []).map(normalizeDispatch),
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
+      materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
     };
   } catch {
     return buildSeedData();

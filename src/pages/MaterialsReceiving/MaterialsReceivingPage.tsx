@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
-import { MaterialFilters, MaterialReceipt, MaterialReceiptFormState, Supplier } from '../../types';
+import { MaterialFilters, MaterialOrderRequest, MaterialReceipt, MaterialReceiptFormState, Supplier } from '../../types';
 import { FSC_CLAIM_TYPES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
 
 interface MaterialsReceivingPageProps {
@@ -17,6 +17,7 @@ interface MaterialsReceivingPageProps {
   materialFilters: MaterialFilters;
   setMaterialFilters: (value: MaterialFilters) => void;
   filteredMaterialReceipts: MaterialReceipt[];
+  materialOrderRequests: MaterialOrderRequest[];
   onEdit: (receipt: MaterialReceipt) => void;
 }
 
@@ -33,6 +34,7 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     materialFilters,
     setMaterialFilters,
     filteredMaterialReceipts,
+    materialOrderRequests,
     onEdit,
   } = props;
   const [mode, setMode] = useState<'list' | 'form'>('list');
@@ -174,6 +176,46 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
           </div>
         </section>
       ) : (
+        <>
+        <section className="card">
+          <SectionTitle title="Paper order cards" subtitle={`${materialOrderRequests.length} order request(s)`} />
+
+          {materialOrderRequests.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Job</th>
+                    <th>Client</th>
+                    <th>Paper</th>
+                    <th>Required</th>
+                    <th>Shortage</th>
+                    <th>Supplier</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {materialOrderRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td><strong>{request.orderNumber}</strong><div className="table-subtext">{formatDate(request.requestedDate)}</div></td>
+                      <td>{request.jobNumber}</td>
+                      <td>{request.clientName}</td>
+                      <td>{request.paperType} {request.gsm ? `· ${request.gsm}` : ''}</td>
+                      <td>{formatNumber(request.quantityRequired)} {request.quantityUnit}</td>
+                      <td>{formatNumber(request.shortageQuantity)} {request.quantityUnit}</td>
+                      <td>{request.supplierName || 'Assign supplier'}</td>
+                      <td>{request.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="No paper order cards" body="Jobs with paper shortages will generate buyer-facing paper order cards here." />
+          )}
+        </section>
+
         <section className="card">
           <SectionTitle title="Receiving register" subtitle={`${filteredMaterialReceipts.length} record(s) shown`} />
 
@@ -242,6 +284,7 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
             <EmptyState title="No receipts match the filters" body="Add a receiving record to start the material traceability chain." />
           )}
         </section>
+        </>
       )}
     </>
   );

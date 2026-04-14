@@ -64,8 +64,10 @@ export function JobDetailPanel({
 
       <div className="job-detail-header">
         <div className="job-detail-chip"><span>Status</span><strong><StatusBadge status={job.status} /></strong></div>
+        <div className="job-detail-chip"><span>Commercial</span><strong>{job.commercialReleaseStatus}</strong></div>
         <div className="job-detail-chip"><span>Proofing</span><strong>{job.approvalStatus}</strong></div>
         <div className="job-detail-chip"><span>Stock</span><strong>{job.stockReservationStatus}</strong></div>
+        <div className="job-detail-chip"><span>Paper</span><strong>{job.paperAllocationStatus}</strong></div>
         <div className="job-detail-chip"><span>Dispatch</span><strong>{job.dispatchStatus || 'Not set'}</strong></div>
         <div className="job-detail-chip"><span>Due date</span><strong>{job.dueDate ? formatDate(job.dueDate) : 'Not set'}</strong></div>
         <div className="job-detail-chip"><span>FSC</span><strong><FlagBadge value={job.fscRelated} /></strong></div>
@@ -88,12 +90,21 @@ export function JobDetailPanel({
           <div className="job-detail-section">
             <h3>Job Summary</h3>
             <div className="detail-list">
+              <div><span>Lead</span><strong>{job.leadNumber || 'Not linked'}</strong></div>
+              <div><span>Quote</span><strong>{job.quoteNumber || job.quickbooksEstimateNumber || 'Not linked'}</strong></div>
+              <div><span>Invoice</span><strong>{job.invoiceNumber || 'Not set'}</strong></div>
+              <div><span>Order value</span><strong>{formatNumber(job.orderValue)}</strong></div>
+              <div><span>Payment basis</span><strong>{job.paymentRequirement}</strong></div>
+              <div><span>Payment status</span><strong>{job.paymentStatus}</strong></div>
+              <div><span>Credit check</span><strong>{job.creditCheckStatus}</strong></div>
               <div><span>Customer reference</span><strong>{job.customerReference || 'Not set'}</strong></div>
               <div><span>Job date</span><strong>{formatDate(job.jobDate)}</strong></div>
               <div><span>Quantity planned</span><strong>{formatNumber(job.quantityPlanned)}</strong></div>
               <div><span>Quantity completed</span><strong>{formatNumber(job.quantityCompleted)}</strong></div>
               <div><span>Paper type</span><strong>{job.paperType || 'Not set'}</strong></div>
               <div><span>GSM</span><strong>{job.gsm || 'Not set'}</strong></div>
+              <div><span>Paper required</span><strong>{formatNumber(job.paperQuantityRequired)} {job.paperQuantityUnit}</strong></div>
+              <div><span>Paper order card</span><strong>{job.linkedMaterialOrderId || 'Not linked'}</strong></div>
               <div><span>Size</span><strong>{job.sizeSpec || 'Not set'}</strong></div>
             </div>
           </div>
@@ -102,9 +113,13 @@ export function JobDetailPanel({
             <h3>Artwork & Proofing</h3>
             <div className="detail-list">
               <div><span>Artwork received</span><strong>{job.artworkReceived ? 'Yes' : 'No'}</strong></div>
+              <div><span>Artwork readiness</span><strong>{job.artworkPreparationStatus}</strong></div>
               <div><span>Proof sent</span><strong>{job.proofSent ? 'Yes' : 'No'}</strong></div>
               <div><span>Approval status</span><strong>{job.approvalStatus}</strong></div>
               <div><span>Approval date</span><strong>{job.approvalDate ? formatDate(job.approvalDate) : 'Not set'}</strong></div>
+              <div><span>Add elements</span><strong>{job.addElementsRequired ? 'Yes' : 'No'}</strong></div>
+              <div><span>Change colours</span><strong>{job.colorChangesRequired ? 'Yes' : 'No'}</strong></div>
+              <div><span>Artwork brief</span><strong>{job.artworkChangeSummary || 'None'}</strong></div>
               <div><span>Changes requested</span><strong>{job.changesRequested || 'None'}</strong></div>
             </div>
           </div>
@@ -116,6 +131,7 @@ export function JobDetailPanel({
               <div><span>Stock batch</span><strong>{job.reservedFinishedGoodsStockNumber || 'Not linked'}</strong></div>
               <div><span>Reserved quantity</span><strong>{formatNumber(job.reservedQuantity)}</strong></div>
               <div><span>Production needed</span><strong>{job.stockReservationStatus === 'Production Needed' ? 'Yes' : 'No'}</strong></div>
+              <div><span>Paper allocation</span><strong>{job.paperAllocationStatus}</strong></div>
             </div>
           </div>
 

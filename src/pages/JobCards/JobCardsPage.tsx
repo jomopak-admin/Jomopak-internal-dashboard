@@ -155,6 +155,39 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <input value={jobForm.invoiceNumber} onChange={(event) => setJobForm({ ...jobForm, invoiceNumber: event.target.value })} />
             </label>
             <label>
+              Order value
+              <input type="number" min="0" value={jobForm.orderValue} onChange={(event) => setJobForm({ ...jobForm, orderValue: event.target.value })} />
+            </label>
+            <label>
+              Payment basis
+              <select value={jobForm.paymentRequirement} onChange={(event) => setJobForm({ ...jobForm, paymentRequirement: event.target.value as JobFormState['paymentRequirement'] })}>
+                <option>50% Deposit</option>
+                <option>Full Payment</option>
+                <option>Credit Terms</option>
+              </select>
+            </label>
+            <label>
+              Payment / credit status
+              <select value={jobForm.paymentStatus} onChange={(event) => setJobForm({ ...jobForm, paymentStatus: event.target.value as JobFormState['paymentStatus'] })}>
+                <option>Pending</option>
+                <option>50% Paid</option>
+                <option>Full Payment Received</option>
+                <option>Credit Limit Applied</option>
+              </select>
+            </label>
+            <label>
+              Credit check
+              <select value={jobForm.creditCheckStatus} onChange={(event) => setJobForm({ ...jobForm, creditCheckStatus: event.target.value as JobFormState['creditCheckStatus'] })}>
+                <option>Not Required</option>
+                <option>Within Limit</option>
+                <option>Blocked</option>
+              </select>
+            </label>
+            <label>
+              Available credit at approval
+              <input type="number" min="0" value={jobForm.availableCreditAtApproval} onChange={(event) => setJobForm({ ...jobForm, availableCreditAtApproval: event.target.value })} />
+            </label>
+            <label>
               Commercial release
               <select value={jobForm.commercialReleaseStatus} onChange={(event) => setJobForm({ ...jobForm, commercialReleaseStatus: event.target.value as JobFormState['commercialReleaseStatus'] })}>
                 <option>Pending</option>
@@ -222,6 +255,28 @@ export function JobCardsPage(props: JobCardsPageProps) {
               GSM
               <input value={jobForm.gsm} onChange={(event) => setJobForm({ ...jobForm, gsm: event.target.value })} />
             </label>
+            <label>
+              Paper quantity required
+              <input type="number" min="0" value={jobForm.paperQuantityRequired} onChange={(event) => setJobForm({ ...jobForm, paperQuantityRequired: event.target.value })} />
+            </label>
+            <label>
+              Paper quantity unit
+              <select value={jobForm.paperQuantityUnit} onChange={(event) => setJobForm({ ...jobForm, paperQuantityUnit: event.target.value as JobFormState['paperQuantityUnit'] })}>
+                <option value="kg">kg</option>
+                <option value="rolls">rolls</option>
+                <option value="sheets">sheets</option>
+                <option value="units">units</option>
+              </select>
+            </label>
+            <label>
+              Paper allocation
+              <select value={jobForm.paperAllocationStatus} onChange={(event) => setJobForm({ ...jobForm, paperAllocationStatus: event.target.value as JobFormState['paperAllocationStatus'] })}>
+                <option>Not Checked</option>
+                <option>In Stock</option>
+                <option>Order Required</option>
+                <option>Ordered</option>
+              </select>
+            </label>
             <label className="checkbox-row">
               <input type="checkbox" checked={jobForm.printRequired} onChange={(event) => setJobForm({ ...jobForm, printRequired: event.target.checked })} />
               Print required
@@ -284,6 +339,14 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <input type="checkbox" checked={jobForm.artworkReceived} onChange={(event) => setJobForm({ ...jobForm, artworkReceived: event.target.checked })} />
               Artwork received
             </label>
+            <label>
+              Artwork readiness
+              <select value={jobForm.artworkPreparationStatus} onChange={(event) => setJobForm({ ...jobForm, artworkPreparationStatus: event.target.value as JobFormState['artworkPreparationStatus'] })}>
+                <option>Print Ready</option>
+                <option>Ready but Not Print Ready</option>
+                <option>Needs Design</option>
+              </select>
+            </label>
             <label className="checkbox-row">
               <input type="checkbox" checked={jobForm.proofSent} onChange={(event) => setJobForm({ ...jobForm, proofSent: event.target.checked })} />
               Proof sent
@@ -300,6 +363,18 @@ export function JobCardsPage(props: JobCardsPageProps) {
             <label>
               Approval date
               <input type="date" value={jobForm.approvalDate} onChange={(event) => setJobForm({ ...jobForm, approvalDate: event.target.value })} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.addElementsRequired} onChange={(event) => setJobForm({ ...jobForm, addElementsRequired: event.target.checked })} />
+              Add other elements
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.colorChangesRequired} onChange={(event) => setJobForm({ ...jobForm, colorChangesRequired: event.target.checked })} />
+              Change colours
+            </label>
+            <label className="full-span">
+              Artwork brief / required changes
+              <textarea value={jobForm.artworkChangeSummary} onChange={(event) => setJobForm({ ...jobForm, artworkChangeSummary: event.target.value })} />
             </label>
             <label className="full-span">
               Changes requested

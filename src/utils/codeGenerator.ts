@@ -1,5 +1,5 @@
 export function generateCode(
-  prefix: 'JOB' | 'RCV' | 'PRD' | 'WST' | 'PPR' | 'DSP' | 'FGS' | 'SPR' | 'QTE' | 'ART' | 'REL' | 'LED',
+  prefix: 'JOB' | 'RCV' | 'PRD' | 'WST' | 'PPR' | 'DSP' | 'FGS' | 'SPR' | 'QTE' | 'ART' | 'REL' | 'LED' | 'POR',
   existingCodes: string[],
   date: string,
 ): string {

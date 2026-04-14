@@ -57,6 +57,7 @@ import {
   MachineFilters,
   MachineFormState,
   MaterialFilters,
+  MaterialOrderRequest,
   MaterialReceipt,
   MaterialReceiptFormState,
   PaperFilters,
@@ -146,6 +147,11 @@ const createInitialJobForm = (): JobFormState => ({
   quoteNumber: '',
   quickbooksEstimateNumber: '',
   invoiceNumber: '',
+  orderValue: '',
+  paymentRequirement: '50% Deposit',
+  paymentStatus: 'Pending',
+  creditCheckStatus: 'Not Required',
+  availableCreditAtApproval: '',
   commercialReleaseStatus: 'Pending',
   clientId: '',
   pricingTierId: '',
@@ -158,6 +164,9 @@ const createInitialJobForm = (): JobFormState => ({
   sizeSpec: '',
   paperType: '',
   gsm: '',
+  paperQuantityRequired: '',
+  paperQuantityUnit: 'kg',
+  paperAllocationStatus: 'Not Checked',
   printRequired: false,
   printMethod: 'Plain',
   colorCount: '0',
@@ -171,6 +180,10 @@ const createInitialJobForm = (): JobFormState => ({
   proofSent: false,
   approvalStatus: 'Not Sent',
   approvalDate: '',
+  artworkPreparationStatus: 'Needs Design',
+  addElementsRequired: false,
+  colorChangesRequired: false,
+  artworkChangeSummary: '',
   changesRequested: '',
   artworkNotes: '',
   reserveFromStock: false,
@@ -641,6 +654,7 @@ function App() {
   const tiersById = useMemo(() => new Map(data.pricingTiers.map((tier) => [tier.id, tier])), [data.pricingTiers]);
   const clientsById = useMemo(() => new Map(data.clients.map((client) => [client.id, client])), [data.clients]);
   const productsById = useMemo(() => new Map(data.products.map((product) => [product.id, product])), [data.products]);
+  const quotesById = useMemo(() => new Map(data.quoteEstimates.map((quote) => [quote.id, quote])), [data.quoteEstimates]);
   const jobsById = useMemo(() => new Map(data.jobs.map((job) => [job.id, job])), [data.jobs]);
   const finishedStockById = useMemo(() => new Map(data.finishedGoodsStock.map((item) => [item.id, item])), [data.finishedGoodsStock]);
   const materialsById = useMemo(() => new Map(data.materialReceipts.map((receipt) => [receipt.id, receipt])), [data.materialReceipts]);
@@ -1187,8 +1201,26 @@ function App() {
       return;
     }
     const previousJob = jobEditingId ? data.jobs.find((job) => job.id === jobEditingId) : undefined;
+    const linkedClient = jobForm.clientId ? clientsById.get(jobForm.clientId) : undefined;
+    const linkedProduct = jobForm.productId ? productsById.get(jobForm.productId) : undefined;
+    const linkedQuote = jobForm.quoteId ? quotesById.get(jobForm.quoteId) : undefined;
     const linkedReservationStock = jobForm.reservedFinishedGoodsStockId ? finishedStockById.get(jobForm.reservedFinishedGoodsStockId) : undefined;
     const reservedQuantity = Number(jobForm.reservedQuantity || 0);
+    const commercialCleared = jobForm.commercialReleaseStatus === 'Cleared for Production';
+    const orderValue = Number(jobForm.orderValue || linkedQuote?.totalQuote || 0);
+    const availableCredit = linkedClient ? Math.max(linkedClient.creditLimit - linkedClient.currentBalance, 0) : 0;
+    const paymentRequirement = jobForm.paymentRequirement;
+    const paymentStatus = jobForm.paymentStatus;
+    const creditCheckStatus = paymentRequirement === 'Credit Terms'
+      ? (paymentStatus === 'Credit Limit Applied' && orderValue > 0 && orderValue <= availableCredit ? 'Within Limit' : 'Blocked')
+      : 'Not Required';
+    const paperQuantityRequired = Number(jobForm.paperQuantityRequired || 0);
+
+    if (jobForm.reserveFromStock && !commercialCleared) {
+      setJobMessage('Commercial clearance is required before reserving finished stock.');
+      return;
+    }
+
     if (jobForm.reserveFromStock) {
       if (!linkedReservationStock || !reservedQuantity) {
         setJobMessage('Select a stock batch and reserved quantity when reserving stock.');
@@ -1203,10 +1235,70 @@ function App() {
         return;
       }
     }
+
+    if (commercialCleared) {
+      if (!linkedClient) {
+        setJobMessage('Select a linked client before clearing a job for production.');
+        return;
+      }
+      if (linkedClient.accountHold) {
+        setJobMessage(`Client account is on hold. ${linkedClient.name} cannot be released to production.`);
+        return;
+      }
+      if (!jobForm.invoiceNumber.trim()) {
+        setJobMessage('Invoice number is required before clearing a job for production.');
+        return;
+      }
+      if (paymentRequirement === '50% Deposit' && paymentStatus !== '50% Paid' && paymentStatus !== 'Full Payment Received') {
+        setJobMessage('This client requires a deposit before the job can be cleared.');
+        return;
+      }
+      if (paymentRequirement === 'Full Payment' && paymentStatus !== 'Full Payment Received') {
+        setJobMessage('Full payment must be received before the job can be cleared.');
+        return;
+      }
+      if (paymentRequirement === 'Credit Terms') {
+        if (paymentStatus !== 'Credit Limit Applied') {
+          setJobMessage('Mark the job as Credit Limit Applied once the credit check passes.');
+          return;
+        }
+        if (orderValue <= 0) {
+          setJobMessage('Order value is required to validate the client credit limit.');
+          return;
+        }
+        if (orderValue > availableCredit) {
+          setJobMessage(`Order value exceeds available credit. Available credit: ${availableCredit.toFixed(2)}.`);
+          return;
+        }
+      }
+    }
+
+    const matchingReceipts = data.materialReceipts.filter((receipt) =>
+      matchesText(receipt.paperType, jobForm.paperType) &&
+      matchesText(receipt.gsm, jobForm.gsm) &&
+      receipt.quantityUnit === jobForm.paperQuantityUnit,
+    );
+    const availablePaperQuantity = Math.max(
+      matchingReceipts.reduce((sum, receipt) => sum + receipt.quantityReceived, 0) -
+      data.paperLogs
+        .filter((log) =>
+          matchesText(log.paperType, jobForm.paperType) &&
+          matchesText(log.gsm, jobForm.gsm) &&
+          log.quantityUnit === jobForm.paperQuantityUnit,
+        )
+        .reduce((sum, log) => sum + log.quantityUsed, 0),
+      0,
+    );
+    const paperShortage = commercialCleared && paperQuantityRequired > 0
+      ? Math.max(paperQuantityRequired - availablePaperQuantity, 0)
+      : 0;
+
     setJobMessage('');
     if (jobEditingId) {
       setData((current) => {
         let nextFinishedStock = current.finishedGoodsStock.map((item) => ({ ...item }));
+        let nextMaterialOrderRequests = current.materialOrderRequests.map((request) => ({ ...request }));
+
         if (previousJob?.reservedFinishedGoodsStockId) {
           nextFinishedStock = nextFinishedStock.map((item) => item.id === previousJob.reservedFinishedGoodsStockId ? {
             ...item,
@@ -1215,7 +1307,7 @@ function App() {
             stockStatus: Math.max(item.quantityReserved - previousJob.reservedQuantity, 0) > 0 ? item.stockStatus : 'In Storage',
           } : item);
         }
-        if (jobForm.reserveFromStock && linkedReservationStock) {
+        if (commercialCleared && jobForm.reserveFromStock && linkedReservationStock) {
           nextFinishedStock = nextFinishedStock.map((item) => item.id === linkedReservationStock.id ? {
             ...item,
             quantityReserved: item.quantityReserved + reservedQuantity,
@@ -1223,9 +1315,79 @@ function App() {
             stockStatus: 'Reserved',
           } : item);
         }
+
+        let linkedMaterialOrderId = previousJob?.linkedMaterialOrderId ?? '';
+        let paperAllocationStatus: JobCard['paperAllocationStatus'] = commercialCleared
+          ? (paperQuantityRequired > 0 ? (paperShortage > 0 ? 'Order Required' : 'In Stock') : 'Not Checked')
+          : 'Not Checked';
+
+        if (previousJob?.linkedMaterialOrderId && paperShortage <= 0) {
+          nextMaterialOrderRequests = nextMaterialOrderRequests.map((request) =>
+            request.id === previousJob.linkedMaterialOrderId
+              ? { ...request, status: 'Cancelled', notes: 'Cancelled automatically after job paper availability was updated.' }
+              : request,
+          );
+          linkedMaterialOrderId = '';
+        }
+
+        if (paperShortage > 0) {
+          if (previousJob?.linkedMaterialOrderId) {
+            nextMaterialOrderRequests = nextMaterialOrderRequests.map((request) =>
+              request.id === previousJob.linkedMaterialOrderId
+                ? {
+                    ...request,
+                    requestedDate: jobForm.jobDate,
+                    status: request.status === 'Received' ? request.status : 'Requested',
+                    clientId: linkedClient?.id ?? '',
+                    clientName: linkedClient?.name ?? jobForm.customerName,
+                    productId: linkedProduct?.id ?? '',
+                    productName: linkedProduct?.name ?? jobForm.productName,
+                    paperType: jobForm.paperType,
+                    gsm: jobForm.gsm,
+                    quantityRequired: paperQuantityRequired,
+                    quantityUnit: jobForm.paperQuantityUnit,
+                    shortageQuantity: paperShortage,
+                    supplierId: linkedProduct?.defaultSupplierId ?? '',
+                    supplierName: linkedProduct?.defaultSupplierName ?? '',
+                    requestedBy: profile?.fullName || profile?.email || 'Unknown user',
+                    notes: `Auto-updated from ${jobForm.jobDate} job release.`,
+                  }
+                : request,
+            );
+            linkedMaterialOrderId = previousJob.linkedMaterialOrderId;
+          } else {
+            const orderNumber = generateCode('POR', current.materialOrderRequests.map((request) => request.orderNumber), jobForm.jobDate);
+            const newOrder: MaterialOrderRequest = {
+              id: orderNumber,
+              orderNumber,
+              createdAt: new Date().toISOString(),
+              requestedDate: jobForm.jobDate,
+              status: 'Requested',
+              jobId: jobEditingId,
+              jobNumber: previousJob?.jobNumber ?? '',
+              clientId: linkedClient?.id ?? '',
+              clientName: linkedClient?.name ?? jobForm.customerName,
+              productId: linkedProduct?.id ?? '',
+              productName: linkedProduct?.name ?? jobForm.productName,
+              paperType: jobForm.paperType,
+              gsm: jobForm.gsm,
+              quantityRequired: paperQuantityRequired,
+              quantityUnit: jobForm.paperQuantityUnit,
+              shortageQuantity: paperShortage,
+              supplierId: linkedProduct?.defaultSupplierId ?? '',
+              supplierName: linkedProduct?.defaultSupplierName ?? '',
+              requestedBy: profile?.fullName || profile?.email || 'Unknown user',
+              notes: `Auto-created from ${previousJob?.jobNumber ?? 'job'} because paper stock is short.`,
+            };
+            nextMaterialOrderRequests = [newOrder, ...nextMaterialOrderRequests];
+            linkedMaterialOrderId = newOrder.id;
+          }
+        }
+
         return {
           ...current,
           finishedGoodsStock: nextFinishedStock,
+          materialOrderRequests: nextMaterialOrderRequests,
           jobs: current.jobs.map((job) => job.id === jobEditingId ? {
             ...job,
             jobDate: jobForm.jobDate,
@@ -1236,6 +1398,11 @@ function App() {
             quoteNumber: jobForm.quoteNumber,
             quickbooksEstimateNumber: jobForm.quickbooksEstimateNumber,
             invoiceNumber: jobForm.invoiceNumber,
+            orderValue,
+            paymentRequirement,
+            paymentStatus,
+            creditCheckStatus,
+            availableCreditAtApproval: paymentRequirement === 'Credit Terms' ? availableCredit : 0,
             commercialReleaseStatus: jobForm.commercialReleaseStatus,
             clientId: jobForm.clientId,
             pricingTierId: jobForm.pricingTierId,
@@ -1248,6 +1415,10 @@ function App() {
             sizeSpec: jobForm.sizeSpec,
             paperType: jobForm.paperType,
             gsm: jobForm.gsm,
+            paperQuantityRequired,
+            paperQuantityUnit: jobForm.paperQuantityUnit,
+            paperAllocationStatus,
+            linkedMaterialOrderId,
             printRequired: jobForm.printRequired,
             printMethod: jobForm.printMethod,
             colorCount: Number(jobForm.colorCount || 0),
@@ -1261,13 +1432,17 @@ function App() {
             proofSent: jobForm.proofSent,
             approvalStatus: jobForm.approvalStatus,
             approvalDate: jobForm.approvalDate,
+            artworkPreparationStatus: jobForm.artworkPreparationStatus,
+            addElementsRequired: jobForm.addElementsRequired,
+            colorChangesRequired: jobForm.colorChangesRequired,
+            artworkChangeSummary: jobForm.artworkChangeSummary,
             changesRequested: jobForm.changesRequested,
             artworkNotes: jobForm.artworkNotes,
             reserveFromStock: jobForm.reserveFromStock,
-            reservedFinishedGoodsStockId: jobForm.reserveFromStock ? linkedReservationStock?.id ?? '' : '',
-            reservedFinishedGoodsStockNumber: jobForm.reserveFromStock ? linkedReservationStock?.stockNumber ?? '' : '',
-            reservedQuantity: jobForm.reserveFromStock ? reservedQuantity : 0,
-            stockReservationStatus: jobForm.reserveFromStock && linkedReservationStock ? 'Reserved' : 'Production Needed',
+            reservedFinishedGoodsStockId: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.id ?? '' : '',
+            reservedFinishedGoodsStockNumber: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.stockNumber ?? '' : '',
+            reservedQuantity: commercialCleared && jobForm.reserveFromStock ? reservedQuantity : 0,
+            stockReservationStatus: commercialCleared ? (jobForm.reserveFromStock && linkedReservationStock ? 'Reserved' : 'Production Needed') : 'Not Checked',
             dispatchStatus: jobForm.dispatchStatus,
             qualityNotes: jobForm.qualityNotes,
             capturedBy: jobForm.capturedBy,
@@ -1279,6 +1454,10 @@ function App() {
       });
     } else {
       const jobNumber = generateCode('JOB', data.jobs.map((job) => job.jobNumber), jobForm.jobDate);
+      let linkedMaterialOrderId = '';
+      let paperAllocationStatus: JobCard['paperAllocationStatus'] = commercialCleared
+        ? (paperQuantityRequired > 0 ? (paperShortage > 0 ? 'Order Required' : 'In Stock') : 'Not Checked')
+        : 'Not Checked';
       const newJob: JobCard = {
         id: jobNumber,
         jobNumber,
@@ -1291,6 +1470,11 @@ function App() {
         quoteNumber: jobForm.quoteNumber,
         quickbooksEstimateNumber: jobForm.quickbooksEstimateNumber,
         invoiceNumber: jobForm.invoiceNumber,
+        orderValue,
+        paymentRequirement,
+        paymentStatus,
+        creditCheckStatus,
+        availableCreditAtApproval: paymentRequirement === 'Credit Terms' ? availableCredit : 0,
         commercialReleaseStatus: jobForm.commercialReleaseStatus,
         clientId: jobForm.clientId,
         pricingTierId: jobForm.pricingTierId,
@@ -1303,6 +1487,10 @@ function App() {
         sizeSpec: jobForm.sizeSpec,
         paperType: jobForm.paperType,
         gsm: jobForm.gsm,
+        paperQuantityRequired,
+        paperQuantityUnit: jobForm.paperQuantityUnit,
+        paperAllocationStatus,
+        linkedMaterialOrderId: '',
         printRequired: jobForm.printRequired,
         printMethod: jobForm.printMethod,
         colorCount: Number(jobForm.colorCount || 0),
@@ -1316,13 +1504,17 @@ function App() {
         proofSent: jobForm.proofSent,
         approvalStatus: jobForm.approvalStatus,
         approvalDate: jobForm.approvalDate,
+        artworkPreparationStatus: jobForm.artworkPreparationStatus,
+        addElementsRequired: jobForm.addElementsRequired,
+        colorChangesRequired: jobForm.colorChangesRequired,
+        artworkChangeSummary: jobForm.artworkChangeSummary,
         changesRequested: jobForm.changesRequested,
         artworkNotes: jobForm.artworkNotes,
         reserveFromStock: jobForm.reserveFromStock,
-        reservedFinishedGoodsStockId: jobForm.reserveFromStock ? linkedReservationStock?.id ?? '' : '',
-        reservedFinishedGoodsStockNumber: jobForm.reserveFromStock ? linkedReservationStock?.stockNumber ?? '' : '',
-        reservedQuantity: jobForm.reserveFromStock ? reservedQuantity : 0,
-        stockReservationStatus: jobForm.reserveFromStock && linkedReservationStock ? 'Reserved' : 'Production Needed',
+        reservedFinishedGoodsStockId: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.id ?? '' : '',
+        reservedFinishedGoodsStockNumber: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.stockNumber ?? '' : '',
+        reservedQuantity: commercialCleared && jobForm.reserveFromStock ? reservedQuantity : 0,
+        stockReservationStatus: commercialCleared ? (jobForm.reserveFromStock && linkedReservationStock ? 'Reserved' : 'Production Needed') : 'Not Checked',
         dispatchStatus: jobForm.dispatchStatus,
         qualityNotes: jobForm.qualityNotes,
         capturedBy: jobForm.capturedBy,
@@ -1330,14 +1522,47 @@ function App() {
         notes: jobForm.notes,
         fscRelated: jobForm.fscRelated,
       };
+
+      const nextMaterialOrders = [...data.materialOrderRequests];
+      if (paperShortage > 0) {
+        const orderNumber = generateCode('POR', data.materialOrderRequests.map((request) => request.orderNumber), jobForm.jobDate);
+        const newOrder: MaterialOrderRequest = {
+          id: orderNumber,
+          orderNumber,
+          createdAt: new Date().toISOString(),
+          requestedDate: jobForm.jobDate,
+          status: 'Requested',
+          jobId: newJob.id,
+          jobNumber: newJob.jobNumber,
+          clientId: linkedClient?.id ?? '',
+          clientName: linkedClient?.name ?? jobForm.customerName,
+          productId: linkedProduct?.id ?? '',
+          productName: linkedProduct?.name ?? jobForm.productName,
+          paperType: jobForm.paperType,
+          gsm: jobForm.gsm,
+          quantityRequired: paperQuantityRequired,
+          quantityUnit: jobForm.paperQuantityUnit,
+          shortageQuantity: paperShortage,
+          supplierId: linkedProduct?.defaultSupplierId ?? '',
+          supplierName: linkedProduct?.defaultSupplierName ?? '',
+          requestedBy: profile?.fullName || profile?.email || 'Unknown user',
+          notes: `Auto-created from ${newJob.jobNumber} because paper stock is short.`,
+        };
+        nextMaterialOrders.unshift(newOrder);
+        newJob.linkedMaterialOrderId = newOrder.id;
+        paperAllocationStatus = 'Order Required';
+        newJob.paperAllocationStatus = paperAllocationStatus;
+      }
+
       setData((current) => ({
         ...current,
-        finishedGoodsStock: current.finishedGoodsStock.map((item) => jobForm.reserveFromStock && linkedReservationStock && item.id === linkedReservationStock.id ? {
+        finishedGoodsStock: current.finishedGoodsStock.map((item) => commercialCleared && jobForm.reserveFromStock && linkedReservationStock && item.id === linkedReservationStock.id ? {
           ...item,
           quantityReserved: item.quantityReserved + reservedQuantity,
           quantityAvailable: Math.max(item.quantityAvailable - reservedQuantity, 0),
           stockStatus: 'Reserved',
         } : item),
+        materialOrderRequests: nextMaterialOrders,
         jobs: [newJob, ...current.jobs],
       }));
     }
@@ -1995,6 +2220,11 @@ function App() {
       quoteNumber: job.quoteNumber,
       quickbooksEstimateNumber: job.quickbooksEstimateNumber,
       invoiceNumber: job.invoiceNumber,
+      orderValue: String(job.orderValue),
+      paymentRequirement: job.paymentRequirement,
+      paymentStatus: job.paymentStatus,
+      creditCheckStatus: job.creditCheckStatus,
+      availableCreditAtApproval: String(job.availableCreditAtApproval),
       commercialReleaseStatus: job.commercialReleaseStatus,
       clientId: job.clientId,
       pricingTierId: job.pricingTierId,
@@ -2007,6 +2237,9 @@ function App() {
       sizeSpec: job.sizeSpec,
       paperType: job.paperType,
       gsm: job.gsm,
+      paperQuantityRequired: String(job.paperQuantityRequired),
+      paperQuantityUnit: job.paperQuantityUnit,
+      paperAllocationStatus: job.paperAllocationStatus,
       printRequired: job.printRequired,
       printMethod: job.printMethod,
       colorCount: String(job.colorCount),
@@ -2020,6 +2253,10 @@ function App() {
       proofSent: job.proofSent,
       approvalStatus: job.approvalStatus,
       approvalDate: job.approvalDate,
+      artworkPreparationStatus: job.artworkPreparationStatus,
+      addElementsRequired: job.addElementsRequired,
+      colorChangesRequired: job.colorChangesRequired,
+      artworkChangeSummary: job.artworkChangeSummary,
       changesRequested: job.changesRequested,
       artworkNotes: job.artworkNotes,
       reserveFromStock: job.reserveFromStock,
@@ -2086,6 +2323,11 @@ function App() {
       quoteNumber: job.quoteNumber,
       quickbooksEstimateNumber: job.quickbooksEstimateNumber,
       invoiceNumber: job.invoiceNumber,
+      orderValue: String(job.orderValue),
+      paymentRequirement: job.paymentRequirement,
+      paymentStatus: job.paymentStatus,
+      creditCheckStatus: job.creditCheckStatus,
+      availableCreditAtApproval: String(job.availableCreditAtApproval),
       commercialReleaseStatus: job.commercialReleaseStatus,
       clientId: job.clientId,
       pricingTierId: job.pricingTierId,
@@ -2098,6 +2340,9 @@ function App() {
       sizeSpec: job.sizeSpec,
       paperType: job.paperType,
       gsm: job.gsm,
+      paperQuantityRequired: String(job.paperQuantityRequired),
+      paperQuantityUnit: job.paperQuantityUnit,
+      paperAllocationStatus: job.paperAllocationStatus,
       printRequired: job.printRequired,
       printMethod: job.printMethod,
       colorCount: String(job.colorCount),
@@ -2111,6 +2356,10 @@ function App() {
       proofSent: job.proofSent,
       approvalStatus: job.approvalStatus,
       approvalDate: job.approvalDate,
+      artworkPreparationStatus: job.artworkPreparationStatus,
+      addElementsRequired: job.addElementsRequired,
+      colorChangesRequired: job.colorChangesRequired,
+      artworkChangeSummary: job.artworkChangeSummary,
       changesRequested: job.changesRequested,
       artworkNotes: job.artworkNotes,
       reserveFromStock: false,
@@ -2867,6 +3116,7 @@ function App() {
           materialFilters={materialFilters}
           setMaterialFilters={setMaterialFilters}
           filteredMaterialReceipts={filteredMaterialReceipts}
+          materialOrderRequests={data.materialOrderRequests}
           onEdit={editMaterial}
         />
       )}

@@ -270,6 +270,12 @@ export type HandleType = 'None' | 'Flat Handle' | 'Rope Handle' | 'Roll Handle';
 export type PrintMethod = 'Plain' | 'Auto' | 'Screen Print' | 'Flexo' | 'Digital Print' | 'Litho';
 export type SupplyFormat = 'Boxes' | 'Flat Packed' | 'Bundles' | 'Palletized' | 'Loose';
 export type CommercialReleaseStatus = 'Pending' | 'Accepted' | 'Invoiced' | 'Cleared for Production';
+export type PaymentRequirement = '50% Deposit' | 'Full Payment' | 'Credit Terms';
+export type PaymentStatus = 'Pending' | '50% Paid' | 'Full Payment Received' | 'Credit Limit Applied';
+export type CreditCheckStatus = 'Not Required' | 'Within Limit' | 'Blocked';
+export type PaperAllocationStatus = 'Not Checked' | 'In Stock' | 'Order Required' | 'Ordered';
+export type ProcurementOrderStatus = 'Requested' | 'Ordered' | 'Received' | 'Cancelled';
+export type ArtworkPreparationStatus = 'Print Ready' | 'Ready but Not Print Ready' | 'Needs Design';
 export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
 export type LeadStatus = 'New' | 'Qualified' | 'Awaiting Info' | 'Quoted' | 'Won' | 'Lost';
@@ -544,6 +550,11 @@ export interface JobCard {
   quoteNumber: string;
   quickbooksEstimateNumber: string;
   invoiceNumber: string;
+  orderValue: number;
+  paymentRequirement: PaymentRequirement;
+  paymentStatus: PaymentStatus;
+  creditCheckStatus: CreditCheckStatus;
+  availableCreditAtApproval: number;
   commercialReleaseStatus: CommercialReleaseStatus;
   clientId: string;
   pricingTierId: string;
@@ -556,6 +567,10 @@ export interface JobCard {
   sizeSpec: string;
   paperType: string;
   gsm: string;
+  paperQuantityRequired: number;
+  paperQuantityUnit: QuantityUnit;
+  paperAllocationStatus: PaperAllocationStatus;
+  linkedMaterialOrderId: string;
   printRequired: boolean;
   printMethod: PrintMethod;
   colorCount: number;
@@ -569,6 +584,10 @@ export interface JobCard {
   proofSent: boolean;
   approvalStatus: ApprovalStatus;
   approvalDate: string;
+  artworkPreparationStatus: ArtworkPreparationStatus;
+  addElementsRequired: boolean;
+  colorChangesRequired: boolean;
+  artworkChangeSummary: string;
   changesRequested: string;
   artworkNotes: string;
   reserveFromStock: boolean;
@@ -783,6 +802,30 @@ export interface AppData {
   paperLogs: PaperLog[];
   dispatchRecords: DispatchRecord[];
   stockChangeLogs: StockChangeLog[];
+  materialOrderRequests: MaterialOrderRequest[];
+}
+
+export interface MaterialOrderRequest {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  requestedDate: string;
+  status: ProcurementOrderStatus;
+  jobId: string;
+  jobNumber: string;
+  clientId: string;
+  clientName: string;
+  productId: string;
+  productName: string;
+  paperType: string;
+  gsm: string;
+  quantityRequired: number;
+  quantityUnit: QuantityUnit;
+  shortageQuantity: number;
+  supplierId: string;
+  supplierName: string;
+  requestedBy: string;
+  notes: string;
 }
 
 export interface SupplierFormState {
@@ -981,6 +1024,11 @@ export interface JobFormState {
   quoteNumber: string;
   quickbooksEstimateNumber: string;
   invoiceNumber: string;
+  orderValue: string;
+  paymentRequirement: PaymentRequirement;
+  paymentStatus: PaymentStatus;
+  creditCheckStatus: CreditCheckStatus;
+  availableCreditAtApproval: string;
   commercialReleaseStatus: CommercialReleaseStatus;
   clientId: string;
   pricingTierId: string;
@@ -993,6 +1041,9 @@ export interface JobFormState {
   sizeSpec: string;
   paperType: string;
   gsm: string;
+  paperQuantityRequired: string;
+  paperQuantityUnit: QuantityUnit;
+  paperAllocationStatus: PaperAllocationStatus;
   printRequired: boolean;
   printMethod: PrintMethod;
   colorCount: string;
@@ -1006,6 +1057,10 @@ export interface JobFormState {
   proofSent: boolean;
   approvalStatus: ApprovalStatus;
   approvalDate: string;
+  artworkPreparationStatus: ArtworkPreparationStatus;
+  addElementsRequired: boolean;
+  colorChangesRequired: boolean;
+  artworkChangeSummary: string;
   changesRequested: string;
   artworkNotes: string;
   reserveFromStock: boolean;

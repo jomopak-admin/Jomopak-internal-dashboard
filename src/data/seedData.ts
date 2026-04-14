@@ -22,5 +22,6 @@ export function buildSeedData(): AppData {
     paperLogs: [],
     dispatchRecords: [],
     stockChangeLogs: [],
+    materialOrderRequests: [],
   };
 }
