@@ -132,6 +132,7 @@ function mapQuoteEstimate(row: any): QuoteEstimate {
   return {
     id: row.id,
     quoteNumber: row.quote_number,
+    quickbooksEstimateNumber: row.quickbooks_estimate_number ?? '',
     createdAt: row.created_at,
     quoteDate: row.quote_date,
     clientId: row.client_id ?? '',
@@ -679,6 +680,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     safeUpsert('quote_estimates', data.quoteEstimates.map((quote) => ({
       id: quote.id,
       quote_number: quote.quoteNumber,
+      quickbooks_estimate_number: quote.quickbooksEstimateNumber || null,
       created_at: quote.createdAt,
       quote_date: quote.quoteDate,
       client_id: quote.clientId || null,

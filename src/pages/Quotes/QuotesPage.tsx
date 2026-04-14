@@ -73,6 +73,7 @@ export function QuotesPage({
           {quoteMessage ? <div className="message-strip">{quoteMessage}</div> : null}
           <div className="form-grid">
             <label><span>Quote date</span><input type="date" value={quoteForm.quoteDate} onChange={(event) => setQuoteForm({ ...quoteForm, quoteDate: event.target.value })} /></label>
+            <label><span>QuickBooks estimate #</span><input value={quoteForm.quickbooksEstimateNumber} onChange={(event) => setQuoteForm({ ...quoteForm, quickbooksEstimateNumber: event.target.value })} placeholder="Optional reference" /></label>
             <label><span>Client</span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
             <label><span>Product</span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
             <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
@@ -107,7 +108,7 @@ export function QuotesPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Quote</th><th>Date</th><th>Client</th><th>Product</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>{filteredQuotes.map((quote) => <tr key={quote.id}><td><strong>{quote.quoteNumber}</strong><div className="table-subtext">{quote.sizeSpec || 'No size'}</div></td><td>{formatDate(quote.quoteDate)}</td><td>{quote.clientName}</td><td>{quote.productName}</td><td>{formatNumber(quote.totalQuote, 2)}</td><td>{quote.status}</td><td><button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredQuotes.map((quote) => <tr key={quote.id}><td><strong>{quote.quoteNumber}</strong><div className="table-subtext">{quote.quickbooksEstimateNumber ? `QB ${quote.quickbooksEstimateNumber}` : (quote.sizeSpec || 'No size')}</div></td><td>{formatDate(quote.quoteDate)}</td><td>{quote.clientName}</td><td>{quote.productName}</td><td>{formatNumber(quote.totalQuote, 2)}</td><td>{quote.status}</td><td><button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No quotes yet" body="Save estimates here before converting them into jobs." />}

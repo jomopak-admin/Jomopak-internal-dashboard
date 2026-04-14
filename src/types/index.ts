@@ -358,6 +358,7 @@ export interface Machine {
 export interface QuoteEstimate {
   id: string;
   quoteNumber: string;
+  quickbooksEstimateNumber: string;
   createdAt: string;
   quoteDate: string;
   clientId: string;
@@ -824,6 +825,7 @@ export interface LeadFormState {
 
 export interface QuoteEstimateFormState {
   quoteDate: string;
+  quickbooksEstimateNumber: string;
   clientId: string;
   productId: string;
   pricingTierId: string;

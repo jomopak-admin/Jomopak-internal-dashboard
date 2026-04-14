@@ -164,6 +164,7 @@ function normalizeQuoteEstimate(raw: any): QuoteEstimate {
   return {
     id: code,
     quoteNumber: code,
+    quickbooksEstimateNumber: raw.quickbooksEstimateNumber ?? raw.quickbooksEstimateNo ?? '',
     createdAt: raw.createdAt ?? new Date(`${raw.quoteDate ?? getToday()}T08:00:00.000Z`).toISOString(),
     quoteDate: raw.quoteDate ?? getToday(),
     clientId: raw.clientId ?? '',

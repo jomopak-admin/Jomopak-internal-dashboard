@@ -221,6 +221,7 @@ const createInitialMachineForm = (): MachineFormState => ({
 
 const createInitialQuoteForm = (): QuoteEstimateFormState => ({
   quoteDate: getToday(),
+  quickbooksEstimateNumber: '',
   clientId: '',
   productId: '',
   pricingTierId: '',
@@ -756,7 +757,7 @@ function App() {
   }), [data.dispatchRecords, dispatchFilters]);
 
   const filteredQuoteEstimates = useMemo(() => data.quoteEstimates.filter((quote) => {
-    const matchesSearch = !quoteFilters.search || [quote.quoteNumber, quote.clientName, quote.productName, quote.sizeSpec].some((value) => matchesText(value, quoteFilters.search));
+    const matchesSearch = !quoteFilters.search || [quote.quoteNumber, quote.quickbooksEstimateNumber, quote.clientName, quote.productName, quote.sizeSpec].some((value) => matchesText(value, quoteFilters.search));
     const matchesMonth = !quoteFilters.month || getMonthKey(quote.quoteDate) === quoteFilters.month;
     const matchesStatus = !quoteFilters.status || quote.status === quoteFilters.status;
     const matchesClient = !quoteFilters.client || matchesText(quote.clientName, quoteFilters.client);
@@ -1013,6 +1014,7 @@ function App() {
     const costProfile = quoteForm.costProfileId ? costProfilesById.get(quoteForm.costProfileId) : undefined;
     const payload = {
       quoteDate: quoteForm.quoteDate,
+      quickbooksEstimateNumber: quoteForm.quickbooksEstimateNumber.trim(),
       clientId: client.id,
       clientName: client.name,
       productId: product.id,
@@ -2212,6 +2214,7 @@ function App() {
     setQuoteEditingId(quote.id);
     setQuoteForm({
       quoteDate: quote.quoteDate,
+      quickbooksEstimateNumber: quote.quickbooksEstimateNumber,
       clientId: quote.clientId,
       productId: quote.productId,
       pricingTierId: quote.pricingTierId,
