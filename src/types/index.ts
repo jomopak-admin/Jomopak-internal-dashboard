@@ -267,7 +267,9 @@ export type WasteReason =
 export type FscClaimType = 'None' | 'FSC Mix' | 'FSC Recycled' | 'FSC 100%';
 export type ProductionLogType = 'Slitting' | 'Flexo Printing' | 'Bag Printing' | 'Bag Making';
 export type HandleType = 'None' | 'Flat Handle' | 'Rope Handle' | 'Roll Handle';
-export type PrintMethod = 'Plain' | 'Auto' | 'Screen Print' | 'Flexo';
+export type PrintMethod = 'Plain' | 'Auto' | 'Screen Print' | 'Flexo' | 'Digital Print' | 'Litho';
+export type SupplyFormat = 'Boxes' | 'Flat Packed' | 'Bundles' | 'Palletized' | 'Loose';
+export type CommercialReleaseStatus = 'Pending' | 'Accepted' | 'Invoiced' | 'Cleared for Production';
 export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
 export type LeadStatus = 'New' | 'Qualified' | 'Awaiting Info' | 'Quoted' | 'Won' | 'Lost';
@@ -536,9 +538,17 @@ export interface JobCard {
   createdAt: string;
   jobDate: string;
   dueDate: string;
+  leadId: string;
+  leadNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  quickbooksEstimateNumber: string;
+  invoiceNumber: string;
+  commercialReleaseStatus: CommercialReleaseStatus;
   clientId: string;
   pricingTierId: string;
   productId: string;
+  productCategory: ProductCategory;
   customerName: string;
   customerReference: string;
   productName: string;
@@ -546,6 +556,12 @@ export interface JobCard {
   sizeSpec: string;
   paperType: string;
   gsm: string;
+  printRequired: boolean;
+  printMethod: PrintMethod;
+  colorCount: number;
+  supplyFormat: SupplyFormat;
+  packingNotes: string;
+  printNotes: string;
   quantityPlanned: number;
   quantityCompleted: number;
   status: JobStatus;
@@ -562,6 +578,8 @@ export interface JobCard {
   stockReservationStatus: StockReservationStatus;
   dispatchStatus: string;
   qualityNotes: string;
+  capturedBy: string;
+  releasedBy: string;
   notes: string;
   fscRelated: boolean;
 }
@@ -957,9 +975,17 @@ export interface ProductFormState {
 export interface JobFormState {
   jobDate: string;
   dueDate: string;
+  leadId: string;
+  leadNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  quickbooksEstimateNumber: string;
+  invoiceNumber: string;
+  commercialReleaseStatus: CommercialReleaseStatus;
   clientId: string;
   pricingTierId: string;
   productId: string;
+  productCategory: ProductCategory;
   customerName: string;
   customerReference: string;
   productName: string;
@@ -967,6 +993,12 @@ export interface JobFormState {
   sizeSpec: string;
   paperType: string;
   gsm: string;
+  printRequired: boolean;
+  printMethod: PrintMethod;
+  colorCount: string;
+  supplyFormat: SupplyFormat;
+  packingNotes: string;
+  printNotes: string;
   quantityPlanned: string;
   quantityCompleted: string;
   status: JobStatus;
@@ -982,6 +1014,8 @@ export interface JobFormState {
   stockReservationStatus: StockReservationStatus;
   dispatchStatus: string;
   qualityNotes: string;
+  capturedBy: string;
+  releasedBy: string;
   notes: string;
   fscRelated: boolean;
 }

@@ -139,6 +139,31 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <input type="date" value={jobForm.dueDate} onChange={(event) => setJobForm({ ...jobForm, dueDate: event.target.value })} />
             </label>
             <label>
+              Lead number
+              <input value={jobForm.leadNumber} onChange={(event) => setJobForm({ ...jobForm, leadNumber: event.target.value })} placeholder="LED-202604-001" />
+            </label>
+            <label>
+              Quote number
+              <input value={jobForm.quoteNumber} onChange={(event) => setJobForm({ ...jobForm, quoteNumber: event.target.value })} placeholder="QTE-..." />
+            </label>
+            <label>
+              QuickBooks estimate #
+              <input value={jobForm.quickbooksEstimateNumber} onChange={(event) => setJobForm({ ...jobForm, quickbooksEstimateNumber: event.target.value })} />
+            </label>
+            <label>
+              Invoice number
+              <input value={jobForm.invoiceNumber} onChange={(event) => setJobForm({ ...jobForm, invoiceNumber: event.target.value })} />
+            </label>
+            <label>
+              Commercial release
+              <select value={jobForm.commercialReleaseStatus} onChange={(event) => setJobForm({ ...jobForm, commercialReleaseStatus: event.target.value as JobFormState['commercialReleaseStatus'] })}>
+                <option>Pending</option>
+                <option>Accepted</option>
+                <option>Invoiced</option>
+                <option>Cleared for Production</option>
+              </select>
+            </label>
+            <label>
               Client
               <select value={jobForm.clientId} onChange={(event) => setJobForm({ ...jobForm, clientId: event.target.value })}>
                 <option value="">Select client</option>
@@ -172,6 +197,16 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <input value={jobForm.productName} onChange={(event) => setJobForm({ ...jobForm, productName: event.target.value })} />
             </label>
             <label>
+              Product category
+              <select value={jobForm.productCategory} onChange={(event) => setJobForm({ ...jobForm, productCategory: event.target.value as JobFormState['productCategory'] })}>
+                <option>Paper Bags</option>
+                <option>Paper Cups</option>
+                <option>Food Boxes</option>
+                <option>Wet Wipes</option>
+                <option>Other Packaging</option>
+              </select>
+            </label>
+            <label>
               Size / specification
               <input value={jobForm.sizeSpec} onChange={(event) => setJobForm({ ...jobForm, sizeSpec: event.target.value })} />
             </label>
@@ -186,6 +221,35 @@ export function JobCardsPage(props: JobCardsPageProps) {
             <label>
               GSM
               <input value={jobForm.gsm} onChange={(event) => setJobForm({ ...jobForm, gsm: event.target.value })} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={jobForm.printRequired} onChange={(event) => setJobForm({ ...jobForm, printRequired: event.target.checked })} />
+              Print required
+            </label>
+            <label>
+              Print method
+              <select value={jobForm.printMethod} onChange={(event) => setJobForm({ ...jobForm, printMethod: event.target.value as JobFormState['printMethod'] })} disabled={!jobForm.printRequired}>
+                <option>Plain</option>
+                <option>Auto</option>
+                <option>Screen Print</option>
+                <option>Flexo</option>
+                <option>Digital Print</option>
+                <option>Litho</option>
+              </select>
+            </label>
+            <label>
+              Number of colours
+              <input type="number" min="0" value={jobForm.colorCount} onChange={(event) => setJobForm({ ...jobForm, colorCount: event.target.value })} disabled={!jobForm.printRequired} />
+            </label>
+            <label>
+              Supply format
+              <select value={jobForm.supplyFormat} onChange={(event) => setJobForm({ ...jobForm, supplyFormat: event.target.value as JobFormState['supplyFormat'] })}>
+                <option>Boxes</option>
+                <option>Flat Packed</option>
+                <option>Bundles</option>
+                <option>Palletized</option>
+                <option>Loose</option>
+              </select>
             </label>
             <label>
               Quantity planned
@@ -245,9 +309,25 @@ export function JobCardsPage(props: JobCardsPageProps) {
               Artwork / proof notes
               <textarea value={jobForm.artworkNotes} onChange={(event) => setJobForm({ ...jobForm, artworkNotes: event.target.value })} />
             </label>
+            <label className="full-span">
+              Print notes
+              <textarea value={jobForm.printNotes} onChange={(event) => setJobForm({ ...jobForm, printNotes: event.target.value })} />
+            </label>
+            <label className="full-span">
+              Packing / supply notes
+              <textarea value={jobForm.packingNotes} onChange={(event) => setJobForm({ ...jobForm, packingNotes: event.target.value })} />
+            </label>
             <label>
               Dispatch status
               <input value={jobForm.dispatchStatus} onChange={(event) => setJobForm({ ...jobForm, dispatchStatus: event.target.value })} />
+            </label>
+            <label>
+              Captured by
+              <input value={jobForm.capturedBy} onChange={(event) => setJobForm({ ...jobForm, capturedBy: event.target.value })} />
+            </label>
+            <label>
+              Released by
+              <input value={jobForm.releasedBy} onChange={(event) => setJobForm({ ...jobForm, releasedBy: event.target.value })} />
             </label>
             <label className="checkbox-row">
               <input type="checkbox" checked={jobForm.fscRelated} onChange={(event) => setJobForm({ ...jobForm, fscRelated: event.target.checked })} />
