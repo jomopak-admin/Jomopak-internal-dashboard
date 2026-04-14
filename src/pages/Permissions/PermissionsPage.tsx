@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
-import { normalizeProfilePermissions, ROLE_DEFAULT_VIEWS, UserProfile, VIEW_LABELS, View } from '../../types';
+import {
+  DASHBOARD_WIDGET_LABELS,
+  DashboardWidget,
+  normalizeDashboardWidgets,
+  normalizeProfilePermissions,
+  ROLE_DEFAULT_DASHBOARD_WIDGETS,
+  ROLE_DEFAULT_VIEWS,
+  UserProfile,
+  VIEW_LABELS,
+  View,
+} from '../../types';
 
 interface CreateUserFormState {
   email: string;
@@ -9,6 +19,7 @@ interface CreateUserFormState {
   fullName: string;
   role: UserProfile['role'];
   permissions: View[];
+  dashboardWidgets: DashboardWidget[];
 }
 
 interface PermissionsPageProps {
@@ -24,6 +35,7 @@ const initialCreateUserForm = (): CreateUserFormState => ({
   fullName: '',
   role: 'artwork',
   permissions: ROLE_DEFAULT_VIEWS.artwork,
+  dashboardWidgets: ROLE_DEFAULT_DASHBOARD_WIDGETS.artwork,
 });
 
 export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: PermissionsPageProps) {
@@ -31,6 +43,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
   const [draftName, setDraftName] = useState('');
   const [draftRole, setDraftRole] = useState<UserProfile['role']>('ops');
   const [draftPermissions, setDraftPermissions] = useState<View[]>(ROLE_DEFAULT_VIEWS.ops);
+  const [draftDashboardWidgets, setDraftDashboardWidgets] = useState<DashboardWidget[]>(ROLE_DEFAULT_DASHBOARD_WIDGETS.ops);
   const [createUserForm, setCreateUserForm] = useState(initialCreateUserForm);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [message, setMessage] = useState('');
@@ -39,6 +52,12 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
     const exists = selected.includes(permission);
     const next = exists ? selected.filter((entry) => entry !== permission) : [...selected, permission];
     return normalizeProfilePermissions(role, next);
+  }
+
+  function toggleDashboardWidget(selected: DashboardWidget[], widget: DashboardWidget, role: UserProfile['role']) {
+    const exists = selected.includes(widget);
+    const next = exists ? selected.filter((entry) => entry !== widget) : [...selected, widget];
+    return normalizeDashboardWidgets(role, next);
   }
 
   async function handleSave(profileId: string) {
@@ -52,6 +71,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
         fullName: draftName,
         role: draftRole,
         permissions: normalizeProfilePermissions(draftRole, draftPermissions),
+        dashboardWidgets: normalizeDashboardWidgets(draftRole, draftDashboardWidgets),
       });
       setMessage('Permissions updated.');
     } catch (error) {
@@ -66,6 +86,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
     setDraftName(profile.fullName);
     setDraftRole(profile.role);
     setDraftPermissions(profile.permissions);
+    setDraftDashboardWidgets(profile.dashboardWidgets);
     setMessage('');
   }
 
@@ -136,6 +157,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                     ...createUserForm,
                     role,
                     permissions: ROLE_DEFAULT_VIEWS[role],
+                    dashboardWidgets: ROLE_DEFAULT_DASHBOARD_WIDGETS[role],
                   });
                 }}
               >
@@ -164,6 +186,32 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                         setCreateUserForm({
                           ...createUserForm,
                           permissions: togglePermission(createUserForm.permissions, permission, createUserForm.role),
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="permission-panel">
+            <div className="permission-panel-header">
+              <strong>Dashboard Cards</strong>
+              <span className="table-subtext">Choose which cards appear on this user&apos;s dashboard.</span>
+            </div>
+            <div className="permission-grid">
+              {Object.entries(DASHBOARD_WIDGET_LABELS).map(([key, label]) => {
+                const widget = key as DashboardWidget;
+                return (
+                  <label key={widget} className="permission-check">
+                    <input
+                      type="checkbox"
+                      checked={createUserForm.dashboardWidgets.includes(widget)}
+                      onChange={() =>
+                        setCreateUserForm({
+                          ...createUserForm,
+                          dashboardWidgets: toggleDashboardWidget(createUserForm.dashboardWidgets, widget, createUserForm.role),
                         })
                       }
                     />
@@ -225,6 +273,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                         const role = event.target.value as UserProfile['role'];
                         setDraftRole(role);
                         setDraftPermissions(normalizeProfilePermissions(role, draftPermissions));
+                        setDraftDashboardWidgets(normalizeDashboardWidgets(role, draftDashboardWidgets));
                       }}
                     >
                       <option value="admin">admin</option>
@@ -248,6 +297,27 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                               type="checkbox"
                               checked={draftPermissions.includes(permission)}
                               onChange={() => setDraftPermissions(togglePermission(draftPermissions, permission, draftRole))}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="permission-panel">
+                    <div className="permission-panel-header">
+                      <strong>Dashboard Cards</strong>
+                      <span className="table-subtext">Tick the dashboard cards this user should see.</span>
+                    </div>
+                    <div className="permission-grid">
+                      {Object.entries(DASHBOARD_WIDGET_LABELS).map(([key, label]) => {
+                        const widget = key as DashboardWidget;
+                        return (
+                          <label key={widget} className="permission-check">
+                            <input
+                              type="checkbox"
+                              checked={draftDashboardWidgets.includes(widget)}
+                              onChange={() => setDraftDashboardWidgets(toggleDashboardWidget(draftDashboardWidgets, widget, draftRole))}
                             />
                             <span>{label}</span>
                           </label>

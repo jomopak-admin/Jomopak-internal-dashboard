@@ -22,6 +22,21 @@ export type View =
   | 'dispatch'
   | 'reports';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork';
+export type DashboardWidget =
+  | 'stats'
+  | 'monthSummary'
+  | 'alerts'
+  | 'quickCalculator'
+  | 'finishedStock'
+  | 'partsAttention'
+  | 'recentJobs'
+  | 'recentMaterials'
+  | 'recentWaste'
+  | 'recentProduction'
+  | 'recentPaper'
+  | 'recentDispatch'
+  | 'wasteByReason'
+  | 'topPaper';
 
 export const VIEW_LABELS: Record<View, string> = {
   dashboard: 'Dashboard',
@@ -137,6 +152,82 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
     }
   });
   return Array.from(new Set(valid));
+}
+
+export const DASHBOARD_WIDGET_LABELS: Record<DashboardWidget, string> = {
+  stats: 'Top Stats',
+  monthSummary: 'Month Summary',
+  alerts: 'Exceptions & Alerts',
+  quickCalculator: 'Quick Calculator',
+  finishedStock: 'Finished Stock On Hand',
+  partsAttention: 'Parts Needing Attention',
+  recentJobs: 'Recent Jobs',
+  recentMaterials: 'Recent Material Receipts',
+  recentWaste: 'Recent Waste Entries',
+  recentProduction: 'Recent Production Logs',
+  recentPaper: 'Recent Paper Logs',
+  recentDispatch: 'Recent Dispatches',
+  wasteByReason: 'Waste By Reason',
+  topPaper: 'Top Paper Types Used',
+};
+
+export const ROLE_DEFAULT_DASHBOARD_WIDGETS: Record<UserRole, DashboardWidget[]> = {
+  admin: Object.keys(DASHBOARD_WIDGET_LABELS) as DashboardWidget[],
+  ops: [
+    'stats',
+    'monthSummary',
+    'alerts',
+    'finishedStock',
+    'partsAttention',
+    'recentJobs',
+    'recentMaterials',
+    'recentWaste',
+    'recentProduction',
+    'recentPaper',
+    'recentDispatch',
+    'wasteByReason',
+    'topPaper',
+  ],
+  production: [
+    'stats',
+    'monthSummary',
+    'alerts',
+    'finishedStock',
+    'partsAttention',
+    'recentJobs',
+    'recentMaterials',
+    'recentWaste',
+    'recentProduction',
+    'recentPaper',
+    'recentDispatch',
+    'wasteByReason',
+    'topPaper',
+  ],
+  sales: [
+    'stats',
+    'monthSummary',
+    'alerts',
+    'quickCalculator',
+    'recentJobs',
+    'recentDispatch',
+  ],
+  artwork: [
+    'stats',
+    'monthSummary',
+    'alerts',
+    'recentJobs',
+  ],
+};
+
+export function normalizeDashboardWidgets(role: UserRole, widgets?: string[] | null): DashboardWidget[] {
+  const source = Array.isArray(widgets) && widgets.length
+    ? widgets
+    : ROLE_DEFAULT_DASHBOARD_WIDGETS[role];
+  return Array.from(
+    new Set(
+      source.filter((widget): widget is DashboardWidget => widget in DASHBOARD_WIDGET_LABELS),
+    ),
+  );
 }
 
 export type JobStatus =
@@ -369,6 +460,7 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   permissions: View[];
+  dashboardWidgets: DashboardWidget[];
 }
 
 export interface Client {

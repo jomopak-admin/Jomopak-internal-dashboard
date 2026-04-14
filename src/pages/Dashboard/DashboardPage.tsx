@@ -3,7 +3,7 @@ import { FlagBadge, StatusBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
 import { StatCard } from '../../components/StatCard';
-import { Client, DispatchRecord, FinishedGoodsStock, JobCard, MaterialReceipt, PaperLog, ProductionLogEntry, SparePart, WasteEntry } from '../../types';
+import { Client, DashboardWidget, DispatchRecord, FinishedGoodsStock, JobCard, MaterialReceipt, PaperLog, ProductionLogEntry, SparePart, WasteEntry } from '../../types';
 import {
   calculateAverageWastePerCompletedJob,
   calculateAverageWastePerJob,
@@ -37,6 +37,7 @@ interface DashboardPageProps {
   dashboardFinishedStock: FinishedGoodsStock[];
   dashboardWasteByReason: Array<{ label: string; value: number }>;
   dashboardTopPaper: Array<{ label: string; value: number }>;
+  visibleWidgets: DashboardWidget[];
 }
 
 export function DashboardPage({
@@ -61,6 +62,7 @@ export function DashboardPage({
   dashboardFinishedStock,
   dashboardWasteByReason,
   dashboardTopPaper,
+  visibleWidgets,
 }: DashboardPageProps) {
   const [calculator, setCalculator] = useState({
     quantity: '10000',
@@ -166,6 +168,7 @@ export function DashboardPage({
         detail: `${client.name} · ${formatNumber(client.currentBalance)} / ${formatNumber(client.creditLimit)}`,
       })),
   ];
+  const widgetSet = useMemo(() => new Set(visibleWidgets), [visibleWidgets]);
 
   return (
     <>
@@ -186,6 +189,7 @@ export function DashboardPage({
         }
       />
 
+      {widgetSet.has('stats') ? (
       <div className="stats-grid">
         <StatCard label="Total jobs this month" value={String(dashboardJobs.length)} />
         <StatCard label="Jobs currently open" value={String(openJobsThisMonth)} />
@@ -206,7 +210,9 @@ export function DashboardPage({
         <StatCard label="Clients on hold" value={String(clientsOnHold)} />
         <StatCard label="Stock over 60 days" value={String(stockOverSixtyDays)} />
       </div>
+      ) : null}
 
+      {widgetSet.has('monthSummary') ? (
       <div className="summary-strip">
         <div className="summary-chip">
           <span>FSC-related jobs</span>
@@ -233,7 +239,9 @@ export function DashboardPage({
           <strong>{stockOverSixtyDays}</strong>
         </div>
       </div>
+      ) : null}
 
+      {widgetSet.has('alerts') ? (
       <div className="card">
         <SectionTitle title="Exceptions & Alerts" subtitle="Operational items that need attention before they become bigger problems." />
         {alerts.length ? (
@@ -249,7 +257,9 @@ export function DashboardPage({
           <EmptyState title="No active exceptions" body="The main operational exceptions list is currently clear." />
         )}
       </div>
+      ) : null}
 
+      {widgetSet.has('quickCalculator') ? (
       <div className="card">
         <SectionTitle title="Quick Calculator" subtitle="Use this for fast bag/job pricing checks while the full estimating engine is still being built." />
         <div className="calculator-grid">
@@ -301,8 +311,10 @@ export function DashboardPage({
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="dashboard-grid">
+        {widgetSet.has('finishedStock') ? (
         <div className="card">
           <SectionTitle title="Finished stock on hand" />
           {finishedGoodsStock.length ? (
@@ -332,7 +344,9 @@ export function DashboardPage({
             <EmptyState title="No finished stock yet" body="Stored finished goods will appear here once stock is recorded." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('partsAttention') ? (
         <div className="card">
           <SectionTitle title="Parts needing attention" />
           {spareParts.length ? (
@@ -360,7 +374,9 @@ export function DashboardPage({
             <EmptyState title="No spare parts yet" body="Critical maintenance stock will appear here once recorded." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentJobs') ? (
         <div className="card">
           <SectionTitle title="Recent jobs" />
           {jobs.length ? (
@@ -390,7 +406,9 @@ export function DashboardPage({
             <EmptyState title="No jobs yet" body="Create a job card to start building the digital production history." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentMaterials') ? (
         <div className="card">
           <SectionTitle title="Recent material receipts" />
           {materialReceipts.length ? (
@@ -418,7 +436,9 @@ export function DashboardPage({
             <EmptyState title="No receipts yet" body="Material receiving records will appear here." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentWaste') ? (
         <div className="card">
           <SectionTitle title="Recent waste entries" />
           {wasteEntries.length ? (
@@ -446,7 +466,9 @@ export function DashboardPage({
             <EmptyState title="No waste logged" body="Waste entries will appear here once operators start capturing production waste." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentProduction') ? (
         <div className="card">
           <SectionTitle title="Recent production logs" />
           {productionLogs.length ? (
@@ -474,7 +496,9 @@ export function DashboardPage({
             <EmptyState title="No production logs yet" body="Process records will appear here once operators begin logging work." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentPaper') ? (
         <div className="card">
           <SectionTitle title="Recent paper logs" />
           {paperLogs.length ? (
@@ -502,7 +526,9 @@ export function DashboardPage({
             <EmptyState title="No paper logs yet" body="Paper usage history will appear here after the stores team starts recording usage." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('recentDispatch') ? (
         <div className="card">
           <SectionTitle title="Recent dispatches" />
           {dispatchRecords.length ? (
@@ -530,7 +556,9 @@ export function DashboardPage({
             <EmptyState title="No dispatch records" body="Customer dispatch history will appear here." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('wasteByReason') ? (
         <div className="card">
           <SectionTitle title="Waste by reason" subtitle="Top drivers this month" />
           {dashboardWasteByReason.length ? (
@@ -546,7 +574,9 @@ export function DashboardPage({
             <EmptyState title="No waste data" body="Waste trends will render after entries are logged for the selected month." />
           )}
         </div>
+        ) : null}
 
+        {widgetSet.has('topPaper') ? (
         <div className="card">
           <SectionTitle title="Top paper types used" subtitle="Usage for the selected month" />
           {dashboardTopPaper.length ? (
@@ -562,6 +592,7 @@ export function DashboardPage({
             <EmptyState title="No paper data" body="Paper type usage will appear here once paper logs are captured." />
           )}
         </div>
+        ) : null}
       </div>
     </>
   );

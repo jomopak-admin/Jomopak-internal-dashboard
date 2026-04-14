@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { normalizeProfilePermissions, UserProfile } from '../types';
+import { normalizeDashboardWidgets, normalizeProfilePermissions, UserProfile } from '../types';
 import { supabase } from '../utils/supabase';
 
 interface AuthState {
@@ -28,6 +28,7 @@ async function loadProfile(userId: string): Promise<UserProfile | null> {
     fullName: data.full_name ?? '',
     role: (data.role ?? 'ops') as UserProfile['role'],
     permissions: normalizeProfilePermissions(data.role ?? 'ops', data.permissions),
+    dashboardWidgets: normalizeDashboardWidgets(data.role ?? 'ops', data.dashboard_widgets),
   };
 }
 

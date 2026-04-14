@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { normalizeProfilePermissions, UserProfile } from '../types';
+import { normalizeDashboardWidgets, normalizeProfilePermissions, UserProfile } from '../types';
 import { supabase } from '../utils/supabase';
 
 interface CreateUserInput {
@@ -8,6 +8,7 @@ interface CreateUserInput {
   fullName: string;
   role: UserProfile['role'];
   permissions: UserProfile['permissions'];
+  dashboardWidgets: UserProfile['dashboardWidgets'];
 }
 
 interface CreateUserResultRow {
@@ -16,6 +17,28 @@ interface CreateUserResultRow {
   full_name: string | null;
   role: string | null;
   permissions: string[] | null;
+  dashboard_widgets?: string[] | null;
+}
+
+const DASHBOARD_WIDGETS_STORAGE_KEY = 'jomopak-dashboard-widgets';
+
+function loadDashboardWidgetOverrides(): Record<string, UserProfile['dashboardWidgets']> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(DASHBOARD_WIDGETS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as Record<string, UserProfile['dashboardWidgets']> : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDashboardWidgetOverrides(overrides: Record<string, UserProfile['dashboardWidgets']>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(DASHBOARD_WIDGETS_STORAGE_KEY, JSON.stringify(overrides));
 }
 
 export function useProfiles(enabled: boolean) {
@@ -41,6 +64,7 @@ export function useProfiles(enabled: boolean) {
       if (error) {
         console.error('Failed to load profiles', error);
       } else if (active) {
+        const widgetOverrides = loadDashboardWidgetOverrides();
         setProfiles(
           (data ?? []).map((row) => ({
             id: row.id,
@@ -48,6 +72,10 @@ export function useProfiles(enabled: boolean) {
             fullName: row.full_name ?? '',
             role: (row.role ?? 'ops') as UserProfile['role'],
             permissions: normalizeProfilePermissions(row.role ?? 'ops', row.permissions),
+            dashboardWidgets: normalizeDashboardWidgets(
+              row.role ?? 'ops',
+              row.dashboard_widgets ?? widgetOverrides[row.id],
+            ),
           })),
         );
       }
@@ -65,13 +93,28 @@ export function useProfiles(enabled: boolean) {
   }, [enabled]);
 
   async function saveProfile(nextProfile: UserProfile) {
-    const { error } = await supabase.from('profiles').upsert({
+    const payload = {
       id: nextProfile.id,
       email: nextProfile.email || null,
       full_name: nextProfile.fullName || null,
       role: nextProfile.role,
       permissions: nextProfile.permissions,
-    });
+      dashboard_widgets: nextProfile.dashboardWidgets,
+    };
+
+    let { error } = await supabase.from('profiles').upsert(payload);
+    if (error && String(error.message || '').includes('dashboard_widgets')) {
+      const overrides = loadDashboardWidgetOverrides();
+      overrides[nextProfile.id] = nextProfile.dashboardWidgets;
+      saveDashboardWidgetOverrides(overrides);
+      ({ error } = await supabase.from('profiles').upsert({
+        id: nextProfile.id,
+        email: nextProfile.email || null,
+        full_name: nextProfile.fullName || null,
+        role: nextProfile.role,
+        permissions: nextProfile.permissions,
+      }));
+    }
 
     if (error) {
       throw error;
@@ -111,6 +154,7 @@ async function createUser(input: CreateUserInput) {
         fullName: input.fullName,
         role: input.role,
         permissions: input.permissions,
+        dashboardWidgets: input.dashboardWidgets,
       }),
     },
   );
@@ -134,6 +178,10 @@ async function createUser(input: CreateUserInput) {
     permissions: normalizeProfilePermissions(
       (row.role ?? input.role) as UserProfile['role'],
       row.permissions ?? input.permissions,
+    ),
+    dashboardWidgets: normalizeDashboardWidgets(
+      (row.role ?? input.role) as UserProfile['role'],
+      row.dashboard_widgets ?? input.dashboardWidgets,
     ),
   };
 

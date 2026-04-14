@@ -2367,6 +2367,7 @@ function App() {
           dashboardFinishedStock={dashboardFinishedStock}
           dashboardWasteByReason={dashboardWasteByReason}
           dashboardTopPaper={dashboardTopPaper}
+          visibleWidgets={profile?.dashboardWidgets ?? []}
         />
       )}
 
