@@ -377,12 +377,12 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <textarea value={jobForm.artworkChangeSummary} onChange={(event) => setJobForm({ ...jobForm, artworkChangeSummary: event.target.value })} />
             </label>
             <label>
-              Given to Jacob / design date
+              Given to designer / design date
               <input type="date" value={jobForm.artworkAssignedDate} onChange={(event) => setJobForm({ ...jobForm, artworkAssignedDate: event.target.value })} />
             </label>
             <label>
               Artwork assigned to
-              <input value={jobForm.artworkAssignedTo} onChange={(event) => setJobForm({ ...jobForm, artworkAssignedTo: event.target.value })} placeholder="Jacob" />
+              <input value={jobForm.artworkAssignedTo} onChange={(event) => setJobForm({ ...jobForm, artworkAssignedTo: event.target.value })} placeholder="Designer / design department" />
             </label>
             <label>
               Proof shared to client date
@@ -390,7 +390,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
             </label>
             <label>
               Proof shared by
-              <input value={jobForm.proofSharedBy} onChange={(event) => setJobForm({ ...jobForm, proofSharedBy: event.target.value })} placeholder="Lebo / Jacob" />
+              <input value={jobForm.proofSharedBy} onChange={(event) => setJobForm({ ...jobForm, proofSharedBy: event.target.value })} placeholder="Sales / admin / customer care" />
             </label>
             <label>
               Final sign-off date
