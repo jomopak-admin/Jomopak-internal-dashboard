@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, CostProfile, PaperRate, PricingTier, Product, QuoteEstimate, QuoteEstimateFilters, QuoteEstimateFormState } from '../../types';
+import { Client, CostProfile, Lead, PaperRate, PricingTier, Product, QuoteEstimate, QuoteEstimateFilters, QuoteEstimateFormState } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
 
 interface QuotesPageProps {
   monthOptions: string[];
   clients: Client[];
+  leads: Lead[];
   products: Product[];
   pricingTiers: PricingTier[];
   paperRates: PaperRate[];
@@ -26,6 +27,7 @@ interface QuotesPageProps {
 export function QuotesPage({
   monthOptions,
   clients,
+  leads,
   products,
   pricingTiers,
   paperRates,
@@ -74,6 +76,7 @@ export function QuotesPage({
           <div className="form-grid">
             <label><span>Quote date</span><input type="date" value={quoteForm.quoteDate} onChange={(event) => setQuoteForm({ ...quoteForm, quoteDate: event.target.value })} /></label>
             <label><span>QuickBooks estimate #</span><input value={quoteForm.quickbooksEstimateNumber} onChange={(event) => setQuoteForm({ ...quoteForm, quickbooksEstimateNumber: event.target.value })} placeholder="Optional reference" /></label>
+            <label><span>Linked lead</span><select value={quoteForm.linkedLeadId} onChange={(event) => setQuoteForm({ ...quoteForm, linkedLeadId: event.target.value })}><option value="">Select lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.leadNumber} · {lead.companyName || lead.clientName || lead.contactName}</option>)}</select></label>
             <label><span>Client</span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
             <label><span>Product</span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
             <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>

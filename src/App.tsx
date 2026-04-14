@@ -264,6 +264,7 @@ const createInitialMachineForm = (): MachineFormState => ({
 const createInitialQuoteForm = (): QuoteEstimateFormState => ({
   quoteDate: getToday(),
   quickbooksEstimateNumber: '',
+  linkedLeadId: '',
   clientId: '',
   productId: '',
   pricingTierId: '',
@@ -672,6 +673,8 @@ function App() {
   const finishedStockById = useMemo(() => new Map(data.finishedGoodsStock.map((item) => [item.id, item])), [data.finishedGoodsStock]);
   const materialsById = useMemo(() => new Map(data.materialReceipts.map((receipt) => [receipt.id, receipt])), [data.materialReceipts]);
   const productionLogsById = useMemo(() => new Map(data.productionLogs.map((log) => [log.id, log])), [data.productionLogs]);
+  const isSalesUser = profile?.role === 'sales';
+  const currentSalesOwner = profile?.fullName || profile?.email || '';
 
   const dashboardJobs = useMemo(() => data.jobs.filter((job) => getMonthKey(job.jobDate) === dashboardMonth), [dashboardMonth, data.jobs]);
   const dashboardMaterials = useMemo(() => data.materialReceipts.filter((receipt) => getMonthKey(receipt.receivedDate) === dashboardMonth), [dashboardMonth, data.materialReceipts]);
@@ -731,13 +734,14 @@ function App() {
   }), [data.products, productFilters]);
 
   const filteredJobs = useMemo(() => data.jobs.filter((job) => {
+    const matchesSalesOwner = !isSalesUser || matchesText(job.salesOwnerName, currentSalesOwner);
     const matchesSearch = !jobFilters.search || [job.jobNumber, job.customerName, job.productName, job.paperType, job.customerReference].some((value) => matchesText(value, jobFilters.search));
     const matchesMonth = !jobFilters.month || getMonthKey(job.jobDate) === jobFilters.month;
     const matchesStatus = !jobFilters.status || job.status === jobFilters.status;
     const matchesCustomer = !jobFilters.customer || matchesText(job.customerName, jobFilters.customer);
     const matchesFsc = jobFilters.fsc === 'all' || (jobFilters.fsc === 'yes' ? job.fscRelated : !job.fscRelated);
-    return matchesSearch && matchesMonth && matchesStatus && matchesCustomer && matchesFsc;
-  }), [data.jobs, jobFilters]);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesStatus && matchesCustomer && matchesFsc;
+  }), [currentSalesOwner, data.jobs, isSalesUser, jobFilters]);
 
   const filteredFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => {
     const matchesSearch = !stockFilters.search || [item.stockNumber, item.productName, item.clientName, item.jobNumber, item.storageLocation].some((value) => matchesText(value, stockFilters.search));
@@ -793,29 +797,33 @@ function App() {
   }), [data.paperLogs, paperFilters]);
 
   const filteredDispatchRecords = useMemo(() => data.dispatchRecords.filter((record) => {
+    const linkedJob = record.jobId ? jobsById.get(record.jobId) : undefined;
+    const matchesSalesOwner = !isSalesUser || matchesText(linkedJob?.salesOwnerName ?? '', currentSalesOwner);
     const matchesSearch = !dispatchFilters.search || [record.dispatchNumber, record.jobNumber, record.customerName, record.labelReference, record.deliveryReference].some((value) => matchesText(value, dispatchFilters.search));
     const matchesMonth = !dispatchFilters.month || getMonthKey(record.dispatchDate) === dispatchFilters.month;
     const matchesCustomer = !dispatchFilters.customer || matchesText(record.customerName, dispatchFilters.customer);
     const matchesFsc = dispatchFilters.fsc === 'all' || (dispatchFilters.fsc === 'yes' ? record.fscRelated : !record.fscRelated);
-    return matchesSearch && matchesMonth && matchesCustomer && matchesFsc;
-  }), [data.dispatchRecords, dispatchFilters]);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesCustomer && matchesFsc;
+  }), [currentSalesOwner, data.dispatchRecords, dispatchFilters, isSalesUser, jobsById]);
 
   const filteredQuoteEstimates = useMemo(() => data.quoteEstimates.filter((quote) => {
+    const matchesSalesOwner = !isSalesUser || matchesText(quote.salesOwnerName, currentSalesOwner);
     const matchesSearch = !quoteFilters.search || [quote.quoteNumber, quote.quickbooksEstimateNumber, quote.clientName, quote.productName, quote.sizeSpec].some((value) => matchesText(value, quoteFilters.search));
     const matchesMonth = !quoteFilters.month || getMonthKey(quote.quoteDate) === quoteFilters.month;
     const matchesStatus = !quoteFilters.status || quote.status === quoteFilters.status;
     const matchesClient = !quoteFilters.client || matchesText(quote.clientName, quoteFilters.client);
-    return matchesSearch && matchesMonth && matchesStatus && matchesClient;
-  }), [data.quoteEstimates, quoteFilters]);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesStatus && matchesClient;
+  }), [currentSalesOwner, data.quoteEstimates, isSalesUser, quoteFilters]);
 
   const filteredLeads = useMemo(() => data.leads.filter((lead) => {
+    const matchesSalesOwner = !isSalesUser || matchesText(lead.assignedTo, currentSalesOwner);
     const matchesSearch = !leadFilters.search || [lead.leadNumber, lead.quickbooksEstimateNumber, lead.companyName, lead.contactName, lead.clientName, lead.productName, lead.notes].some((value) => matchesText(value, leadFilters.search));
     const matchesMonth = !leadFilters.month || getMonthKey(lead.enquiryDate) === leadFilters.month;
     const matchesStatus = !leadFilters.status || lead.status === leadFilters.status;
     const matchesSource = !leadFilters.source || lead.source === leadFilters.source;
     const matchesOwner = !leadFilters.owner || matchesText(lead.assignedTo, leadFilters.owner);
-    return matchesSearch && matchesMonth && matchesStatus && matchesSource && matchesOwner;
-  }), [data.leads, leadFilters]);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesStatus && matchesSource && matchesOwner;
+  }), [currentSalesOwner, data.leads, isSalesUser, leadFilters]);
 
   const filteredArtworkRecords = useMemo(() => data.artworkRecords.filter((record) => {
     const matchesSearch = !artworkFilters.search || [record.artworkNumber, record.jobNumber, record.clientName, record.notes].some((value) => matchesText(value, artworkFilters.search));
@@ -825,11 +833,13 @@ function App() {
   }), [data.artworkRecords, artworkFilters]);
 
   const filteredCustomerStockReleases = useMemo(() => data.customerStockReleases.filter((release) => {
+    const linkedJob = release.jobId ? jobsById.get(release.jobId) : undefined;
+    const matchesSalesOwner = !isSalesUser || matchesText(linkedJob?.salesOwnerName ?? '', currentSalesOwner);
     const matchesSearch = !customerStockReleaseFilters.search || [release.releaseNumber, release.clientName, release.finishedGoodsStockNumber, release.jobNumber, release.destination].some((value) => matchesText(value, customerStockReleaseFilters.search));
     const matchesMonth = !customerStockReleaseFilters.month || getMonthKey(release.releaseDate) === customerStockReleaseFilters.month;
     const matchesClient = !customerStockReleaseFilters.client || matchesText(release.clientName, customerStockReleaseFilters.client);
-    return matchesSearch && matchesMonth && matchesClient;
-  }), [data.customerStockReleases, customerStockReleaseFilters]);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesClient;
+  }), [currentSalesOwner, customerStockReleaseFilters, data.customerStockReleases, isSalesUser, jobsById]);
 
   const reportJobs = useMemo(() => data.jobs.filter((job) => {
     const matchesMonth = !reportFilters.month || getMonthKey(job.jobDate) === reportFilters.month;
@@ -1049,6 +1059,7 @@ function App() {
     }
     const client = clientsById.get(quoteForm.clientId);
     const product = productsById.get(quoteForm.productId);
+    const linkedLead = quoteForm.linkedLeadId ? data.leads.find((lead) => lead.id === quoteForm.linkedLeadId) : undefined;
     if (!client || !product) {
       setQuoteMessage('Select a valid client and product before saving.');
       return;
@@ -1059,6 +1070,9 @@ function App() {
     const payload = {
       quoteDate: quoteForm.quoteDate,
       quickbooksEstimateNumber: quoteForm.quickbooksEstimateNumber.trim(),
+      linkedLeadId: linkedLead?.id ?? '',
+      linkedLeadNumber: linkedLead?.leadNumber ?? '',
+      salesOwnerName: linkedLead?.assignedTo ?? '',
       clientId: client.id,
       clientName: client.name,
       productId: product.id,
@@ -1081,11 +1095,30 @@ function App() {
       notes: quoteForm.notes,
     };
     if (quoteEditingId) {
-      setData((current) => ({ ...current, quoteEstimates: current.quoteEstimates.map((quote) => quote.id === quoteEditingId ? { ...quote, ...payload } : quote) }));
+      setData((current) => ({
+        ...current,
+        quoteEstimates: current.quoteEstimates.map((quote) => quote.id === quoteEditingId ? { ...quote, ...payload } : quote),
+        leads: current.leads.map((lead) => linkedLead?.id && lead.id === linkedLead.id ? {
+          ...lead,
+          linkedQuoteId: quoteEditingId,
+          linkedQuoteNumber: current.quoteEstimates.find((quote) => quote.id === quoteEditingId)?.quoteNumber ?? lead.linkedQuoteNumber,
+          status: lead.status === 'Won' || lead.status === 'Lost' ? lead.status : 'Quoted',
+        } : lead),
+      }));
     } else {
       const quoteNumber = generateCode('QTE', data.quoteEstimates.map((quote) => quote.quoteNumber), quoteForm.quoteDate);
       const newQuote: QuoteEstimate = { id: quoteNumber, quoteNumber, createdAt: new Date().toISOString(), ...payload };
-      setData((current) => ({ ...current, quoteEstimates: [newQuote, ...current.quoteEstimates] }));
+      setData((current) => ({
+        ...current,
+        quoteEstimates: [newQuote, ...current.quoteEstimates],
+        leads: current.leads.map((lead) => linkedLead?.id && lead.id === linkedLead.id ? {
+          ...lead,
+          linkedQuoteId: newQuote.id,
+          linkedQuoteNumber: newQuote.quoteNumber,
+          quickbooksEstimateNumber: newQuote.quickbooksEstimateNumber || lead.quickbooksEstimateNumber,
+          status: lead.status === 'Won' || lead.status === 'Lost' ? lead.status : 'Quoted',
+        } : lead),
+      }));
     }
     resetQuoteEditor();
   }
@@ -1217,6 +1250,7 @@ function App() {
     const linkedClient = jobForm.clientId ? clientsById.get(jobForm.clientId) : undefined;
     const linkedProduct = jobForm.productId ? productsById.get(jobForm.productId) : undefined;
     const linkedQuote = jobForm.quoteId ? quotesById.get(jobForm.quoteId) : undefined;
+    const linkedLead = jobForm.leadId ? data.leads.find((lead) => lead.id === jobForm.leadId) : undefined;
     const linkedReservationStock = jobForm.reservedFinishedGoodsStockId ? finishedStockById.get(jobForm.reservedFinishedGoodsStockId) : undefined;
     const reservedQuantity = Number(jobForm.reservedQuantity || 0);
     const commercialCleared = jobForm.commercialReleaseStatus === 'Cleared for Production';
@@ -1411,6 +1445,7 @@ function App() {
             quoteNumber: jobForm.quoteNumber,
             quickbooksEstimateNumber: jobForm.quickbooksEstimateNumber,
             invoiceNumber: jobForm.invoiceNumber,
+            salesOwnerName: linkedQuote?.salesOwnerName || linkedLead?.assignedTo || job.salesOwnerName || '',
             orderValue,
             paymentRequirement,
             paymentStatus,
@@ -1496,6 +1531,7 @@ function App() {
         quoteNumber: jobForm.quoteNumber,
         quickbooksEstimateNumber: jobForm.quickbooksEstimateNumber,
         invoiceNumber: jobForm.invoiceNumber,
+        salesOwnerName: linkedQuote?.salesOwnerName || linkedLead?.assignedTo || '',
         orderValue,
         paymentRequirement,
         paymentStatus,
@@ -2615,6 +2651,7 @@ function App() {
     setQuoteForm({
       quoteDate: quote.quoteDate,
       quickbooksEstimateNumber: quote.quickbooksEstimateNumber,
+      linkedLeadId: quote.linkedLeadId,
       clientId: quote.clientId,
       productId: quote.productId,
       pricingTierId: quote.pricingTierId,
@@ -2998,6 +3035,7 @@ function App() {
         <QuotesPage
           monthOptions={monthOptions}
           clients={data.clients}
+          leads={data.leads}
           products={data.products}
           pricingTiers={data.pricingTiers}
           paperRates={data.paperRates}

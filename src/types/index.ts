@@ -369,6 +369,9 @@ export interface QuoteEstimate {
   quickbooksEstimateNumber: string;
   createdAt: string;
   quoteDate: string;
+  linkedLeadId: string;
+  linkedLeadNumber: string;
+  salesOwnerName: string;
   clientId: string;
   clientName: string;
   productId: string;
@@ -550,6 +553,7 @@ export interface JobCard {
   quoteNumber: string;
   quickbooksEstimateNumber: string;
   invoiceNumber: string;
+  salesOwnerName: string;
   orderValue: number;
   paymentRequirement: PaymentRequirement;
   paymentStatus: PaymentStatus;
@@ -902,6 +906,7 @@ export interface LeadFormState {
 export interface QuoteEstimateFormState {
   quoteDate: string;
   quickbooksEstimateNumber: string;
+  linkedLeadId: string;
   clientId: string;
   productId: string;
   pricingTierId: string;
