@@ -114,9 +114,15 @@ export function JobDetailPanel({
             <div className="detail-list">
               <div><span>Artwork received</span><strong>{job.artworkReceived ? 'Yes' : 'No'}</strong></div>
               <div><span>Artwork readiness</span><strong>{job.artworkPreparationStatus}</strong></div>
+              <div><span>Assigned to artwork</span><strong>{job.artworkAssignedTo || 'Not assigned'}</strong></div>
+              <div><span>Assigned date</span><strong>{job.artworkAssignedDate ? formatDate(job.artworkAssignedDate) : 'Not set'}</strong></div>
               <div><span>Proof sent</span><strong>{job.proofSent ? 'Yes' : 'No'}</strong></div>
+              <div><span>Proof shared to client</span><strong>{job.proofSharedDate ? formatDate(job.proofSharedDate) : 'Not set'}</strong></div>
+              <div><span>Proof shared by</span><strong>{job.proofSharedBy || 'Not set'}</strong></div>
               <div><span>Approval status</span><strong>{job.approvalStatus}</strong></div>
               <div><span>Approval date</span><strong>{job.approvalDate ? formatDate(job.approvalDate) : 'Not set'}</strong></div>
+              <div><span>Final sign-off</span><strong>{job.finalApprovalReceivedDate ? formatDate(job.finalApprovalReceivedDate) : 'Not set'}</strong></div>
+              <div><span>Cleared by</span><strong>{job.finalApprovalClearedBy || 'Not set'}</strong></div>
               <div><span>Add elements</span><strong>{job.addElementsRequired ? 'Yes' : 'No'}</strong></div>
               <div><span>Change colours</span><strong>{job.colorChangesRequired ? 'Yes' : 'No'}</strong></div>
               <div><span>Artwork brief</span><strong>{job.artworkChangeSummary || 'None'}</strong></div>
@@ -138,6 +144,13 @@ export function JobDetailPanel({
           <div className="job-detail-section">
             <h3>Operational Totals</h3>
             <div className="detail-list">
+              <div><span>Given to factory</span><strong>{job.factoryReleaseDate ? formatDate(job.factoryReleaseDate) : 'Not set'}</strong></div>
+              <div><span>Factory release by</span><strong>{job.factoryReleasedBy || 'Not set'}</strong></div>
+              <div><span>Production started</span><strong>{job.productionStartDate ? formatDate(job.productionStartDate) : 'Not set'}</strong></div>
+              <div><span>Production started by</span><strong>{job.productionStartedBy || 'Not set'}</strong></div>
+              <div><span>Ready for dispatch</span><strong>{job.readyForDispatchDate ? formatDate(job.readyForDispatchDate) : 'Not set'}</strong></div>
+              <div><span>Ready for dispatch by</span><strong>{job.readyForDispatchBy || 'Not set'}</strong></div>
+              <div><span>Collection / delivery</span><strong>{job.collectionOrDeliveryStatus}</strong></div>
               <div><span>Material receipts linked</span><strong>{materials.length}</strong></div>
               <div><span>Production logs</span><strong>{productionLogs.length}</strong></div>
               <div><span>Total waste</span><strong>{formatNumber(totalWaste)}</strong></div>

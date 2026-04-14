@@ -376,6 +376,30 @@ export function JobCardsPage(props: JobCardsPageProps) {
               Artwork brief / required changes
               <textarea value={jobForm.artworkChangeSummary} onChange={(event) => setJobForm({ ...jobForm, artworkChangeSummary: event.target.value })} />
             </label>
+            <label>
+              Given to Jacob / design date
+              <input type="date" value={jobForm.artworkAssignedDate} onChange={(event) => setJobForm({ ...jobForm, artworkAssignedDate: event.target.value })} />
+            </label>
+            <label>
+              Artwork assigned to
+              <input value={jobForm.artworkAssignedTo} onChange={(event) => setJobForm({ ...jobForm, artworkAssignedTo: event.target.value })} placeholder="Jacob" />
+            </label>
+            <label>
+              Proof shared to client date
+              <input type="date" value={jobForm.proofSharedDate} onChange={(event) => setJobForm({ ...jobForm, proofSharedDate: event.target.value })} />
+            </label>
+            <label>
+              Proof shared by
+              <input value={jobForm.proofSharedBy} onChange={(event) => setJobForm({ ...jobForm, proofSharedBy: event.target.value })} placeholder="Lebo / Jacob" />
+            </label>
+            <label>
+              Final sign-off date
+              <input type="date" value={jobForm.finalApprovalReceivedDate} onChange={(event) => setJobForm({ ...jobForm, finalApprovalReceivedDate: event.target.value })} />
+            </label>
+            <label>
+              Final sign-off cleared by
+              <input value={jobForm.finalApprovalClearedBy} onChange={(event) => setJobForm({ ...jobForm, finalApprovalClearedBy: event.target.value })} />
+            </label>
             <label className="full-span">
               Changes requested
               <textarea value={jobForm.changesRequested} onChange={(event) => setJobForm({ ...jobForm, changesRequested: event.target.value })} />
@@ -395,6 +419,38 @@ export function JobCardsPage(props: JobCardsPageProps) {
             <label>
               Dispatch status
               <input value={jobForm.dispatchStatus} onChange={(event) => setJobForm({ ...jobForm, dispatchStatus: event.target.value })} />
+            </label>
+            <label>
+              Given to factory date
+              <input type="date" value={jobForm.factoryReleaseDate} onChange={(event) => setJobForm({ ...jobForm, factoryReleaseDate: event.target.value })} />
+            </label>
+            <label>
+              Given to factory by
+              <input value={jobForm.factoryReleasedBy} onChange={(event) => setJobForm({ ...jobForm, factoryReleasedBy: event.target.value })} />
+            </label>
+            <label>
+              Production start date
+              <input type="date" value={jobForm.productionStartDate} onChange={(event) => setJobForm({ ...jobForm, productionStartDate: event.target.value })} />
+            </label>
+            <label>
+              Production started by
+              <input value={jobForm.productionStartedBy} onChange={(event) => setJobForm({ ...jobForm, productionStartedBy: event.target.value })} />
+            </label>
+            <label>
+              Ready for dispatch date
+              <input type="date" value={jobForm.readyForDispatchDate} onChange={(event) => setJobForm({ ...jobForm, readyForDispatchDate: event.target.value })} />
+            </label>
+            <label>
+              Ready for dispatch by
+              <input value={jobForm.readyForDispatchBy} onChange={(event) => setJobForm({ ...jobForm, readyForDispatchBy: event.target.value })} />
+            </label>
+            <label>
+              Collection / delivery
+              <select value={jobForm.collectionOrDeliveryStatus} onChange={(event) => setJobForm({ ...jobForm, collectionOrDeliveryStatus: event.target.value as JobFormState['collectionOrDeliveryStatus'] })}>
+                <option>Not Confirmed</option>
+                <option>Delivery Required</option>
+                <option>Client Collecting</option>
+              </select>
             </label>
             <label>
               Captured by
