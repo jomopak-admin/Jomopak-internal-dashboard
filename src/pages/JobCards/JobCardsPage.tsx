@@ -278,13 +278,22 @@ export function JobCardsPage(props: JobCardsPageProps) {
               </select>
             </label>
             <label className="checkbox-row">
-              <input type="checkbox" checked={jobForm.printRequired} onChange={(event) => setJobForm({ ...jobForm, printRequired: event.target.checked })} />
+              <input
+                type="checkbox"
+                checked={jobForm.printRequired}
+                onChange={(event) => setJobForm({
+                  ...jobForm,
+                  printRequired: event.target.checked,
+                  printMethod: event.target.checked ? jobForm.printMethod : 'Plain',
+                  colorCount: event.target.checked ? jobForm.colorCount : '0',
+                })}
+              />
               Print required
             </label>
             <label>
               Print method
               <select value={jobForm.printMethod} onChange={(event) => setJobForm({ ...jobForm, printMethod: event.target.value as JobFormState['printMethod'] })} disabled={!jobForm.printRequired}>
-                <option>Plain</option>
+                <option>Plain / No Print</option>
                 <option>Auto</option>
                 <option>Screen Print</option>
                 <option>Flexo</option>
