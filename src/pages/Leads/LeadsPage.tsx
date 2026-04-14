@@ -80,6 +80,7 @@ export function LeadsPage({
             <label><span>Requested quantity</span><input type="number" min="0" value={leadForm.requestedQuantity} onChange={(event) => setLeadForm({ ...leadForm, requestedQuantity: event.target.value })} /></label>
             <label><span>Due date</span><input type="date" value={leadForm.dueDate} onChange={(event) => setLeadForm({ ...leadForm, dueDate: event.target.value })} /></label>
             <label><span>Status</span><select value={leadForm.status} onChange={(event) => setLeadForm({ ...leadForm, status: event.target.value as LeadFormState['status'] })}><option value="New">New</option><option value="Qualified">Qualified</option><option value="Awaiting Info">Awaiting Info</option><option value="Quoted">Quoted</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
+            <label><span>QuickBooks estimate #</span><input value={leadForm.quickbooksEstimateNumber} onChange={(event) => setLeadForm({ ...leadForm, quickbooksEstimateNumber: event.target.value })} placeholder="Required once quoted" /></label>
             <label><span>Linked quote</span><select value={leadForm.linkedQuoteId} onChange={(event) => setLeadForm({ ...leadForm, linkedQuoteId: event.target.value })}><option value="">Select quote</option>{quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quoteNumber} · {quote.clientName || quote.productName}</option>)}</select></label>
             <label className="full-span"><span>Notes</span><textarea value={leadForm.notes} onChange={(event) => setLeadForm({ ...leadForm, notes: event.target.value })} /></label>
           </div>
@@ -102,7 +103,7 @@ export function LeadsPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Lead</th><th>Date</th><th>Company</th><th>Owner</th><th>Qty</th><th>Status</th><th>Quote</th><th>Actions</th></tr></thead>
-                <tbody>{filteredLeads.map((lead) => <tr key={lead.id}><td><strong>{lead.leadNumber}</strong><div className="table-subtext">{lead.contactName || 'No contact'}</div></td><td>{formatDate(lead.enquiryDate)}</td><td>{lead.companyName || lead.clientName || 'No company'}</td><td>{lead.assignedTo || 'Unassigned'}</td><td>{formatNumber(lead.requestedQuantity)}</td><td>{lead.status}</td><td>{lead.linkedQuoteNumber || 'Not quoted'}</td><td><button className="table-button" onClick={() => { onEdit(lead); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredLeads.map((lead) => <tr key={lead.id}><td><strong>{lead.leadNumber}</strong><div className="table-subtext">{lead.contactName || 'No contact'}</div></td><td>{formatDate(lead.enquiryDate)}</td><td>{lead.companyName || lead.clientName || 'No company'}</td><td>{lead.assignedTo || 'Unassigned'}</td><td>{formatNumber(lead.requestedQuantity)}</td><td>{lead.status}</td><td>{lead.quickbooksEstimateNumber ? `QB ${lead.quickbooksEstimateNumber}` : (lead.linkedQuoteNumber || 'Not quoted')}</td><td><button className="table-button" onClick={() => { onEdit(lead); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No leads yet" body="Capture enquiries here before they move into the quote pipeline." />}

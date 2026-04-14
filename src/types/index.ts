@@ -401,6 +401,7 @@ export interface Lead {
   requestedQuantity: number;
   dueDate: string;
   status: LeadStatus;
+  quickbooksEstimateNumber: string;
   linkedQuoteId: string;
   linkedQuoteNumber: string;
   notes: string;
@@ -819,6 +820,7 @@ export interface LeadFormState {
   requestedQuantity: string;
   dueDate: string;
   status: LeadStatus;
+  quickbooksEstimateNumber: string;
   linkedQuoteId: string;
   notes: string;
 }

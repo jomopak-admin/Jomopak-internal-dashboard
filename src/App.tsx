@@ -252,6 +252,7 @@ const createInitialLeadForm = (): LeadFormState => ({
   requestedQuantity: '',
   dueDate: '',
   status: 'New',
+  quickbooksEstimateNumber: '',
   linkedQuoteId: '',
   notes: '',
 });
@@ -765,7 +766,7 @@ function App() {
   }), [data.quoteEstimates, quoteFilters]);
 
   const filteredLeads = useMemo(() => data.leads.filter((lead) => {
-    const matchesSearch = !leadFilters.search || [lead.leadNumber, lead.companyName, lead.contactName, lead.clientName, lead.productName, lead.notes].some((value) => matchesText(value, leadFilters.search));
+    const matchesSearch = !leadFilters.search || [lead.leadNumber, lead.quickbooksEstimateNumber, lead.companyName, lead.contactName, lead.clientName, lead.productName, lead.notes].some((value) => matchesText(value, leadFilters.search));
     const matchesMonth = !leadFilters.month || getMonthKey(lead.enquiryDate) === leadFilters.month;
     const matchesStatus = !leadFilters.status || lead.status === leadFilters.status;
     const matchesSource = !leadFilters.source || lead.source === leadFilters.source;
@@ -1055,6 +1056,10 @@ function App() {
       setLeadMessage('Add at least one contact detail for the lead.');
       return;
     }
+    if (leadForm.status === 'Quoted' && !leadForm.quickbooksEstimateNumber.trim()) {
+      setLeadMessage('QuickBooks estimate number is required once the lead is marked as quoted.');
+      return;
+    }
     const client = leadForm.clientId ? clientsById.get(leadForm.clientId) : undefined;
     const product = leadForm.productId ? productsById.get(leadForm.productId) : undefined;
     const quote = leadForm.linkedQuoteId ? data.quoteEstimates.find((item) => item.id === leadForm.linkedQuoteId) : undefined;
@@ -1073,6 +1078,7 @@ function App() {
       requestedQuantity: Number(leadForm.requestedQuantity || 0),
       dueDate: leadForm.dueDate,
       status: leadForm.status,
+      quickbooksEstimateNumber: leadForm.quickbooksEstimateNumber.trim(),
       linkedQuoteId: quote?.id ?? '',
       linkedQuoteNumber: quote?.quoteNumber ?? '',
       notes: leadForm.notes,
@@ -2249,6 +2255,7 @@ function App() {
       requestedQuantity: String(lead.requestedQuantity),
       dueDate: lead.dueDate,
       status: lead.status,
+      quickbooksEstimateNumber: lead.quickbooksEstimateNumber,
       linkedQuoteId: lead.linkedQuoteId,
       notes: lead.notes,
     });

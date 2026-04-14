@@ -210,6 +210,7 @@ function normalizeLead(raw: any): Lead {
     requestedQuantity: Number(raw.requestedQuantity ?? 0),
     dueDate: raw.dueDate ?? '',
     status: raw.status ?? 'New',
+    quickbooksEstimateNumber: raw.quickbooksEstimateNumber ?? '',
     linkedQuoteId: raw.linkedQuoteId ?? '',
     linkedQuoteNumber: raw.linkedQuoteNumber ?? '',
     notes: raw.notes ?? '',
