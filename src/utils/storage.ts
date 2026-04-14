@@ -5,6 +5,7 @@ import {
   CustomerStockRelease,
   DispatchRecord,
   JobCard,
+  Lead,
   Machine,
   MaterialReceipt,
   PaperLog,
@@ -184,6 +185,32 @@ function normalizeQuoteEstimate(raw: any): QuoteEstimate {
     quotedUnitPrice: Number(raw.quotedUnitPrice ?? 0),
     totalQuote: Number(raw.totalQuote ?? 0),
     status: raw.status ?? 'Draft',
+    notes: raw.notes ?? '',
+  };
+}
+
+function normalizeLead(raw: any): Lead {
+  const code = raw.leadNumber ?? raw.id ?? '';
+  return {
+    id: code,
+    leadNumber: code,
+    createdAt: raw.createdAt ?? new Date(`${raw.enquiryDate ?? getToday()}T08:00:00.000Z`).toISOString(),
+    enquiryDate: raw.enquiryDate ?? getToday(),
+    clientId: raw.clientId ?? '',
+    clientName: raw.clientName ?? '',
+    companyName: raw.companyName ?? '',
+    contactName: raw.contactName ?? '',
+    phone: raw.phone ?? '',
+    email: raw.email ?? '',
+    source: raw.source ?? 'WhatsApp',
+    assignedTo: raw.assignedTo ?? '',
+    productId: raw.productId ?? '',
+    productName: raw.productName ?? '',
+    requestedQuantity: Number(raw.requestedQuantity ?? 0),
+    dueDate: raw.dueDate ?? '',
+    status: raw.status ?? 'New',
+    linkedQuoteId: raw.linkedQuoteId ?? '',
+    linkedQuoteNumber: raw.linkedQuoteNumber ?? '',
     notes: raw.notes ?? '',
   };
 }
@@ -444,6 +471,7 @@ export function loadAppData(): AppData {
     return {
       suppliers: (parsed.suppliers ?? []).map(normalizeSupplier),
       machines: (parsed.machines ?? []).map(normalizeMachine),
+      leads: (parsed.leads ?? []).map(normalizeLead),
       quoteEstimates: (parsed.quoteEstimates ?? []).map(normalizeQuoteEstimate),
       artworkRecords: (parsed.artworkRecords ?? []).map(normalizeArtwork),
       customerStockReleases: (parsed.customerStockReleases ?? []).map(normalizeCustomerStockRelease),

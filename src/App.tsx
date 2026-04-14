@@ -13,6 +13,7 @@ import { DashboardPage } from './pages/Dashboard/DashboardPage';
 import { DispatchPage } from './pages/Dispatch/DispatchPage';
 import { FinishedGoodsStockPage } from './pages/FinishedGoodsStock/FinishedGoodsStockPage';
 import { JobCardsPage } from './pages/JobCards/JobCardsPage';
+import { LeadsPage } from './pages/Leads/LeadsPage';
 import { MaterialsReceivingPage } from './pages/MaterialsReceiving/MaterialsReceivingPage';
 import { MachinesPage } from './pages/Machines/MachinesPage';
 import { PaperLogPage } from './pages/PaperLog/PaperLogPage';
@@ -49,6 +50,9 @@ import {
   JobCard,
   JobFilters,
   JobFormState,
+  Lead,
+  LeadFilters,
+  LeadFormState,
   Machine,
   MachineFilters,
   MachineFormState,
@@ -111,6 +115,7 @@ const currentMonth = getCurrentMonthValue();
 const VIEW_ORDER: View[] = [
   'dashboard',
   'salesDesk',
+  'leads',
   'calculator',
   'costInputs',
   'permissions',
@@ -230,6 +235,23 @@ const createInitialQuoteForm = (): QuoteEstimateFormState => ({
   quotedUnitPrice: '',
   totalQuote: '',
   status: 'Draft',
+  notes: '',
+});
+
+const createInitialLeadForm = (): LeadFormState => ({
+  enquiryDate: getToday(),
+  clientId: '',
+  companyName: '',
+  contactName: '',
+  phone: '',
+  email: '',
+  source: 'WhatsApp',
+  assignedTo: '',
+  productId: '',
+  requestedQuantity: '',
+  dueDate: '',
+  status: 'New',
+  linkedQuoteId: '',
   notes: '',
 });
 
@@ -490,6 +512,11 @@ function App() {
   const [quoteMessage, setQuoteMessage] = useState('');
   const [quoteFilters, setQuoteFilters] = useState<QuoteEstimateFilters>({ search: '', month: '', status: '', client: '' });
 
+  const [leadForm, setLeadForm] = useState(createInitialLeadForm);
+  const [leadEditingId, setLeadEditingId] = useState<string | null>(null);
+  const [leadMessage, setLeadMessage] = useState('');
+  const [leadFilters, setLeadFilters] = useState<LeadFilters>({ search: '', month: '', status: '', source: '', owner: '' });
+
   const [artworkForm, setArtworkForm] = useState(createInitialArtworkForm);
   const [artworkEditingId, setArtworkEditingId] = useState<string | null>(null);
   const [artworkMessage, setArtworkMessage] = useState('');
@@ -736,6 +763,15 @@ function App() {
     return matchesSearch && matchesMonth && matchesStatus && matchesClient;
   }), [data.quoteEstimates, quoteFilters]);
 
+  const filteredLeads = useMemo(() => data.leads.filter((lead) => {
+    const matchesSearch = !leadFilters.search || [lead.leadNumber, lead.companyName, lead.contactName, lead.clientName, lead.productName, lead.notes].some((value) => matchesText(value, leadFilters.search));
+    const matchesMonth = !leadFilters.month || getMonthKey(lead.enquiryDate) === leadFilters.month;
+    const matchesStatus = !leadFilters.status || lead.status === leadFilters.status;
+    const matchesSource = !leadFilters.source || lead.source === leadFilters.source;
+    const matchesOwner = !leadFilters.owner || matchesText(lead.assignedTo, leadFilters.owner);
+    return matchesSearch && matchesMonth && matchesStatus && matchesSource && matchesOwner;
+  }), [data.leads, leadFilters]);
+
   const filteredArtworkRecords = useMemo(() => data.artworkRecords.filter((record) => {
     const matchesSearch = !artworkFilters.search || [record.artworkNumber, record.jobNumber, record.clientName, record.notes].some((value) => matchesText(value, artworkFilters.search));
     const matchesStage = !artworkFilters.stage || record.stage === artworkFilters.stage;
@@ -826,6 +862,7 @@ function App() {
   function resetJobEditor() { setJobForm(createInitialJobForm()); setJobEditingId(null); setJobMessage(''); }
   function resetSupplierEditor() { setSupplierForm(createInitialSupplierForm()); setSupplierEditingId(null); setSupplierMessage(''); }
   function resetMachineEditor() { setMachineForm(createInitialMachineForm()); setMachineEditingId(null); setMachineMessage(''); }
+  function resetLeadEditor() { setLeadForm(createInitialLeadForm()); setLeadEditingId(null); setLeadMessage(''); }
   function resetQuoteEditor() { setQuoteForm(createInitialQuoteForm()); setQuoteEditingId(null); setQuoteMessage(''); }
   function resetArtworkEditor() { setArtworkForm(createInitialArtworkForm()); setArtworkEditingId(null); setArtworkMessage(''); }
   function resetCustomerStockReleaseEditor() { setCustomerStockReleaseForm(createInitialCustomerStockReleaseForm()); setCustomerStockReleaseEditingId(null); setCustomerStockReleaseMessage(''); }
@@ -1005,6 +1042,52 @@ function App() {
       setData((current) => ({ ...current, quoteEstimates: [newQuote, ...current.quoteEstimates] }));
     }
     resetQuoteEditor();
+  }
+
+  function handleSaveLead() {
+    if (!leadForm.companyName && !leadForm.clientId) {
+      setLeadMessage('Company name or an existing client is required.');
+      return;
+    }
+    if (!leadForm.contactName && !leadForm.phone && !leadForm.email) {
+      setLeadMessage('Add at least one contact detail for the lead.');
+      return;
+    }
+    const client = leadForm.clientId ? clientsById.get(leadForm.clientId) : undefined;
+    const product = leadForm.productId ? productsById.get(leadForm.productId) : undefined;
+    const quote = leadForm.linkedQuoteId ? data.quoteEstimates.find((item) => item.id === leadForm.linkedQuoteId) : undefined;
+    const payload = {
+      enquiryDate: leadForm.enquiryDate,
+      clientId: client?.id ?? '',
+      clientName: client?.name ?? '',
+      companyName: client?.name ?? leadForm.companyName,
+      contactName: leadForm.contactName,
+      phone: leadForm.phone,
+      email: leadForm.email,
+      source: leadForm.source,
+      assignedTo: leadForm.assignedTo,
+      productId: product?.id ?? '',
+      productName: product?.name ?? '',
+      requestedQuantity: Number(leadForm.requestedQuantity || 0),
+      dueDate: leadForm.dueDate,
+      status: leadForm.status,
+      linkedQuoteId: quote?.id ?? '',
+      linkedQuoteNumber: quote?.quoteNumber ?? '',
+      notes: leadForm.notes,
+    };
+    if (leadEditingId) {
+      setData((current) => ({ ...current, leads: current.leads.map((lead) => lead.id === leadEditingId ? { ...lead, ...payload } : lead) }));
+    } else {
+      const leadNumber = generateCode('LED', data.leads.map((lead) => lead.leadNumber), leadForm.enquiryDate || getToday());
+      const newLead: Lead = {
+        id: leadNumber,
+        leadNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      setData((current) => ({ ...current, leads: [newLead, ...current.leads] }));
+    }
+    resetLeadEditor();
   }
 
   function handleSaveArtwork() {
@@ -2046,7 +2129,7 @@ function App() {
       notes: rate.notes,
       active: rate.active,
     });
-    setView('calculator');
+    setView('costInputs');
   }
 
   function editCostProfile(profile: CostProfile) {
@@ -2074,7 +2157,7 @@ function App() {
       active: profile.active,
       notes: profile.notes,
     });
-    setView('calculator');
+    setView('costInputs');
   }
 
   function editSupplier(supplier: Supplier) {
@@ -2146,6 +2229,27 @@ function App() {
       notes: quote.notes,
     });
     setView('quotes');
+  }
+
+  function editLead(lead: Lead) {
+    setLeadEditingId(lead.id);
+    setLeadForm({
+      enquiryDate: lead.enquiryDate,
+      clientId: lead.clientId,
+      companyName: lead.companyName,
+      contactName: lead.contactName,
+      phone: lead.phone,
+      email: lead.email,
+      source: lead.source,
+      assignedTo: lead.assignedTo,
+      productId: lead.productId,
+      requestedQuantity: String(lead.requestedQuantity),
+      dueDate: lead.dueDate,
+      status: lead.status,
+      linkedQuoteId: lead.linkedQuoteId,
+      notes: lead.notes,
+    });
+    setView('leads');
   }
 
   function editArtwork(record: ArtworkRecord) {
@@ -2381,6 +2485,25 @@ function App() {
           onOpenJob={editJob}
           onOpenQuotesRegister={() => setView('quotes')}
           onOpenJobsRegister={() => setView('jobs')}
+        />
+      )}
+
+      {view === 'leads' && (
+        <LeadsPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          products={data.products}
+          quotes={data.quoteEstimates}
+          leadForm={leadForm}
+          setLeadForm={setLeadForm}
+          leadEditingId={leadEditingId}
+          leadMessage={leadMessage}
+          onSave={handleSaveLead}
+          onReset={resetLeadEditor}
+          leadFilters={leadFilters}
+          setLeadFilters={setLeadFilters}
+          filteredLeads={filteredLeads}
+          onEdit={editLead}
         />
       )}
 

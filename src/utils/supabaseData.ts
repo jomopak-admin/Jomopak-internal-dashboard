@@ -7,6 +7,7 @@ import {
   DispatchRecord,
   FinishedGoodsStock,
   JobCard,
+  Lead,
   Machine,
   MaterialReceipt,
   PaperLog,
@@ -152,6 +153,31 @@ function mapQuoteEstimate(row: any): QuoteEstimate {
     quotedUnitPrice: Number(row.quoted_unit_price ?? 0),
     totalQuote: Number(row.total_quote ?? 0),
     status: row.status ?? 'Draft',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapLead(row: any): Lead {
+  return {
+    id: row.id,
+    leadNumber: row.lead_number,
+    createdAt: row.created_at,
+    enquiryDate: row.enquiry_date,
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    companyName: row.company_name ?? '',
+    contactName: row.contact_name ?? '',
+    phone: row.phone ?? '',
+    email: row.email ?? '',
+    source: row.source ?? 'WhatsApp',
+    assignedTo: row.assigned_to ?? '',
+    productId: row.product_id ?? '',
+    productName: row.product_name ?? '',
+    requestedQuantity: Number(row.requested_quantity ?? 0),
+    dueDate: row.due_date ?? '',
+    status: row.status ?? 'New',
+    linkedQuoteId: row.linked_quote_id ?? '',
+    linkedQuoteNumber: row.linked_quote_number ?? '',
     notes: row.notes ?? '',
   };
 }
@@ -520,6 +546,7 @@ export async function fetchAppData(): Promise<AppData> {
   const [
     suppliers,
     machines,
+    leads,
     quoteEstimates,
     artworkRecords,
     customerStockReleases,
@@ -540,6 +567,7 @@ export async function fetchAppData(): Promise<AppData> {
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
+    safeSelect('leads'),
     safeSelect('quote_estimates'),
     safeSelect('artwork_records'),
     safeSelect('customer_stock_releases'),
@@ -562,6 +590,7 @@ export async function fetchAppData(): Promise<AppData> {
   return {
     suppliers: suppliers.map(mapSupplier),
     machines: machines.map(mapMachine),
+    leads: leads.map(mapLead),
     quoteEstimates: quoteEstimates.map(mapQuoteEstimate),
     artworkRecords: artworkRecords.map(mapArtworkRecord),
     customerStockReleases: customerStockReleases.map(mapCustomerStockRelease),
@@ -624,6 +653,28 @@ export async function syncAppData(data: AppData): Promise<void> {
       status: machine.status,
       notes: machine.notes || null,
       active: machine.active,
+    }))),
+    safeUpsert('leads', data.leads.map((lead) => ({
+      id: lead.id,
+      lead_number: lead.leadNumber,
+      created_at: lead.createdAt,
+      enquiry_date: lead.enquiryDate,
+      client_id: lead.clientId || null,
+      client_name: lead.clientName || null,
+      company_name: lead.companyName || null,
+      contact_name: lead.contactName || null,
+      phone: lead.phone || null,
+      email: lead.email || null,
+      source: lead.source,
+      assigned_to: lead.assignedTo || null,
+      product_id: lead.productId || null,
+      product_name: lead.productName || null,
+      requested_quantity: lead.requestedQuantity,
+      due_date: lead.dueDate || null,
+      status: lead.status,
+      linked_quote_id: lead.linkedQuoteId || null,
+      linked_quote_number: lead.linkedQuoteNumber || null,
+      notes: lead.notes || null,
     }))),
     safeUpsert('quote_estimates', data.quoteEstimates.map((quote) => ({
       id: quote.id,

@@ -9,6 +9,7 @@ const corsHeaders = {
 const VIEW_LABELS = {
   dashboard: 'Dashboard',
   salesDesk: 'Sales Desk',
+  leads: 'Leads',
   calculator: 'Calculator',
   costInputs: 'Cost Inputs',
   permissions: 'Permissions',
@@ -53,6 +54,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   admin: [
     'dashboard',
     'salesDesk',
+    'leads',
     'calculator',
     'costInputs',
     'permissions',
@@ -76,6 +78,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   ],
   ops: [
     'dashboard',
+    'leads',
     'calculator',
     'suppliers',
     'quotes',
@@ -106,6 +109,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   sales: [
     'dashboard',
     'salesDesk',
+    'leads',
     'calculator',
     'quotes',
     'artwork',

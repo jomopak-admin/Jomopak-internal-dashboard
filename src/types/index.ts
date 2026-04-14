@@ -3,6 +3,7 @@ export type View =
   | 'salesDesk'
   | 'calculator'
   | 'costInputs'
+  | 'leads'
   | 'permissions'
   | 'suppliers'
   | 'quotes'
@@ -43,6 +44,7 @@ export const VIEW_LABELS: Record<View, string> = {
   salesDesk: 'Sales Desk',
   calculator: 'Calculator',
   costInputs: 'Cost Inputs',
+  leads: 'Leads',
   permissions: 'Permissions',
   suppliers: 'Suppliers',
   quotes: 'Quotes & Estimates',
@@ -69,6 +71,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'salesDesk',
     'calculator',
     'costInputs',
+    'leads',
     'permissions',
     'suppliers',
     'quotes',
@@ -90,6 +93,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   ],
   ops: [
     'dashboard',
+    'leads',
     'calculator',
     'suppliers',
     'quotes',
@@ -120,6 +124,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   sales: [
     'dashboard',
     'salesDesk',
+    'leads',
     'calculator',
     'quotes',
     'artwork',
@@ -265,6 +270,8 @@ export type HandleType = 'None' | 'Flat Handle' | 'Rope Handle' | 'Roll Handle';
 export type PrintMethod = 'Plain' | 'Auto' | 'Screen Print' | 'Flexo';
 export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
+export type LeadStatus = 'New' | 'Qualified' | 'Awaiting Info' | 'Quoted' | 'Won' | 'Lost';
+export type LeadSource = 'WhatsApp' | 'Phone' | 'Email' | 'Referral' | 'Walk-in' | 'Existing Customer' | 'Website' | 'Other';
 export type MachineStatus = 'Active' | 'Maintenance' | 'Offline';
 export type ArtworkStage = 'Awaiting Artwork' | 'Artwork Received' | 'Proof Sent' | 'Approved' | 'Changes Requested';
 export type CertificationType = 'FSC' | 'ISO' | 'Food Safety' | 'Other';
@@ -372,6 +379,29 @@ export interface QuoteEstimate {
   quotedUnitPrice: number;
   totalQuote: number;
   status: QuoteStatus;
+  notes: string;
+}
+
+export interface Lead {
+  id: string;
+  leadNumber: string;
+  createdAt: string;
+  enquiryDate: string;
+  clientId: string;
+  clientName: string;
+  companyName: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  source: LeadSource;
+  assignedTo: string;
+  productId: string;
+  productName: string;
+  requestedQuantity: number;
+  dueDate: string;
+  status: LeadStatus;
+  linkedQuoteId: string;
+  linkedQuoteNumber: string;
   notes: string;
 }
 
@@ -715,6 +745,7 @@ export interface StockChangeLog {
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
+  leads: Lead[];
   quoteEstimates: QuoteEstimate[];
   artworkRecords: ArtworkRecord[];
   customerStockReleases: CustomerStockRelease[];
@@ -772,6 +803,23 @@ export interface MachineFormState {
   status: MachineStatus;
   notes: string;
   active: boolean;
+}
+
+export interface LeadFormState {
+  enquiryDate: string;
+  clientId: string;
+  companyName: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  source: LeadSource;
+  assignedTo: string;
+  productId: string;
+  requestedQuantity: string;
+  dueDate: string;
+  status: LeadStatus;
+  linkedQuoteId: string;
+  notes: string;
 }
 
 export interface QuoteEstimateFormState {
@@ -1062,6 +1110,7 @@ export interface JobFilters { search: string; month: string; status: string; cus
 export interface PaperRateFilters { search: string; active: string; }
 export interface SupplierFilters { search: string; supplierType: string; active: string; }
 export interface MachineFilters { search: string; status: string; processType: string; active: string; }
+export interface LeadFilters { search: string; month: string; status: string; source: string; owner: string; }
 export interface QuoteEstimateFilters { search: string; month: string; status: string; client: string; }
 export interface ArtworkFilters { search: string; stage: string; client: string; }
 export interface CustomerStockReleaseFilters { search: string; month: string; client: string; }

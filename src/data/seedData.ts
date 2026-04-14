@@ -4,6 +4,7 @@ export function buildSeedData(): AppData {
   return {
     suppliers: [],
     machines: [],
+    leads: [],
     quoteEstimates: [],
     artworkRecords: [],
     customerStockReleases: [],
