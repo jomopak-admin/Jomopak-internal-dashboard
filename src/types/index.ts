@@ -9,6 +9,7 @@ export type View =
   | 'quotes'
   | 'artwork'
   | 'customerStock'
+  | 'deliveryNotes'
   | 'machines'
   | 'jobs'
   | 'products'
@@ -50,6 +51,7 @@ export const VIEW_LABELS: Record<View, string> = {
   quotes: 'Quotes & Estimates',
   artwork: 'Artwork',
   customerStock: 'Customer Stock',
+  deliveryNotes: 'Delivery Notes',
   machines: 'Machines',
   jobs: 'Job Cards',
   products: 'Products',
@@ -77,6 +79,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'artwork',
     'customerStock',
+    'deliveryNotes',
     'machines',
     'jobs',
     'products',
@@ -99,6 +102,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'artwork',
     'customerStock',
+    'deliveryNotes',
     'machines',
     'jobs',
     'products',
@@ -128,6 +132,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'calculator',
     'quotes',
     'artwork',
+    'deliveryNotes',
     'jobs',
     'products',
     'reports',
@@ -135,6 +140,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   artwork: [
     'dashboard',
     'artwork',
+    'deliveryNotes',
     'quotes',
     'jobs',
     'products',
@@ -285,6 +291,11 @@ export type ArtworkStage = 'Awaiting Artwork' | 'Artwork Received' | 'Proof Sent
 export type CertificationType = 'FSC' | 'ISO' | 'Food Safety' | 'Other';
 export type CertificationStatus = 'Active' | 'Expiring Soon' | 'Expired';
 export type CurrencyCode = 'ZAR' | 'USD' | 'EUR' | 'GBP';
+export type InventoryItemType = 'Finished Goods' | 'Spare Part' | 'Material Lot';
+export type InventoryMovementType = 'Received' | 'Issued to Job' | 'Transferred' | 'Adjusted' | 'Returned';
+export type PaymentMethod = 'EFT' | 'Cash' | 'Card' | 'Credit Terms' | 'Other';
+export type StorageFeeType = 'None' | 'Per Month' | 'Per Pallet' | 'Per Unit';
+export type DeliveryChargePolicy = 'Charge Every Release' | 'Client Collection' | 'Charge By Zone' | 'Included By Agreement';
 
 export interface SupplierContact {
   id: string;
@@ -451,6 +462,17 @@ export interface CustomerStockRelease {
   notes: string;
 }
 
+export interface DeliveryNoteLineItem {
+  id: string;
+  description: string;
+  productName: string;
+  stockNumber: string;
+  quantity: number;
+  quantityUnit: QuantityUnit;
+  dispatchRecordId: string;
+  customerStockReleaseId: string;
+}
+
 export interface PaperRate {
   id: string;
   name: string;
@@ -501,6 +523,12 @@ export interface UserProfile {
   id: string;
   email: string;
   fullName: string;
+  username: string;
+  phoneNumber: string;
+  clientId: string;
+  accountType: 'internal' | 'client';
+  publicDisplayName: string;
+  publicDisplayRole: string;
   role: UserRole;
   permissions: View[];
   dashboardWidgets: DashboardWidget[];
@@ -509,6 +537,7 @@ export interface UserProfile {
 export interface Client {
   id: string;
   name: string;
+  companyName: string;
   code: string;
   pricingTierId: string;
   pricingTierName: string;
@@ -518,9 +547,64 @@ export interface Client {
   creditLimit: number;
   currentBalance: number;
   paymentTerms: string;
+  primaryPaymentMethod: PaymentMethod;
+  currency: CurrencyCode;
+  invoiceLanguage: string;
+  vatNumber: string;
+  openingBalance: number;
+  openingBalanceAsOf: string;
   accountHold: boolean;
+  title: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix: string;
   contactName: string;
   contactEmail: string;
+  phoneNumber: string;
+  mobileNumber: string;
+  otherPhone: string;
+  faxNumber: string;
+  ccEmail: string;
+  bccEmail: string;
+  website: string;
+  marketingConsent: boolean;
+  billingAddressLine1: string;
+  billingAddressLine2: string;
+  billingCity: string;
+  billingState: string;
+  billingPostalCode: string;
+  billingCountry: string;
+  deliveryAddressLine1: string;
+  deliveryAddressLine2: string;
+  deliveryCity: string;
+  deliveryState: string;
+  deliveryPostalCode: string;
+  deliveryCountry: string;
+  stockHoldingEnabled: boolean;
+  stockHoldingAgreementSigned: boolean;
+  stockHoldingAgreementSignedDate: string;
+  stockHoldingAgreementReference: string;
+  stockHoldingReviewDate: string;
+  creditAgreementSigned: boolean;
+  creditAgreementSignedDate: string;
+  creditAgreementReference: string;
+  storageGracePeriodDays: number;
+  maxStoragePeriodDays: number;
+  storageFeeApplies: boolean;
+  storageFeeType: StorageFeeType;
+  storageFeeRate: number;
+  depositRequiredPercent: number;
+  minimumMonthlyReleaseQuantity: number;
+  minimumMonthlyReleaseUnit: QuantityUnit;
+  minimumReleaseQuantity: number;
+  deliveryChargePolicy: DeliveryChargePolicy;
+  releaseApprovalRequired: boolean;
+  portalEnabled: boolean;
+  portalViewQuotes: boolean;
+  portalViewInvoices: boolean;
+  portalViewStock: boolean;
+  portalRequestRelease: boolean;
   notes: string;
   active: boolean;
 }
@@ -623,6 +707,7 @@ export interface JobCard {
 export interface FinishedGoodsStock {
   id: string;
   stockNumber: string;
+  barcode: string;
   createdAt: string;
   storedDate: string;
   productId: string;
@@ -644,6 +729,7 @@ export interface FinishedGoodsStock {
 export interface SparePart {
   id: string;
   partCode: string;
+  barcode: string;
   createdAt: string;
   partName: string;
   category: string;
@@ -664,6 +750,7 @@ export interface SparePart {
 export interface MaterialReceipt {
   id: string;
   receiptNumber: string;
+  barcode: string;
   createdAt: string;
   receivedDate: string;
   supplierId: string;
@@ -674,6 +761,7 @@ export interface MaterialReceipt {
   gsm: string;
   width: string;
   quantityReceived: number;
+  quantityAvailable: number;
   quantityUnit: QuantityUnit;
   fscClaimType: FscClaimType;
   supplierCertificateCode: string;
@@ -782,6 +870,37 @@ export interface DispatchRecord {
   fscRelated: boolean;
 }
 
+export interface DeliveryNote {
+  id: string;
+  deliveryNoteNumber: string;
+  createdAt: string;
+  noteDate: string;
+  clientId: string;
+  clientName: string;
+  clientContactName: string;
+  clientContactPhone: string;
+  clientEmail: string;
+  clientAddress: string;
+  companyName: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyAddress: string;
+  jobId: string;
+  jobNumber: string;
+  dispatchRecordIds: string[];
+  customerStockReleaseIds: string[];
+  deliveryMethod: 'Delivery' | 'Collection' | 'Courier';
+  deliveryReference: string;
+  vehicleRegistration: string;
+  driverName: string;
+  dispatchedBy: string;
+  receivedBy: string;
+  status: 'Draft' | 'Issued' | 'Delivered' | 'Collected';
+  clientVisible: boolean;
+  lineItems: DeliveryNoteLineItem[];
+  notes: string;
+}
+
 export interface StockChangeLog {
   id: string;
   createdAt: string;
@@ -798,6 +917,47 @@ export interface StockChangeLog {
   notes: string;
  }
 
+export interface InventoryMovement {
+  id: string;
+  movementNumber: string;
+  createdAt: string;
+  movementDate: string;
+  itemType: InventoryItemType;
+  movementType: InventoryMovementType;
+  barcode: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  quantityMoved: number;
+  quantityUnit: QuantityUnit;
+  fromLocation: string;
+  toLocation: string;
+  jobId: string;
+  jobNumber: string;
+  movedByUserId: string;
+  movedByName: string;
+  notes: string;
+}
+
+export interface BiEvent {
+  id: string;
+  createdAt: string;
+  occurredAt: string;
+  sourceTable: string;
+  sourceRecordId: string;
+  eventCategory: string;
+  eventType: string;
+  action: string;
+  summary: string;
+  actorName: string;
+  jobId: string;
+  jobNumber: string;
+  clientId: string;
+  clientName: string;
+  visibilityScope: 'internal' | 'client_shared' | 'client_only';
+  details: Record<string, unknown>;
+}
+
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
@@ -805,6 +965,7 @@ export interface AppData {
   quoteEstimates: QuoteEstimate[];
   artworkRecords: ArtworkRecord[];
   customerStockReleases: CustomerStockRelease[];
+  deliveryNotes: DeliveryNote[];
   paperRates: PaperRate[];
   costProfiles: CostProfile[];
   pricingTiers: PricingTier[];
@@ -820,6 +981,8 @@ export interface AppData {
   dispatchRecords: DispatchRecord[];
   stockChangeLogs: StockChangeLog[];
   materialOrderRequests: MaterialOrderRequest[];
+  inventoryMovements: InventoryMovement[];
+  biEvents: BiEvent[];
 }
 
 export interface MaterialOrderRequest {
@@ -945,6 +1108,32 @@ export interface CustomerStockReleaseFormState {
   notes: string;
 }
 
+export interface DeliveryNoteFormState {
+  noteDate: string;
+  clientId: string;
+  clientContactName: string;
+  clientContactPhone: string;
+  clientEmail: string;
+  clientAddress: string;
+  companyName: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyAddress: string;
+  jobId: string;
+  dispatchRecordId: string;
+  customerStockReleaseId: string;
+  deliveryMethod: 'Delivery' | 'Collection' | 'Courier';
+  deliveryReference: string;
+  vehicleRegistration: string;
+  driverName: string;
+  dispatchedBy: string;
+  receivedBy: string;
+  status: 'Draft' | 'Issued' | 'Delivered' | 'Collected';
+  clientVisible: boolean;
+  lineItems: DeliveryNoteLineItem[];
+  notes: string;
+}
+
 export interface PricingTierFormState {
   name: string;
   type: PricingTierType;
@@ -1005,6 +1194,7 @@ export interface CalculatorQuoteFormState {
 
 export interface ClientFormState {
   name: string;
+  companyName: string;
   code: string;
   pricingTierId: string;
   brandingDefault: boolean;
@@ -1012,9 +1202,64 @@ export interface ClientFormState {
   creditLimit: string;
   currentBalance: string;
   paymentTerms: string;
+  primaryPaymentMethod: PaymentMethod;
+  currency: CurrencyCode;
+  invoiceLanguage: string;
+  vatNumber: string;
+  openingBalance: string;
+  openingBalanceAsOf: string;
   accountHold: boolean;
+  title: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix: string;
   contactName: string;
   contactEmail: string;
+  phoneNumber: string;
+  mobileNumber: string;
+  otherPhone: string;
+  faxNumber: string;
+  ccEmail: string;
+  bccEmail: string;
+  website: string;
+  marketingConsent: boolean;
+  billingAddressLine1: string;
+  billingAddressLine2: string;
+  billingCity: string;
+  billingState: string;
+  billingPostalCode: string;
+  billingCountry: string;
+  deliveryAddressLine1: string;
+  deliveryAddressLine2: string;
+  deliveryCity: string;
+  deliveryState: string;
+  deliveryPostalCode: string;
+  deliveryCountry: string;
+  stockHoldingEnabled: boolean;
+  stockHoldingAgreementSigned: boolean;
+  stockHoldingAgreementSignedDate: string;
+  stockHoldingAgreementReference: string;
+  stockHoldingReviewDate: string;
+  creditAgreementSigned: boolean;
+  creditAgreementSignedDate: string;
+  creditAgreementReference: string;
+  storageGracePeriodDays: string;
+  maxStoragePeriodDays: string;
+  storageFeeApplies: boolean;
+  storageFeeType: StorageFeeType;
+  storageFeeRate: string;
+  depositRequiredPercent: string;
+  minimumMonthlyReleaseQuantity: string;
+  minimumMonthlyReleaseUnit: QuantityUnit;
+  minimumReleaseQuantity: string;
+  deliveryChargePolicy: DeliveryChargePolicy;
+  releaseApprovalRequired: boolean;
+  portalEnabled: boolean;
+  portalViewQuotes: boolean;
+  portalViewInvoices: boolean;
+  portalViewStock: boolean;
+  portalRequestRelease: boolean;
   notes: string;
   active: boolean;
 }
@@ -1111,6 +1356,7 @@ export interface FinishedGoodsStockFormState {
   productId: string;
   clientId: string;
   jobId: string;
+  barcode: string;
   quantityOnHand: string;
   quantityReserved: string;
   quantityUnit: QuantityUnit;
@@ -1127,6 +1373,7 @@ export interface SparePartFormState {
   machineReference: string;
   supplierId: string;
   supplierName: string;
+  barcode: string;
   quantityOnHand: string;
   minimumStockLevel: string;
   reorderLevel: string;
@@ -1143,6 +1390,7 @@ export interface MaterialReceiptFormState {
   supplierName: string;
   supplierBatchNumber: string;
   internalRollCode: string;
+  barcode: string;
   paperType: string;
   gsm: string;
   width: string;
@@ -1154,6 +1402,16 @@ export interface MaterialReceiptFormState {
   storageLocation: string;
   inspectionNotes: string;
   fscRelated: boolean;
+}
+
+export interface InventoryScanFormState {
+  barcode: string;
+  movementDate: string;
+  movementType: InventoryMovementType;
+  quantityMoved: string;
+  toLocation: string;
+  jobId: string;
+  notes: string;
 }
 
 export interface ProductionLogFormState {
@@ -1238,6 +1496,7 @@ export interface LeadFilters { search: string; month: string; status: string; so
 export interface QuoteEstimateFilters { search: string; month: string; status: string; client: string; }
 export interface ArtworkFilters { search: string; stage: string; client: string; }
 export interface CustomerStockReleaseFilters { search: string; month: string; client: string; }
+export interface DeliveryNoteFilters { search: string; month: string; client: string; status: string; visibility: string; }
 export interface CostProfileFilters { search: string; active: string; }
 export interface FinishedGoodsStockFilters { search: string; client: string; status: string; product: string; }
 export interface SparePartFilters { search: string; category: string; lowStock: string; supplier: string; }

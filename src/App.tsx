@@ -5,6 +5,7 @@ import { CalculatorPage } from './pages/Calculator/CalculatorPage';
 import { CostInputsPage } from './pages/CostInputs/CostInputsPage';
 import { ClientsPage } from './pages/Clients/ClientsPage';
 import { CustomerStockPage } from './pages/CustomerStock/CustomerStockPage';
+import { DeliveryNotesPage } from './pages/DeliveryNotes/DeliveryNotesPage';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { useAuth } from './hooks/useAuth';
 import { useProfiles } from './hooks/useProfiles';
@@ -41,12 +42,19 @@ import {
   CustomerStockRelease,
   CustomerStockReleaseFilters,
   CustomerStockReleaseFormState,
+  DeliveryNote,
+  DeliveryNoteFilters,
+  DeliveryNoteFormState,
   DispatchFilters,
   DispatchFormState,
   DispatchRecord,
   FinishedGoodsStock,
   FinishedGoodsStockFilters,
   FinishedGoodsStockFormState,
+  InventoryItemType,
+  InventoryMovement,
+  InventoryMovementType,
+  InventoryScanFormState,
   JobCard,
   JobFilters,
   JobFormState,
@@ -110,6 +118,7 @@ import {
   matchesText,
 } from './utils/calculations';
 import { generateCode } from './utils/codeGenerator';
+import { syncJobThread } from './utils/messagingSync';
 import { supabase } from './utils/supabase';
 
 const currentMonth = getCurrentMonthValue();
@@ -125,6 +134,7 @@ const VIEW_ORDER: View[] = [
   'quotes',
   'artwork',
   'customerStock',
+  'deliveryNotes',
   'jobs',
   'products',
   'clients',
@@ -366,6 +376,7 @@ const createInitialFinishedStockForm = (): FinishedGoodsStockFormState => ({
   productId: '',
   clientId: '',
   jobId: '',
+  barcode: '',
   quantityOnHand: '',
   quantityReserved: '0',
   quantityUnit: 'units',
@@ -382,6 +393,7 @@ const createInitialSpareForm = (): SparePartFormState => ({
   machineReference: '',
   supplierId: '',
   supplierName: '',
+  barcode: '',
   quantityOnHand: '',
   minimumStockLevel: '',
   reorderLevel: '',
@@ -398,6 +410,7 @@ const createInitialMaterialForm = (): MaterialReceiptFormState => ({
   supplierName: '',
   supplierBatchNumber: '',
   internalRollCode: '',
+  barcode: '',
   paperType: '',
   gsm: '',
   width: '',
@@ -409,6 +422,16 @@ const createInitialMaterialForm = (): MaterialReceiptFormState => ({
   storageLocation: '',
   inspectionNotes: '',
   fscRelated: false,
+});
+
+const createInitialInventoryScanForm = (): InventoryScanFormState => ({
+  barcode: '',
+  movementDate: getToday(),
+  movementType: 'Issued to Job',
+  quantityMoved: '',
+  toLocation: '',
+  jobId: '',
+  notes: '',
 });
 
 const createInitialProductionForm = (): ProductionLogFormState => ({
@@ -485,6 +508,32 @@ const createInitialDispatchForm = (): DispatchFormState => ({
   fscRelated: false,
 });
 
+const createInitialDeliveryNoteForm = (): DeliveryNoteFormState => ({
+  noteDate: getToday(),
+  clientId: '',
+  clientContactName: '',
+  clientContactPhone: '',
+  clientEmail: '',
+  clientAddress: '',
+  companyName: 'JomoPak',
+  companyPhone: '',
+  companyEmail: '',
+  companyAddress: '',
+  jobId: '',
+  dispatchRecordId: '',
+  customerStockReleaseId: '',
+  deliveryMethod: 'Delivery',
+  deliveryReference: '',
+  vehicleRegistration: '',
+  driverName: '',
+  dispatchedBy: '',
+  receivedBy: '',
+  status: 'Draft',
+  clientVisible: true,
+  lineItems: [],
+  notes: '',
+});
+
 const createInitialPricingTierForm = (): PricingTierFormState => ({
   name: '',
   type: 'Wholesale',
@@ -495,6 +544,7 @@ const createInitialPricingTierForm = (): PricingTierFormState => ({
 
 const createInitialClientForm = (): ClientFormState => ({
   name: '',
+  companyName: '',
   code: '',
   pricingTierId: '',
   brandingDefault: false,
@@ -502,9 +552,64 @@ const createInitialClientForm = (): ClientFormState => ({
   creditLimit: '',
   currentBalance: '',
   paymentTerms: '30 Days',
+  primaryPaymentMethod: 'EFT',
+  currency: 'ZAR',
+  invoiceLanguage: 'English',
+  vatNumber: '',
+  openingBalance: '',
+  openingBalanceAsOf: getToday(),
   accountHold: false,
+  title: '',
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  suffix: '',
   contactName: '',
   contactEmail: '',
+  phoneNumber: '',
+  mobileNumber: '',
+  otherPhone: '',
+  faxNumber: '',
+  ccEmail: '',
+  bccEmail: '',
+  website: '',
+  marketingConsent: false,
+  billingAddressLine1: '',
+  billingAddressLine2: '',
+  billingCity: '',
+  billingState: '',
+  billingPostalCode: '',
+  billingCountry: 'South Africa',
+  deliveryAddressLine1: '',
+  deliveryAddressLine2: '',
+  deliveryCity: '',
+  deliveryState: '',
+  deliveryPostalCode: '',
+  deliveryCountry: 'South Africa',
+  stockHoldingEnabled: false,
+  stockHoldingAgreementSigned: false,
+  stockHoldingAgreementSignedDate: '',
+  stockHoldingAgreementReference: '',
+  stockHoldingReviewDate: '',
+  creditAgreementSigned: false,
+  creditAgreementSignedDate: '',
+  creditAgreementReference: '',
+  storageGracePeriodDays: '0',
+  maxStoragePeriodDays: '30',
+  storageFeeApplies: false,
+  storageFeeType: 'None',
+  storageFeeRate: '',
+  depositRequiredPercent: '40',
+  minimumMonthlyReleaseQuantity: '',
+  minimumMonthlyReleaseUnit: 'units',
+  minimumReleaseQuantity: '',
+  deliveryChargePolicy: 'Charge Every Release',
+  releaseApprovalRequired: true,
+  portalEnabled: false,
+  portalViewQuotes: true,
+  portalViewInvoices: true,
+  portalViewStock: true,
+  portalRequestRelease: false,
   notes: '',
   active: true,
 });
@@ -526,7 +631,7 @@ const createInitialProductForm = (): ProductFormState => ({
 function App() {
   const { session, profile, loading: authLoading, recoveryMode, clearRecoveryMode } = useAuth();
   const { profiles, loading: profilesLoading, saveProfile, createUser } = useProfiles(profile?.role === 'admin');
-  const { data, setData, loading } = useProductionData();
+  const { data, setData, loading } = useProductionData(!authLoading && Boolean(session));
   const [view, setView] = useState<View>('dashboard');
   const [dashboardMonth, setDashboardMonth] = useState(currentMonth);
 
@@ -545,6 +650,7 @@ function App() {
   const [supplierForm, setSupplierForm] = useState(createInitialSupplierForm);
   const [supplierEditingId, setSupplierEditingId] = useState<string | null>(null);
   const [supplierMessage, setSupplierMessage] = useState('');
+  const [supplierSaveCount, setSupplierSaveCount] = useState(0);
   const [supplierFilters, setSupplierFilters] = useState<SupplierFilters>({ search: '', supplierType: '', active: 'all' });
 
   const [machineForm, setMachineForm] = useState(createInitialMachineForm);
@@ -576,6 +682,7 @@ function App() {
   const [jobEditingId, setJobEditingId] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobMessage, setJobMessage] = useState('');
+  const [jobSaveCount, setJobSaveCount] = useState(0);
   const [jobFilters, setJobFilters] = useState<JobFilters>({ search: '', month: '', status: '', customer: '', fsc: 'all' });
 
   const [stockForm, setStockForm] = useState(createInitialFinishedStockForm);
@@ -607,6 +714,8 @@ function App() {
   const [materialEditingId, setMaterialEditingId] = useState<string | null>(null);
   const [materialMessage, setMaterialMessage] = useState('');
   const [materialFilters, setMaterialFilters] = useState<MaterialFilters>({ search: '', month: '', supplier: '', paperType: '', fsc: 'all' });
+  const [inventoryScanForm, setInventoryScanForm] = useState(createInitialInventoryScanForm);
+  const [inventoryScanMessage, setInventoryScanMessage] = useState('');
 
   const [productionForm, setProductionForm] = useState(createInitialProductionForm);
   const [productionEditingId, setProductionEditingId] = useState<string | null>(null);
@@ -627,6 +736,10 @@ function App() {
   const [dispatchEditingId, setDispatchEditingId] = useState<string | null>(null);
   const [dispatchMessage, setDispatchMessage] = useState('');
   const [dispatchFilters, setDispatchFilters] = useState<DispatchFilters>({ search: '', month: '', customer: '', fsc: 'all' });
+  const [deliveryNoteForm, setDeliveryNoteForm] = useState(createInitialDeliveryNoteForm);
+  const [deliveryNoteEditingId, setDeliveryNoteEditingId] = useState<string | null>(null);
+  const [deliveryNoteMessage, setDeliveryNoteMessage] = useState('');
+  const [deliveryNoteFilters, setDeliveryNoteFilters] = useState<DeliveryNoteFilters>({ search: '', month: '', client: '', status: '', visibility: 'all' });
 
   const [reportFilters, setReportFilters] = useState<ReportFilters>({
     month: currentMonth,
@@ -673,6 +786,19 @@ function App() {
   const finishedStockById = useMemo(() => new Map(data.finishedGoodsStock.map((item) => [item.id, item])), [data.finishedGoodsStock]);
   const materialsById = useMemo(() => new Map(data.materialReceipts.map((receipt) => [receipt.id, receipt])), [data.materialReceipts]);
   const productionLogsById = useMemo(() => new Map(data.productionLogs.map((log) => [log.id, log])), [data.productionLogs]);
+  const barcodeIndex = useMemo(() => {
+    const entries: Array<[string, { itemType: InventoryItemType; item: FinishedGoodsStock | SparePart | MaterialReceipt }]> = [];
+    data.finishedGoodsStock.forEach((item) => {
+      if (item.barcode) entries.push([item.barcode.toLowerCase(), { itemType: 'Finished Goods', item }]);
+    });
+    data.spareParts.forEach((item) => {
+      if (item.barcode) entries.push([item.barcode.toLowerCase(), { itemType: 'Spare Part', item }]);
+    });
+    data.materialReceipts.forEach((item) => {
+      if (item.barcode) entries.push([item.barcode.toLowerCase(), { itemType: 'Material Lot', item }]);
+    });
+    return new Map(entries);
+  }, [data.finishedGoodsStock, data.materialReceipts, data.spareParts]);
   const isSalesUser = profile?.role === 'sales';
   const currentSalesOwner = profile?.fullName || profile?.email || '';
 
@@ -683,6 +809,23 @@ function App() {
   const dashboardPaper = useMemo(() => data.paperLogs.filter((log) => getMonthKey(log.logDate) === dashboardMonth), [dashboardMonth, data.paperLogs]);
   const dashboardDispatch = useMemo(() => data.dispatchRecords.filter((record) => getMonthKey(record.dispatchDate) === dashboardMonth), [dashboardMonth, data.dispatchRecords]);
   const dashboardFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => getMonthKey(item.storedDate) === dashboardMonth), [dashboardMonth, data.finishedGoodsStock]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    const hasCurrentMonthData = data.jobs.some((job) => getMonthKey(job.jobDate) === dashboardMonth)
+      || data.materialReceipts.some((receipt) => getMonthKey(receipt.receivedDate) === dashboardMonth)
+      || data.productionLogs.some((log) => getMonthKey(log.logDate) === dashboardMonth)
+      || data.wasteEntries.some((entry) => getMonthKey(entry.wasteDate) === dashboardMonth)
+      || data.paperLogs.some((log) => getMonthKey(log.logDate) === dashboardMonth)
+      || data.dispatchRecords.some((record) => getMonthKey(record.dispatchDate) === dashboardMonth)
+      || data.finishedGoodsStock.some((item) => getMonthKey(item.storedDate) === dashboardMonth);
+
+    if (!hasCurrentMonthData && monthOptions.length && dashboardMonth === currentMonth) {
+      setDashboardMonth(monthOptions[0]);
+    }
+  }, [dashboardMonth, data.dispatchRecords, data.finishedGoodsStock, data.jobs, data.materialReceipts, data.paperLogs, data.productionLogs, data.wasteEntries, loading, monthOptions]);
 
   const filteredSuppliers = useMemo(() => data.suppliers.filter((supplier) => {
     const contactValues = supplier.contacts.flatMap((contact) => [contact.fullName, contact.role, contact.email, contact.phone]);
@@ -744,7 +887,7 @@ function App() {
   }), [currentSalesOwner, data.jobs, isSalesUser, jobFilters]);
 
   const filteredFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => {
-    const matchesSearch = !stockFilters.search || [item.stockNumber, item.productName, item.clientName, item.jobNumber, item.storageLocation].some((value) => matchesText(value, stockFilters.search));
+    const matchesSearch = !stockFilters.search || [item.stockNumber, item.barcode, item.productName, item.clientName, item.jobNumber, item.storageLocation].some((value) => matchesText(value, stockFilters.search));
     const matchesClient = !stockFilters.client || matchesText(item.clientName, stockFilters.client);
     const matchesStatus = !stockFilters.status || item.stockStatus === stockFilters.status;
     const matchesProduct = !stockFilters.product || matchesText(item.productName, stockFilters.product);
@@ -752,7 +895,7 @@ function App() {
   }), [data.finishedGoodsStock, stockFilters]);
 
   const filteredSpareParts = useMemo(() => data.spareParts.filter((part) => {
-    const matchesSearch = !spareFilters.search || [part.partName, part.partCode, part.machineReference, part.storageLocation].some((value) => matchesText(value, spareFilters.search));
+    const matchesSearch = !spareFilters.search || [part.partName, part.partCode, part.barcode, part.machineReference, part.storageLocation].some((value) => matchesText(value, spareFilters.search));
     const matchesCategory = !spareFilters.category || matchesText(part.category, spareFilters.category);
     const matchesSupplier = !spareFilters.supplier || matchesText(part.supplierName, spareFilters.supplier);
     const isLowStock = part.quantityOnHand <= (part.reorderLevel || part.minimumStockLevel);
@@ -761,13 +904,18 @@ function App() {
   }), [data.spareParts, spareFilters]);
 
   const filteredMaterialReceipts = useMemo(() => data.materialReceipts.filter((receipt) => {
-    const matchesSearch = !materialFilters.search || [receipt.receiptNumber, receipt.internalRollCode, receipt.supplierName, receipt.supplierBatchNumber].some((value) => matchesText(value, materialFilters.search));
+    const matchesSearch = !materialFilters.search || [receipt.receiptNumber, receipt.internalRollCode, receipt.barcode, receipt.supplierName, receipt.supplierBatchNumber].some((value) => matchesText(value, materialFilters.search));
     const matchesMonth = !materialFilters.month || getMonthKey(receipt.receivedDate) === materialFilters.month;
     const matchesSupplier = !materialFilters.supplier || matchesText(receipt.supplierName, materialFilters.supplier);
     const matchesPaperType = !materialFilters.paperType || matchesText(receipt.paperType, materialFilters.paperType);
     const matchesFsc = materialFilters.fsc === 'all' || (materialFilters.fsc === 'yes' ? receipt.fscRelated : !receipt.fscRelated);
     return matchesSearch && matchesMonth && matchesSupplier && matchesPaperType && matchesFsc;
   }), [data.materialReceipts, materialFilters]);
+
+  const scannedInventoryMatch = useMemo(() => {
+    const barcode = inventoryScanForm.barcode.trim().toLowerCase();
+    return barcode ? barcodeIndex.get(barcode) ?? null : null;
+  }, [barcodeIndex, inventoryScanForm.barcode]);
 
   const filteredProductionLogs = useMemo(() => data.productionLogs.filter((log) => {
     const matchesSearch = !productionFilters.search || [log.logNumber, log.jobNumber, log.operatorName, log.machine, log.sourceMaterialCode].some((value) => matchesText(value, productionFilters.search));
@@ -840,6 +988,16 @@ function App() {
     const matchesClient = !customerStockReleaseFilters.client || matchesText(release.clientName, customerStockReleaseFilters.client);
     return matchesSalesOwner && matchesSearch && matchesMonth && matchesClient;
   }), [currentSalesOwner, customerStockReleaseFilters, data.customerStockReleases, isSalesUser, jobsById]);
+  const filteredDeliveryNotes = useMemo(() => data.deliveryNotes.filter((note) => {
+    const linkedJob = note.jobId ? jobsById.get(note.jobId) : undefined;
+    const matchesSalesOwner = !isSalesUser || matchesText(linkedJob?.salesOwnerName ?? '', currentSalesOwner);
+    const matchesSearch = !deliveryNoteFilters.search || [note.deliveryNoteNumber, note.clientName, note.deliveryReference, note.jobNumber].some((value) => matchesText(value, deliveryNoteFilters.search));
+    const matchesMonth = !deliveryNoteFilters.month || getMonthKey(note.noteDate) === deliveryNoteFilters.month;
+    const matchesClient = !deliveryNoteFilters.client || matchesText(note.clientName, deliveryNoteFilters.client);
+    const matchesStatus = !deliveryNoteFilters.status || note.status === deliveryNoteFilters.status;
+    const matchesVisibility = deliveryNoteFilters.visibility === 'all' || (deliveryNoteFilters.visibility === 'client' ? note.clientVisible : !note.clientVisible);
+    return matchesSalesOwner && matchesSearch && matchesMonth && matchesClient && matchesStatus && matchesVisibility;
+  }), [currentSalesOwner, data.deliveryNotes, deliveryNoteFilters, isSalesUser, jobsById]);
 
   const reportJobs = useMemo(() => data.jobs.filter((job) => {
     const matchesMonth = !reportFilters.month || getMonthKey(job.jobDate) === reportFilters.month;
@@ -874,6 +1032,43 @@ function App() {
     const matchesFsc = reportFilters.fsc === 'all' || (reportFilters.fsc === 'yes' ? log.fscRelated : !log.fscRelated);
     return matchesJob && matchesMonth && matchesDate && matchesJobNumber && matchesCustomer && matchesPaperType && matchesFsc;
   }), [data.paperLogs, reportFilters, reportJobIds]);
+  const reportDispatchRecords = useMemo(() => data.dispatchRecords.filter((record) => {
+    const matchesJob = !reportJobIds.size || reportJobIds.has(record.jobId);
+    const matchesMonth = !reportFilters.month || getMonthKey(record.dispatchDate) === reportFilters.month;
+    const matchesDate = isWithinDateRange(record.dispatchDate, reportFilters.dateFrom, reportFilters.dateTo);
+    const matchesJobNumber = !reportFilters.jobNumber || matchesText(record.jobNumber, reportFilters.jobNumber);
+    const matchesCustomer = !reportFilters.customer || matchesText(record.customerName, reportFilters.customer);
+    const matchesFsc = reportFilters.fsc === 'all' || (reportFilters.fsc === 'yes' ? record.fscRelated : !record.fscRelated);
+    return matchesJob && matchesMonth && matchesDate && matchesJobNumber && matchesCustomer && matchesFsc;
+  }), [data.dispatchRecords, reportFilters, reportJobIds]);
+  const reportArtworkRecords = useMemo(() => data.artworkRecords.filter((record) => {
+    const matchesJob = !reportJobIds.size || reportJobIds.has(record.jobId);
+    const candidateDate = record.approvalDate || record.proofSentDate || record.artworkReceivedDate || record.createdAt;
+    const dateValue = candidateDate.slice(0, 10);
+    const matchesMonth = !reportFilters.month || getMonthKey(dateValue) === reportFilters.month;
+    const matchesDate = isWithinDateRange(dateValue, reportFilters.dateFrom, reportFilters.dateTo);
+    const matchesJobNumber = !reportFilters.jobNumber || matchesText(record.jobNumber, reportFilters.jobNumber);
+    const matchesCustomer = !reportFilters.customer || matchesText(record.clientName, reportFilters.customer);
+    return matchesJob && matchesMonth && matchesDate && matchesJobNumber && matchesCustomer;
+  }), [data.artworkRecords, reportFilters, reportJobIds]);
+  const reportProductionLogs = useMemo(() => data.productionLogs.filter((entry) => {
+    const matchesJob = !reportJobIds.size || reportJobIds.has(entry.jobId);
+    const matchesMonth = !reportFilters.month || getMonthKey(entry.logDate) === reportFilters.month;
+    const matchesDate = isWithinDateRange(entry.logDate, reportFilters.dateFrom, reportFilters.dateTo);
+    const matchesJobNumber = !reportFilters.jobNumber || matchesText(entry.jobNumber, reportFilters.jobNumber);
+    const matchesCustomer = !reportFilters.customer || matchesText(entry.customerName, reportFilters.customer);
+    const matchesFsc = reportFilters.fsc === 'all' || (reportFilters.fsc === 'yes' ? entry.fscRelated : !entry.fscRelated);
+    return matchesJob && matchesMonth && matchesDate && matchesJobNumber && matchesCustomer && matchesFsc;
+  }), [data.productionLogs, reportFilters, reportJobIds]);
+  const reportBiEvents = useMemo(() => data.biEvents.filter((event) => {
+    const eventDate = (event.occurredAt || event.createdAt || '').slice(0, 10);
+    const matchesJob = !reportJobIds.size || (event.jobId ? reportJobIds.has(event.jobId) : true);
+    const matchesMonth = !reportFilters.month || (eventDate ? getMonthKey(eventDate) === reportFilters.month : false);
+    const matchesDate = eventDate ? isWithinDateRange(eventDate, reportFilters.dateFrom, reportFilters.dateTo) : false;
+    const matchesJobNumber = !reportFilters.jobNumber || matchesText(event.jobNumber || '', reportFilters.jobNumber);
+    const matchesCustomer = !reportFilters.customer || matchesText(event.clientName || '', reportFilters.customer);
+    return matchesJob && matchesMonth && matchesDate && matchesJobNumber && matchesCustomer;
+  }), [data.biEvents, reportFilters, reportJobIds]);
 
   const dashboardWasteByReason = useMemo(() => groupTotals(dashboardWaste, (entry) => entry.wasteReason, (entry) => entry.wasteQuantity).slice(0, 5), [dashboardWaste]);
   const dashboardTopPaper = useMemo(() => groupTotals(dashboardPaper, (log) => log.paperType, (log) => log.quantityUsed).slice(0, 5), [dashboardPaper]);
@@ -895,6 +1090,345 @@ function App() {
     wastePercent: Number(getWastePercentForJob(job, reportWasteEntries).toFixed(2)),
     fscRelated: formatFlag(job.fscRelated),
   })), [reportJobs, reportPaperLogs, reportWasteEntries]);
+  const reportDueSoonCutoff = useMemo(() => {
+    const next = new Date();
+    next.setDate(next.getDate() + 3);
+    return next.toISOString().slice(0, 10);
+  }, []);
+  const reportTimelineRows = useMemo(() => {
+    if (reportBiEvents.length) {
+      return reportBiEvents
+        .map((event) => ({
+          id: event.id,
+          eventDate: event.occurredAt || event.createdAt,
+          jobNumber: event.jobNumber || 'Not linked',
+          customerName: event.clientName || 'Not linked',
+          event: event.summary || event.action,
+          owner: event.actorName || 'System',
+          source: event.sourceTable || event.eventCategory || 'BI event',
+        }))
+        .slice(0, 25);
+    }
+
+    const items: Array<{
+      id: string;
+      eventDate: string;
+      jobNumber: string;
+      customerName: string;
+      event: string;
+      owner: string;
+      source: string;
+    }> = [];
+
+    reportJobs.forEach((job) => {
+      items.push({
+        id: `${job.id}-created`,
+        eventDate: job.createdAt || job.jobDate,
+        jobNumber: job.jobNumber,
+        customerName: job.customerName,
+        event: 'Job created',
+        owner: job.capturedBy || job.salesOwnerName || 'System',
+        source: 'Job card',
+      });
+      if (job.artworkAssignedDate) {
+        items.push({
+          id: `${job.id}-artwork-assigned`,
+          eventDate: job.artworkAssignedDate,
+          jobNumber: job.jobNumber,
+          customerName: job.customerName,
+          event: 'Artwork assigned',
+          owner: job.artworkAssignedTo || 'Design',
+          source: 'Artwork',
+        });
+      }
+      if (job.proofSharedDate) {
+        items.push({
+          id: `${job.id}-proof`,
+          eventDate: job.proofSharedDate,
+          jobNumber: job.jobNumber,
+          customerName: job.customerName,
+          event: 'Proof shared',
+          owner: job.proofSharedBy || job.salesOwnerName || 'Sales',
+          source: 'Artwork',
+        });
+      }
+      if (job.finalApprovalReceivedDate) {
+        items.push({
+          id: `${job.id}-approval`,
+          eventDate: job.finalApprovalReceivedDate,
+          jobNumber: job.jobNumber,
+          customerName: job.customerName,
+          event: 'Final approval received',
+          owner: job.finalApprovalClearedBy || 'Client approval',
+          source: 'Artwork',
+        });
+      }
+      if (job.productionStartDate) {
+        items.push({
+          id: `${job.id}-production-start`,
+          eventDate: job.productionStartDate,
+          jobNumber: job.jobNumber,
+          customerName: job.customerName,
+          event: 'Production started',
+          owner: job.productionStartedBy || 'Production',
+          source: 'Production',
+        });
+      }
+      if (job.readyForDispatchDate) {
+        items.push({
+          id: `${job.id}-dispatch-ready`,
+          eventDate: job.readyForDispatchDate,
+          jobNumber: job.jobNumber,
+          customerName: job.customerName,
+          event: 'Ready for dispatch',
+          owner: job.readyForDispatchBy || 'Dispatch',
+          source: 'Dispatch',
+        });
+      }
+    });
+
+    reportProductionLogs.forEach((entry) => {
+      items.push({
+        id: `production-${entry.id}`,
+        eventDate: entry.logDate,
+        jobNumber: entry.jobNumber,
+        customerName: entry.customerName,
+        event: `${entry.logType} logged`,
+        owner: entry.operatorName || 'Production',
+        source: 'Production log',
+      });
+    });
+
+    reportDispatchRecords.forEach((record) => {
+      items.push({
+        id: `dispatch-${record.id}`,
+        eventDate: record.dispatchDate,
+        jobNumber: record.jobNumber,
+        customerName: record.customerName,
+        event: 'Dispatch recorded',
+        owner: record.deliveryReference || record.labelReference || 'Dispatch',
+        source: 'Dispatch',
+      });
+    });
+
+    return items
+      .sort((left, right) => String(right.eventDate).localeCompare(String(left.eventDate)))
+      .slice(0, 25);
+  }, [reportBiEvents, reportDispatchRecords, reportJobs, reportProductionLogs]);
+  const reportStaffWorkload = useMemo(() => {
+    const totals = new Map<string, {
+      name: string;
+      role: string;
+      activeJobs: number;
+      overdueJobs: number;
+      dueSoonJobs: number;
+      completedJobs: number;
+    }>();
+    const today = getToday();
+
+    function touch(name: string, role: string) {
+      const key = `${role}:${name}`;
+      if (!totals.has(key)) {
+        totals.set(key, { name, role, activeJobs: 0, overdueJobs: 0, dueSoonJobs: 0, completedJobs: 0 });
+      }
+      return totals.get(key)!;
+    }
+
+    reportJobs.forEach((job) => {
+      const owners = [
+        job.salesOwnerName ? { name: job.salesOwnerName, role: 'Sales / client care' } : null,
+        job.artworkAssignedTo ? { name: job.artworkAssignedTo, role: 'Design' } : null,
+        job.productionStartedBy ? { name: job.productionStartedBy, role: 'Production' } : null,
+        job.readyForDispatchBy ? { name: job.readyForDispatchBy, role: 'Dispatch' } : null,
+      ].filter(Boolean) as Array<{ name: string; role: string }>;
+
+      owners.forEach((owner) => {
+        const row = touch(owner.name, owner.role);
+        if (job.status === 'Completed') {
+          row.completedJobs += 1;
+        } else {
+          row.activeJobs += 1;
+        }
+        if (job.dueDate && job.dueDate < today && job.status !== 'Completed') {
+          row.overdueJobs += 1;
+        }
+        if (job.dueDate && job.dueDate >= today && job.dueDate <= reportDueSoonCutoff && job.status !== 'Completed') {
+          row.dueSoonJobs += 1;
+        }
+      });
+    });
+
+    return [...totals.values()]
+      .sort((left, right) =>
+        (right.activeJobs + right.overdueJobs * 2) - (left.activeJobs + left.overdueJobs * 2))
+      .slice(0, 12);
+  }, [reportDueSoonCutoff, reportJobs]);
+  const reportBottlenecks = useMemo(() => {
+    const today = getToday();
+    const overdueJobs = reportJobs.filter((job) => job.dueDate && job.dueDate < today && job.status !== 'Completed');
+    const awaitingArtwork = reportJobs.filter((job) => ['Needs Design', 'Ready but Not Print Ready'].includes(job.artworkPreparationStatus));
+    const awaitingApproval = reportJobs.filter((job) => job.approvalStatus === 'Awaiting Approval');
+    const productionNotStarted = reportJobs.filter((job) =>
+      job.status === 'Ready for Production' && !job.productionStartDate
+    );
+    const dispatchBlocked = reportJobs.filter((job) =>
+      ['Ready for Dispatch', 'Partially Dispatched'].includes(job.status) && !reportDispatchRecords.some((record) => record.jobId === job.id)
+    );
+
+    return [
+      {
+        title: 'Overdue jobs',
+        count: overdueJobs.length,
+        detail: overdueJobs.length ? overdueJobs.slice(0, 3).map((job) => job.jobNumber).join(', ') : 'No overdue jobs in the current report window.',
+      },
+      {
+        title: 'Awaiting artwork prep',
+        count: awaitingArtwork.length,
+        detail: awaitingArtwork.length ? awaitingArtwork.slice(0, 3).map((job) => job.jobNumber).join(', ') : 'No artwork-prep backlog right now.',
+      },
+      {
+        title: 'Client approval pending',
+        count: awaitingApproval.length,
+        detail: awaitingApproval.length ? awaitingApproval.slice(0, 3).map((job) => job.jobNumber).join(', ') : 'No client approvals outstanding.',
+      },
+      {
+        title: 'Production not started',
+        count: productionNotStarted.length,
+        detail: productionNotStarted.length ? productionNotStarted.slice(0, 3).map((job) => job.jobNumber).join(', ') : 'All production-ready jobs have started.',
+      },
+      {
+        title: 'Dispatch follow-up needed',
+        count: dispatchBlocked.length,
+        detail: dispatchBlocked.length ? dispatchBlocked.slice(0, 3).map((job) => job.jobNumber).join(', ') : 'No dispatch exceptions in the current report window.',
+      },
+    ].filter((item) => item.count > 0 || item.title === 'Overdue jobs');
+  }, [reportDispatchRecords, reportJobs]);
+  const reportClientTrackingRows = useMemo(() => {
+    const grouped = new Map<string, {
+      clientName: string;
+      activeJobs: number;
+      completedJobs: number;
+      overdueJobs: number;
+      dispatches: number;
+      totalOrderValue: number;
+      lastActivityDate: string;
+      lastActivityLabel: string;
+    }>();
+    const dispatchesByClient = groupTotals(reportDispatchRecords, (record) => record.customerName, () => 1);
+    const dispatchLookup = new Map(dispatchesByClient.map((item) => [item.label, item.value]));
+    const activityDates = new Map<string, { date: string; label: string }>();
+
+    reportTimelineRows.forEach((row) => {
+      const current = activityDates.get(row.customerName);
+      if (!current || String(row.eventDate) > current.date) {
+        activityDates.set(row.customerName, { date: String(row.eventDate), label: row.event });
+      }
+    });
+
+    reportJobs.forEach((job) => {
+      const current = grouped.get(job.customerName) ?? {
+        clientName: job.customerName,
+        activeJobs: 0,
+        completedJobs: 0,
+        overdueJobs: 0,
+        dispatches: dispatchLookup.get(job.customerName) ?? 0,
+        totalOrderValue: 0,
+        lastActivityDate: activityDates.get(job.customerName)?.date ?? '',
+        lastActivityLabel: activityDates.get(job.customerName)?.label ?? 'No recent activity',
+      };
+      if (job.status === 'Completed') {
+        current.completedJobs += 1;
+      } else {
+        current.activeJobs += 1;
+      }
+      if (job.dueDate && job.dueDate < getToday() && job.status !== 'Completed') {
+        current.overdueJobs += 1;
+      }
+      current.totalOrderValue += job.orderValue || 0;
+      grouped.set(job.customerName, current);
+    });
+
+    return [...grouped.values()].sort((left, right) => (right.activeJobs + right.completedJobs) - (left.activeJobs + left.completedJobs));
+  }, [reportDispatchRecords, reportJobs, reportTimelineRows]);
+  const reportAuditRows = useMemo(() => {
+    if (reportBiEvents.length) {
+      return reportBiEvents
+        .map((event) => ({
+          id: event.id,
+          eventDate: event.occurredAt || event.createdAt,
+          source: event.sourceTable || event.eventCategory || 'BI event',
+          action: event.action || event.eventType,
+          reference: event.jobNumber || event.sourceRecordId,
+          actor: event.actorName || 'System',
+        }))
+        .slice(0, 40);
+    }
+
+    const rows = [
+      ...reportJobs.map((job) => ({
+        id: `job-${job.id}`,
+        eventDate: job.createdAt || job.jobDate,
+        source: 'Job card',
+        action: 'Job captured',
+        reference: job.jobNumber,
+        actor: job.capturedBy || job.salesOwnerName || 'System',
+      })),
+      ...reportArtworkRecords.map((record) => ({
+        id: `art-${record.id}`,
+        eventDate: record.approvalDate || record.proofSentDate || record.artworkReceivedDate || record.createdAt,
+        source: 'Artwork',
+        action: record.stage,
+        reference: record.jobNumber,
+        actor: record.notes || 'Artwork workflow',
+      })),
+      ...reportProductionLogs.map((entry) => ({
+        id: `prod-${entry.id}`,
+        eventDate: entry.logDate,
+        source: 'Production log',
+        action: entry.logType,
+        reference: entry.jobNumber,
+        actor: entry.operatorName || 'Production',
+      })),
+      ...reportWasteEntries.map((entry) => ({
+        id: `waste-${entry.id}`,
+        eventDate: entry.wasteDate,
+        source: 'Waste log',
+        action: entry.wasteReason,
+        reference: entry.jobNumber,
+        actor: entry.enteredBy || 'Production',
+      })),
+      ...reportPaperLogs.map((log) => ({
+        id: `paper-${log.id}`,
+        eventDate: log.logDate,
+        source: 'Paper log',
+        action: `${log.paperType} used`,
+        reference: log.jobNumber,
+        actor: log.paperCode || 'Paper movement',
+      })),
+      ...reportDispatchRecords.map((record) => ({
+        id: `dispatch-${record.id}`,
+        eventDate: record.dispatchDate,
+        source: 'Dispatch',
+        action: 'Stock dispatched',
+        reference: record.dispatchNumber,
+        actor: record.deliveryReference || record.labelReference || 'Dispatch',
+      })),
+      ...data.inventoryMovements
+        .filter((movement) => !reportJobIds.size || reportJobIds.has(movement.jobId))
+        .map((movement) => ({
+          id: `movement-${movement.id}`,
+          eventDate: movement.movementDate,
+          source: 'Inventory',
+          action: `${movement.movementType} ${movement.itemName}`,
+          reference: movement.jobNumber || movement.movementNumber,
+          actor: movement.movedByName || 'Inventory',
+        })),
+    ];
+
+    return rows
+      .sort((left, right) => String(right.eventDate).localeCompare(String(left.eventDate)))
+      .slice(0, 40);
+  }, [data.inventoryMovements, reportArtworkRecords, reportBiEvents, reportDispatchRecords, reportJobIds, reportJobs, reportPaperLogs, reportProductionLogs, reportWasteEntries]);
 
   const selectedWasteJob = wasteForm.jobId ? jobsById.get(wasteForm.jobId) : undefined;
   const selectedPaperJob = paperForm.jobId ? jobsById.get(paperForm.jobId) : undefined;
@@ -915,12 +1449,77 @@ function App() {
   const selectedJobDispatchRecords = useMemo(() => selectedJob ? data.dispatchRecords.filter((record) => record.jobId === selectedJob.id) : [], [data.dispatchRecords, selectedJob]);
 
   function resetJobEditor() { setJobForm(createInitialJobForm()); setJobEditingId(null); setJobMessage(''); }
+  function deriveArtworkStageFromJob(job: JobCard): ArtworkRecord['stage'] {
+    if (job.approvalStatus === 'Approved') return 'Approved';
+    if (job.approvalStatus === 'Changes Requested') return 'Changes Requested';
+    if (job.proofSent) return 'Proof Sent';
+    if (job.artworkReceived) return 'Artwork Received';
+    return 'Awaiting Artwork';
+  }
+  function syncArtworkRecordWithJob(
+    artworkRecords: ArtworkRecord[],
+    job: JobCard,
+  ): ArtworkRecord[] {
+    if (!job.printRequired) {
+      return artworkRecords.filter((record) => record.jobId !== job.id);
+    }
+
+    const stage = deriveArtworkStageFromJob(job);
+    const existingRecord = artworkRecords.find((record) => record.jobId === job.id);
+    const payload = {
+      jobId: job.id,
+      jobNumber: job.jobNumber,
+      clientId: job.clientId,
+      clientName: job.customerName,
+      artworkReceivedDate: job.artworkAssignedDate || '',
+      proofSentDate: job.proofSharedDate || '',
+      approvalDate: job.finalApprovalReceivedDate || job.approvalDate || '',
+      stage,
+      changesRequested: job.changesRequested,
+      notes: job.artworkNotes,
+    };
+
+    if (existingRecord) {
+      return artworkRecords.map((record) => record.id === existingRecord.id ? { ...record, ...payload } : record);
+    }
+
+    const artworkNumber = generateCode('ART', artworkRecords.map((record) => record.artworkNumber), job.jobDate);
+    const newRecord: ArtworkRecord = {
+      id: artworkNumber,
+      artworkNumber,
+      createdAt: new Date().toISOString(),
+      ...payload,
+    };
+    return [newRecord, ...artworkRecords];
+  }
+  function focusSavedJob(job: JobCard) {
+    const jobMonth = getMonthKey(job.jobDate);
+    setSelectedJobId(job.id);
+    setJobFilters((current) => ({
+      ...current,
+      search: '',
+      month: jobMonth,
+      status: '',
+      customer: '',
+    }));
+    setDashboardMonth(jobMonth);
+    setJobSaveCount((current) => current + 1);
+  }
+  function focusSavedSupplier(supplier: Supplier) {
+    setSupplierFilters({
+      search: supplier.name,
+      supplierType: '',
+      active: 'all',
+    });
+    setSupplierSaveCount((current) => current + 1);
+  }
   function resetSupplierEditor() { setSupplierForm(createInitialSupplierForm()); setSupplierEditingId(null); setSupplierMessage(''); }
   function resetMachineEditor() { setMachineForm(createInitialMachineForm()); setMachineEditingId(null); setMachineMessage(''); }
   function resetLeadEditor() { setLeadForm(createInitialLeadForm()); setLeadEditingId(null); setLeadMessage(''); }
   function resetQuoteEditor() { setQuoteForm(createInitialQuoteForm()); setQuoteEditingId(null); setQuoteMessage(''); }
   function resetArtworkEditor() { setArtworkForm(createInitialArtworkForm()); setArtworkEditingId(null); setArtworkMessage(''); }
   function resetCustomerStockReleaseEditor() { setCustomerStockReleaseForm(createInitialCustomerStockReleaseForm()); setCustomerStockReleaseEditingId(null); setCustomerStockReleaseMessage(''); }
+  function resetDeliveryNoteEditor() { setDeliveryNoteForm(createInitialDeliveryNoteForm()); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
   function resetPaperRateEditor() { setPaperRateForm(createInitialPaperRateForm()); setPaperRateEditingId(null); setPaperRateMessage(''); }
   function resetCostProfileEditor() { setCostProfileForm(createInitialCostProfileForm()); setCostProfileEditingId(null); setCostProfileMessage(''); }
   function resetStockEditor() { setStockForm(createInitialFinishedStockForm()); setStockEditingId(null); setStockMessage(''); }
@@ -929,10 +1528,67 @@ function App() {
   function resetClientEditor() { setClientForm(createInitialClientForm()); setClientEditingId(null); setClientMessage(''); }
   function resetProductEditor() { setProductForm(createInitialProductForm()); setProductEditingId(null); setProductMessage(''); }
   function resetMaterialEditor() { setMaterialForm(createInitialMaterialForm()); setMaterialEditingId(null); setMaterialMessage(''); }
+  function resetInventoryScan() { setInventoryScanForm(createInitialInventoryScanForm()); setInventoryScanMessage(''); }
   function resetProductionEditor() { setProductionForm(createInitialProductionForm()); setProductionEditingId(null); setProductionMessage(''); }
   function resetWasteEditor() { setWasteForm(createInitialWasteForm()); setWasteEditingId(null); setWasteMessage(''); }
   function resetPaperEditor() { setPaperForm(createInitialPaperForm()); setPaperEditingId(null); setPaperMessage(''); }
   function resetDispatchEditor() { setDispatchForm(createInitialDispatchForm()); setDispatchEditingId(null); setDispatchMessage(''); }
+
+  function buildBarcode(code: string) {
+    return code.replace(/[^A-Za-z0-9-]/g, '').toUpperCase();
+  }
+
+  function getActor() {
+    return {
+      actorId: profile?.id || 'unknown-user',
+      actorName: profile?.fullName || profile?.email || 'Unknown user',
+    };
+  }
+
+  function createInventoryMovement(input: {
+    movementDate: string;
+    movementType: InventoryMovementType;
+    itemType: InventoryItemType;
+    barcode: string;
+    itemId: string;
+    itemCode: string;
+    itemName: string;
+    quantityMoved: number;
+    quantityUnit: FinishedGoodsStock['quantityUnit'];
+    fromLocation?: string;
+    toLocation?: string;
+    jobId?: string;
+    jobNumber?: string;
+    notes?: string;
+  }): InventoryMovement {
+    const movementNumber = generateCode(
+      'IVM',
+      data.inventoryMovements.map((movement) => movement.movementNumber),
+      input.movementDate,
+    );
+    const { actorId, actorName } = getActor();
+    return {
+      id: movementNumber,
+      movementNumber,
+      createdAt: new Date().toISOString(),
+      movementDate: input.movementDate,
+      itemType: input.itemType,
+      movementType: input.movementType,
+      barcode: input.barcode,
+      itemId: input.itemId,
+      itemCode: input.itemCode,
+      itemName: input.itemName,
+      quantityMoved: input.quantityMoved,
+      quantityUnit: input.quantityUnit,
+      fromLocation: input.fromLocation ?? '',
+      toLocation: input.toLocation ?? '',
+      jobId: input.jobId ?? '',
+      jobNumber: input.jobNumber ?? '',
+      movedByUserId: actorId,
+      movedByName: actorName,
+      notes: input.notes ?? '',
+    };
+  }
 
   function handleSaveSupplier() {
     if (!supplierForm.name) {
@@ -980,6 +1636,7 @@ function App() {
       active: supplierForm.active,
     };
     if (supplierEditingId) {
+      const updatedSupplier = { ...data.suppliers.find((supplier) => supplier.id === supplierEditingId), ...payload } as Supplier;
       setData((current) => ({
         ...current,
         suppliers: current.suppliers.map((supplier) => supplier.id === supplierEditingId ? { ...supplier, ...payload } : supplier),
@@ -987,8 +1644,11 @@ function App() {
         spareParts: current.spareParts.map((part) => part.supplierId === supplierEditingId ? { ...part, supplierName: payload.name } : part),
         materialReceipts: current.materialReceipts.map((receipt) => receipt.supplierId === supplierEditingId ? { ...receipt, supplierName: payload.name } : receipt),
       }));
+      focusSavedSupplier(updatedSupplier);
     } else {
-      setData((current) => ({ ...current, suppliers: [{ id: `supplier-${Date.now()}`, ...payload }, ...current.suppliers] }));
+      const newSupplier: Supplier = { id: `supplier-${Date.now()}`, ...payload };
+      setData((current) => ({ ...current, suppliers: [newSupplier, ...current.suppliers] }));
+      focusSavedSupplier(newSupplier);
     }
     resetSupplierEditor();
   }
@@ -1196,13 +1856,42 @@ function App() {
       changesRequested: artworkForm.changesRequested,
       notes: artworkForm.notes,
     };
-    if (artworkEditingId) {
-      setData((current) => ({ ...current, artworkRecords: current.artworkRecords.map((record) => record.id === artworkEditingId ? { ...record, ...payload } : record) }));
-    } else {
-      const artworkNumber = generateCode('ART', data.artworkRecords.map((record) => record.artworkNumber), artworkForm.artworkReceivedDate || getToday());
-      const newRecord: ArtworkRecord = { id: artworkNumber, artworkNumber, createdAt: new Date().toISOString(), ...payload };
-      setData((current) => ({ ...current, artworkRecords: [newRecord, ...current.artworkRecords] }));
-    }
+    setData((current) => {
+      const nextArtworkRecords = artworkEditingId
+        ? current.artworkRecords.map((record) => record.id === artworkEditingId ? { ...record, ...payload } : record)
+        : [
+          {
+            id: generateCode('ART', current.artworkRecords.map((record) => record.artworkNumber), artworkForm.artworkReceivedDate || getToday()),
+            artworkNumber: generateCode('ART', current.artworkRecords.map((record) => record.artworkNumber), artworkForm.artworkReceivedDate || getToday()),
+            createdAt: new Date().toISOString(),
+            ...payload,
+          },
+          ...current.artworkRecords,
+        ];
+
+      return {
+        ...current,
+        artworkRecords: nextArtworkRecords,
+        jobs: current.jobs.map((currentJob) => currentJob.id === job.id ? {
+          ...currentJob,
+          artworkReceived: artworkForm.stage !== 'Awaiting Artwork' || Boolean(artworkForm.artworkReceivedDate),
+          proofSent: ['Proof Sent', 'Approved', 'Changes Requested'].includes(artworkForm.stage) || Boolean(artworkForm.proofSentDate),
+          approvalStatus:
+            artworkForm.stage === 'Approved'
+              ? 'Approved'
+              : artworkForm.stage === 'Changes Requested'
+                ? 'Changes Requested'
+                : artworkForm.stage === 'Proof Sent'
+                  ? 'Awaiting Approval'
+                  : currentJob.approvalStatus,
+          artworkAssignedDate: artworkForm.artworkReceivedDate || currentJob.artworkAssignedDate,
+          proofSharedDate: artworkForm.proofSentDate || currentJob.proofSharedDate,
+          finalApprovalReceivedDate: artworkForm.approvalDate || currentJob.finalApprovalReceivedDate,
+          changesRequested: artworkForm.changesRequested,
+          artworkNotes: artworkForm.notes,
+        } : currentJob),
+      };
+    });
     resetArtworkEditor();
   }
 
@@ -1239,6 +1928,155 @@ function App() {
       setData((current) => ({ ...current, customerStockReleases: [newRelease, ...current.customerStockReleases] }));
     }
     resetCustomerStockReleaseEditor();
+  }
+
+  function addDispatchLineToDeliveryNote(dispatchRecordId: string) {
+    if (!dispatchRecordId) {
+      setDeliveryNoteMessage('Select a dispatch record before adding a delivery line.');
+      return;
+    }
+    const record = data.dispatchRecords.find((entry) => entry.id === dispatchRecordId);
+    if (!record) {
+      setDeliveryNoteMessage('Select a valid dispatch record before adding a delivery line.');
+      return;
+    }
+    const linkedJob = record.jobId ? jobsById.get(record.jobId) : undefined;
+    const linkedClient = linkedJob?.clientId ? clientsById.get(linkedJob.clientId) : data.clients.find((client) => client.name === record.customerName);
+    const linkedStock = record.finishedGoodsStockId ? finishedStockById.get(record.finishedGoodsStockId) : undefined;
+    const nextLine = {
+      id: `delivery-line-dispatch-${record.id}`,
+      description: `${record.jobNumber || 'Dispatch'} delivery`,
+      productName: linkedStock?.productName || linkedJob?.productName || 'Dispatched stock',
+      stockNumber: record.finishedGoodsStockNumber || '',
+      quantity: record.quantityDispatched,
+      quantityUnit: record.quantityUnit,
+      dispatchRecordId: record.id,
+      customerStockReleaseId: '',
+    };
+
+    setDeliveryNoteForm((current) => ({
+      ...current,
+      clientId: current.clientId || linkedClient?.id || '',
+      clientContactName: current.clientContactName || linkedClient?.contactName || '',
+      clientEmail: current.clientEmail || linkedClient?.contactEmail || '',
+      jobId: current.jobId || record.jobId,
+      deliveryReference: current.deliveryReference || record.deliveryReference,
+      dispatchRecordId: '',
+      lineItems: current.lineItems.some((item) => item.dispatchRecordId === record.id)
+        ? current.lineItems
+        : [...current.lineItems, nextLine],
+    }));
+    setDeliveryNoteMessage('');
+  }
+
+  function addReleaseLineToDeliveryNote(releaseId: string) {
+    if (!releaseId) {
+      setDeliveryNoteMessage('Select a customer stock release before adding a delivery line.');
+      return;
+    }
+    const release = data.customerStockReleases.find((entry) => entry.id === releaseId);
+    if (!release) {
+      setDeliveryNoteMessage('Select a valid customer stock release before adding a delivery line.');
+      return;
+    }
+    const linkedStock = release.finishedGoodsStockId ? finishedStockById.get(release.finishedGoodsStockId) : undefined;
+    const linkedClient = release.clientId ? clientsById.get(release.clientId) : data.clients.find((client) => client.name === release.clientName);
+    const nextLine = {
+      id: `delivery-line-release-${release.id}`,
+      description: `${release.destination || 'Customer stock'} release`,
+      productName: linkedStock?.productName || 'Held stock',
+      stockNumber: release.finishedGoodsStockNumber,
+      quantity: release.quantityReleased,
+      quantityUnit: release.quantityUnit,
+      dispatchRecordId: '',
+      customerStockReleaseId: release.id,
+    };
+
+    setDeliveryNoteForm((current) => ({
+      ...current,
+      clientId: current.clientId || linkedClient?.id || release.clientId,
+      clientContactName: current.clientContactName || linkedClient?.contactName || '',
+      clientEmail: current.clientEmail || linkedClient?.contactEmail || '',
+      jobId: current.jobId || release.jobId,
+      customerStockReleaseId: '',
+      lineItems: current.lineItems.some((item) => item.customerStockReleaseId === release.id)
+        ? current.lineItems
+        : [...current.lineItems, nextLine],
+    }));
+    setDeliveryNoteMessage('');
+  }
+
+  function removeDeliveryLineItem(lineItemId: string) {
+    setDeliveryNoteForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.filter((item) => item.id !== lineItemId),
+    }));
+  }
+
+  function handleSaveDeliveryNote() {
+    if (!deliveryNoteForm.noteDate || !deliveryNoteForm.clientId) {
+      setDeliveryNoteMessage('Note date and linked client are required.');
+      return;
+    }
+    if (!deliveryNoteForm.lineItems.length) {
+      setDeliveryNoteMessage('Add at least one stock line from dispatch or customer stock release.');
+      return;
+    }
+    const client = clientsById.get(deliveryNoteForm.clientId);
+    if (!client) {
+      setDeliveryNoteMessage('Select a valid client before saving the delivery note.');
+      return;
+    }
+    const job = deliveryNoteForm.jobId ? jobsById.get(deliveryNoteForm.jobId) : undefined;
+    const dispatchRecordIds = Array.from(new Set(deliveryNoteForm.lineItems.map((item) => item.dispatchRecordId).filter(Boolean)));
+    const customerStockReleaseIds = Array.from(new Set(deliveryNoteForm.lineItems.map((item) => item.customerStockReleaseId).filter(Boolean)));
+    const payload = {
+      noteDate: deliveryNoteForm.noteDate,
+      clientId: client.id,
+      clientName: client.name,
+      clientContactName: deliveryNoteForm.clientContactName || client.contactName,
+      clientContactPhone: deliveryNoteForm.clientContactPhone,
+      clientEmail: deliveryNoteForm.clientEmail || client.contactEmail,
+      clientAddress: deliveryNoteForm.clientAddress,
+      companyName: deliveryNoteForm.companyName,
+      companyPhone: deliveryNoteForm.companyPhone,
+      companyEmail: deliveryNoteForm.companyEmail,
+      companyAddress: deliveryNoteForm.companyAddress,
+      jobId: job?.id ?? '',
+      jobNumber: job?.jobNumber ?? '',
+      dispatchRecordIds,
+      customerStockReleaseIds,
+      deliveryMethod: deliveryNoteForm.deliveryMethod,
+      deliveryReference: deliveryNoteForm.deliveryReference,
+      vehicleRegistration: deliveryNoteForm.vehicleRegistration,
+      driverName: deliveryNoteForm.driverName,
+      dispatchedBy: deliveryNoteForm.dispatchedBy || currentSalesOwner,
+      receivedBy: deliveryNoteForm.receivedBy,
+      status: deliveryNoteForm.status,
+      clientVisible: deliveryNoteForm.clientVisible,
+      lineItems: deliveryNoteForm.lineItems,
+      notes: deliveryNoteForm.notes,
+    };
+
+    if (deliveryNoteEditingId) {
+      setData((current) => ({
+        ...current,
+        deliveryNotes: current.deliveryNotes.map((note) => note.id === deliveryNoteEditingId ? { ...note, ...payload } : note),
+      }));
+    } else {
+      const deliveryNoteNumber = generateCode('DLV', data.deliveryNotes.map((note) => note.deliveryNoteNumber), deliveryNoteForm.noteDate);
+      const newNote: DeliveryNote = {
+        id: deliveryNoteNumber,
+        deliveryNoteNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      setData((current) => ({
+        ...current,
+        deliveryNotes: [newNote, ...current.deliveryNotes],
+      }));
+    }
+    resetDeliveryNoteEditor();
   }
 
   function handleSaveJob() {
@@ -1326,22 +2164,98 @@ function App() {
       receipt.quantityUnit === jobForm.paperQuantityUnit,
     );
     const availablePaperQuantity = Math.max(
-      matchingReceipts.reduce((sum, receipt) => sum + receipt.quantityReceived, 0) -
-      data.paperLogs
-        .filter((log) =>
-          matchesText(log.paperType, jobForm.paperType) &&
-          matchesText(log.gsm, jobForm.gsm) &&
-          log.quantityUnit === jobForm.paperQuantityUnit,
-        )
-        .reduce((sum, log) => sum + log.quantityUsed, 0),
+      matchingReceipts.reduce((sum, receipt) => sum + receipt.quantityAvailable, 0),
       0,
     );
     const paperShortage = commercialCleared && paperQuantityRequired > 0
       ? Math.max(paperQuantityRequired - availablePaperQuantity, 0)
       : 0;
 
+    const buildJobSnapshot = (base: JobCard): JobCard => ({
+      ...base,
+      jobDate: jobForm.jobDate,
+      dueDate: jobForm.dueDate,
+      leadId: jobForm.leadId,
+      leadNumber: jobForm.leadNumber,
+      quoteId: jobForm.quoteId,
+      quoteNumber: jobForm.quoteNumber,
+      quickbooksEstimateNumber: jobForm.quickbooksEstimateNumber,
+      invoiceNumber: jobForm.invoiceNumber,
+      salesOwnerName: linkedQuote?.salesOwnerName || linkedLead?.assignedTo || base.salesOwnerName || '',
+      orderValue,
+      paymentRequirement,
+      paymentStatus,
+      creditCheckStatus,
+      availableCreditAtApproval: paymentRequirement === 'Credit Terms' ? availableCredit : 0,
+      commercialReleaseStatus: jobForm.commercialReleaseStatus,
+      clientId: jobForm.clientId,
+      pricingTierId: jobForm.pricingTierId,
+      productId: jobForm.productId,
+      productCategory: jobForm.productCategory,
+      customerName: jobForm.customerName,
+      customerReference: jobForm.customerReference,
+      productName: jobForm.productName,
+      description: jobForm.description,
+      sizeSpec: jobForm.sizeSpec,
+      paperType: jobForm.paperType,
+      gsm: jobForm.gsm,
+      paperQuantityRequired,
+      paperQuantityUnit: jobForm.paperQuantityUnit,
+      paperAllocationStatus: commercialCleared
+        ? (paperQuantityRequired > 0 ? (paperShortage > 0 ? 'Order Required' : 'In Stock') : 'Not Checked')
+        : 'Not Checked',
+      printRequired: jobForm.printRequired,
+      printMethod: jobForm.printMethod,
+      colorCount: Number(jobForm.colorCount || 0),
+      supplyFormat: jobForm.supplyFormat,
+      packingNotes: jobForm.packingNotes,
+      printNotes: jobForm.printNotes,
+      quantityPlanned: Number(jobForm.quantityPlanned),
+      quantityCompleted: Number(jobForm.quantityCompleted || 0),
+      status: jobForm.status,
+      artworkReceived: jobForm.artworkReceived,
+      proofSent: jobForm.proofSent,
+      approvalStatus: jobForm.approvalStatus,
+      approvalDate: jobForm.approvalDate,
+      artworkPreparationStatus: jobForm.artworkPreparationStatus,
+      addElementsRequired: jobForm.addElementsRequired,
+      colorChangesRequired: jobForm.colorChangesRequired,
+      artworkChangeSummary: jobForm.artworkChangeSummary,
+      artworkAssignedDate: jobForm.artworkAssignedDate,
+      artworkAssignedTo: jobForm.artworkAssignedTo,
+      proofSharedDate: jobForm.proofSharedDate,
+      proofSharedBy: jobForm.proofSharedBy,
+      finalApprovalReceivedDate: jobForm.finalApprovalReceivedDate,
+      finalApprovalClearedBy: jobForm.finalApprovalClearedBy,
+      factoryReleaseDate: jobForm.factoryReleaseDate,
+      factoryReleasedBy: jobForm.factoryReleasedBy,
+      productionStartDate: jobForm.productionStartDate,
+      productionStartedBy: jobForm.productionStartedBy,
+      readyForDispatchDate: jobForm.readyForDispatchDate,
+      readyForDispatchBy: jobForm.readyForDispatchBy,
+      collectionOrDeliveryStatus: jobForm.collectionOrDeliveryStatus,
+      changesRequested: jobForm.changesRequested,
+      artworkNotes: jobForm.artworkNotes,
+      reserveFromStock: jobForm.reserveFromStock,
+      reservedFinishedGoodsStockId: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.id ?? '' : '',
+      reservedFinishedGoodsStockNumber: commercialCleared && jobForm.reserveFromStock ? linkedReservationStock?.stockNumber ?? '' : '',
+      reservedQuantity: commercialCleared && jobForm.reserveFromStock ? reservedQuantity : 0,
+      stockReservationStatus: commercialCleared ? (jobForm.reserveFromStock && linkedReservationStock ? 'Reserved' : 'Production Needed') : 'Not Checked',
+      dispatchStatus: jobForm.dispatchStatus,
+      qualityNotes: jobForm.qualityNotes,
+      capturedBy: jobForm.capturedBy,
+      releasedBy: jobForm.releasedBy,
+      notes: jobForm.notes,
+      fscRelated: jobForm.fscRelated,
+    });
+
     setJobMessage('');
     if (jobEditingId) {
+      if (!previousJob) {
+        setJobMessage('The selected job could not be found.');
+        return;
+      }
+      const nextEditedJob = buildJobSnapshot(previousJob);
       setData((current) => {
         let nextFinishedStock = current.finishedGoodsStock.map((item) => ({ ...item }));
         let nextMaterialOrderRequests = current.materialOrderRequests.map((request) => ({ ...request }));
@@ -1433,6 +2347,7 @@ function App() {
 
         return {
           ...current,
+          artworkRecords: syncArtworkRecordWithJob(current.artworkRecords, nextEditedJob),
           finishedGoodsStock: nextFinishedStock,
           materialOrderRequests: nextMaterialOrderRequests,
           jobs: current.jobs.map((job) => job.id === jobEditingId ? {
@@ -1512,6 +2427,10 @@ function App() {
             fscRelated: jobForm.fscRelated,
           } : job),
         };
+      });
+      focusSavedJob(nextEditedJob);
+      void syncJobThread(nextEditedJob, previousJob, profile).catch((error) => {
+        console.error('Failed to sync job thread', error);
       });
     } else {
       const jobNumber = generateCode('JOB', data.jobs.map((job) => job.jobNumber), jobForm.jobDate);
@@ -1631,6 +2550,7 @@ function App() {
 
       setData((current) => ({
         ...current,
+        artworkRecords: syncArtworkRecordWithJob(current.artworkRecords, newJob),
         finishedGoodsStock: current.finishedGoodsStock.map((item) => commercialCleared && jobForm.reserveFromStock && linkedReservationStock && item.id === linkedReservationStock.id ? {
           ...item,
           quantityReserved: item.quantityReserved + reservedQuantity,
@@ -1640,6 +2560,10 @@ function App() {
         materialOrderRequests: nextMaterialOrders,
         jobs: [newJob, ...current.jobs],
       }));
+      focusSavedJob(newJob);
+      void syncJobThread(newJob, null, profile).catch((error) => {
+        console.error('Failed to sync job thread', error);
+      });
     }
     resetJobEditor();
   }
@@ -1658,8 +2582,8 @@ function App() {
     const linkedJob = stockForm.jobId ? jobsById.get(stockForm.jobId) : undefined;
     const quantityOnHand = Number(stockForm.quantityOnHand);
     const quantityReserved = Number(stockForm.quantityReserved || 0);
-    const actorName = profile?.fullName || profile?.email || 'Unknown user';
-    const actorId = profile?.id || 'unknown-user';
+    const { actorId, actorName } = getActor();
+    const barcode = stockForm.barcode.trim();
     const payload = {
       storedDate: stockForm.storedDate,
       productId: linkedProduct.id,
@@ -1668,6 +2592,7 @@ function App() {
       clientName: linkedClient?.name ?? '',
       jobId: linkedJob?.id ?? '',
       jobNumber: linkedJob?.jobNumber ?? '',
+      barcode,
       quantityOnHand,
       quantityReserved,
       quantityAvailable: Math.max(quantityOnHand - quantityReserved, 0),
@@ -1710,7 +2635,23 @@ function App() {
         stockNumber,
         createdAt: new Date().toISOString(),
         ...payload,
+        barcode: barcode || buildBarcode(stockNumber),
       };
+      const movement = createInventoryMovement({
+        movementDate: stockForm.storedDate,
+        movementType: 'Received',
+        itemType: 'Finished Goods',
+        barcode: newItem.barcode,
+        itemId: newItem.id,
+        itemCode: newItem.stockNumber,
+        itemName: newItem.productName,
+        quantityMoved: quantityOnHand,
+        quantityUnit: newItem.quantityUnit,
+        toLocation: newItem.storageLocation,
+        jobId: newItem.jobId,
+        jobNumber: newItem.jobNumber,
+        notes: 'Finished stock received into inventory.',
+      });
       setData((current) => ({
         ...current,
         finishedGoodsStock: [newItem, ...current.finishedGoodsStock],
@@ -1732,6 +2673,7 @@ function App() {
           },
           ...current.stockChangeLogs,
         ],
+        inventoryMovements: [movement, ...current.inventoryMovements],
       }));
     }
     resetStockEditor();
@@ -1803,6 +2745,7 @@ function App() {
     }
     const linkedSupplier = spareForm.supplierId ? suppliersById.get(spareForm.supplierId) : undefined;
     const linkedMachine = spareForm.machineId ? machinesById.get(spareForm.machineId) : undefined;
+    const barcode = spareForm.barcode.trim();
     const payload = {
       partName: spareForm.partName,
       category: spareForm.category,
@@ -1810,6 +2753,7 @@ function App() {
       machineReference: linkedMachine?.name ?? spareForm.machineReference,
       supplierId: linkedSupplier?.id ?? '',
       supplierName: linkedSupplier?.name ?? spareForm.supplierName,
+      barcode,
       quantityOnHand: Number(spareForm.quantityOnHand),
       minimumStockLevel: Number(spareForm.minimumStockLevel || 0),
       reorderLevel: Number(spareForm.reorderLevel || 0),
@@ -1831,8 +2775,22 @@ function App() {
         partCode,
         createdAt: new Date().toISOString(),
         ...payload,
+        barcode: barcode || buildBarcode(partCode),
       };
-      setData((current) => ({ ...current, spareParts: [newPart, ...current.spareParts] }));
+      const movement = createInventoryMovement({
+        movementDate: spareForm.lastPurchaseDate || getToday(),
+        movementType: 'Received',
+        itemType: 'Spare Part',
+        barcode: newPart.barcode,
+        itemId: newPart.id,
+        itemCode: newPart.partCode,
+        itemName: newPart.partName,
+        quantityMoved: newPart.quantityOnHand,
+        quantityUnit: newPart.unitOfMeasure,
+        toLocation: newPart.storageLocation,
+        notes: 'Spare part received into inventory.',
+      });
+      setData((current) => ({ ...current, spareParts: [newPart, ...current.spareParts], inventoryMovements: [movement, ...current.inventoryMovements] }));
     }
     resetSpareEditor();
   }
@@ -1925,6 +2883,7 @@ function App() {
     const tier = clientForm.pricingTierId ? tiersById.get(clientForm.pricingTierId) : undefined;
     const payload = {
       name: clientForm.name,
+      companyName: clientForm.companyName,
       code: clientForm.code,
       pricingTierId: clientForm.pricingTierId,
       pricingTierName: tier?.name ?? '',
@@ -1934,9 +2893,64 @@ function App() {
       creditLimit: Number(clientForm.creditLimit || 0),
       currentBalance: Number(clientForm.currentBalance || 0),
       paymentTerms: clientForm.paymentTerms,
+      primaryPaymentMethod: clientForm.primaryPaymentMethod,
+      currency: clientForm.currency,
+      invoiceLanguage: clientForm.invoiceLanguage,
+      vatNumber: clientForm.vatNumber,
+      openingBalance: Number(clientForm.openingBalance || 0),
+      openingBalanceAsOf: clientForm.openingBalanceAsOf,
       accountHold: clientForm.accountHold,
+      title: clientForm.title,
+      firstName: clientForm.firstName,
+      middleName: clientForm.middleName,
+      lastName: clientForm.lastName,
+      suffix: clientForm.suffix,
       contactName: clientForm.contactName,
       contactEmail: clientForm.contactEmail,
+      phoneNumber: clientForm.phoneNumber,
+      mobileNumber: clientForm.mobileNumber,
+      otherPhone: clientForm.otherPhone,
+      faxNumber: clientForm.faxNumber,
+      ccEmail: clientForm.ccEmail,
+      bccEmail: clientForm.bccEmail,
+      website: clientForm.website,
+      marketingConsent: clientForm.marketingConsent,
+      billingAddressLine1: clientForm.billingAddressLine1,
+      billingAddressLine2: clientForm.billingAddressLine2,
+      billingCity: clientForm.billingCity,
+      billingState: clientForm.billingState,
+      billingPostalCode: clientForm.billingPostalCode,
+      billingCountry: clientForm.billingCountry,
+      deliveryAddressLine1: clientForm.deliveryAddressLine1,
+      deliveryAddressLine2: clientForm.deliveryAddressLine2,
+      deliveryCity: clientForm.deliveryCity,
+      deliveryState: clientForm.deliveryState,
+      deliveryPostalCode: clientForm.deliveryPostalCode,
+      deliveryCountry: clientForm.deliveryCountry,
+      stockHoldingEnabled: clientForm.stockHoldingEnabled,
+      stockHoldingAgreementSigned: clientForm.stockHoldingAgreementSigned,
+      stockHoldingAgreementSignedDate: clientForm.stockHoldingAgreementSignedDate,
+      stockHoldingAgreementReference: clientForm.stockHoldingAgreementReference,
+      stockHoldingReviewDate: clientForm.stockHoldingReviewDate,
+      creditAgreementSigned: clientForm.creditAgreementSigned,
+      creditAgreementSignedDate: clientForm.creditAgreementSignedDate,
+      creditAgreementReference: clientForm.creditAgreementReference,
+      storageGracePeriodDays: Number(clientForm.storageGracePeriodDays || 0),
+      maxStoragePeriodDays: Number(clientForm.maxStoragePeriodDays || 0),
+      storageFeeApplies: clientForm.storageFeeApplies,
+      storageFeeType: clientForm.storageFeeType,
+      storageFeeRate: Number(clientForm.storageFeeRate || 0),
+      depositRequiredPercent: Number(clientForm.depositRequiredPercent || 0),
+      minimumMonthlyReleaseQuantity: Number(clientForm.minimumMonthlyReleaseQuantity || 0),
+      minimumMonthlyReleaseUnit: clientForm.minimumMonthlyReleaseUnit,
+      minimumReleaseQuantity: Number(clientForm.minimumReleaseQuantity || 0),
+      deliveryChargePolicy: clientForm.deliveryChargePolicy,
+      releaseApprovalRequired: clientForm.releaseApprovalRequired,
+      portalEnabled: clientForm.portalEnabled,
+      portalViewQuotes: clientForm.portalViewQuotes,
+      portalViewInvoices: clientForm.portalViewInvoices,
+      portalViewStock: clientForm.portalViewStock,
+      portalRequestRelease: clientForm.portalRequestRelease,
       notes: clientForm.notes,
       active: clientForm.active,
     };
@@ -2015,31 +3029,41 @@ function App() {
     if (materialEditingId) {
       setData((current) => ({
         ...current,
-        materialReceipts: current.materialReceipts.map((receipt) => receipt.id === materialEditingId ? {
-          ...receipt,
-          receivedDate: materialForm.receivedDate,
-          supplierId: linkedSupplier?.id ?? materialForm.supplierId,
-          supplierName: linkedSupplier?.name ?? materialForm.supplierName,
-          supplierBatchNumber: materialForm.supplierBatchNumber,
-          internalRollCode: materialForm.internalRollCode,
-          paperType: materialForm.paperType,
-          gsm: materialForm.gsm,
-          width: materialForm.width,
-          quantityReceived: Number(materialForm.quantityReceived),
-          quantityUnit: materialForm.quantityUnit,
-          fscClaimType: materialForm.fscClaimType,
-          supplierCertificateCode: materialForm.supplierCertificateCode,
-          invoiceReference: materialForm.invoiceReference,
-          storageLocation: materialForm.storageLocation,
-          inspectionNotes: materialForm.inspectionNotes,
-          fscRelated: materialForm.fscRelated,
-        } : receipt),
+        materialReceipts: current.materialReceipts.map((receipt) => {
+          if (receipt.id !== materialEditingId) {
+            return receipt;
+          }
+          const nextQuantityReceived = Number(materialForm.quantityReceived);
+          const quantityDelta = nextQuantityReceived - receipt.quantityReceived;
+          return {
+            ...receipt,
+            receivedDate: materialForm.receivedDate,
+            supplierId: linkedSupplier?.id ?? materialForm.supplierId,
+            supplierName: linkedSupplier?.name ?? materialForm.supplierName,
+            supplierBatchNumber: materialForm.supplierBatchNumber,
+            internalRollCode: materialForm.internalRollCode,
+            barcode: materialForm.barcode.trim() || materialForm.internalRollCode,
+            paperType: materialForm.paperType,
+            gsm: materialForm.gsm,
+            width: materialForm.width,
+            quantityReceived: nextQuantityReceived,
+            quantityAvailable: Math.max(receipt.quantityAvailable + quantityDelta, 0),
+            quantityUnit: materialForm.quantityUnit,
+            fscClaimType: materialForm.fscClaimType,
+            supplierCertificateCode: materialForm.supplierCertificateCode,
+            invoiceReference: materialForm.invoiceReference,
+            storageLocation: materialForm.storageLocation,
+            inspectionNotes: materialForm.inspectionNotes,
+            fscRelated: materialForm.fscRelated,
+          };
+        }),
       }));
     } else {
       const receiptNumber = generateCode('RCV', data.materialReceipts.map((receipt) => receipt.receiptNumber), materialForm.receivedDate);
       const newReceipt: MaterialReceipt = {
         id: receiptNumber,
         receiptNumber,
+        barcode: materialForm.barcode.trim() || buildBarcode(materialForm.internalRollCode || receiptNumber),
         createdAt: new Date().toISOString(),
         receivedDate: materialForm.receivedDate,
         supplierId: linkedSupplier?.id ?? materialForm.supplierId,
@@ -2050,6 +3074,7 @@ function App() {
         gsm: materialForm.gsm,
         width: materialForm.width,
         quantityReceived: Number(materialForm.quantityReceived),
+        quantityAvailable: Number(materialForm.quantityReceived),
         quantityUnit: materialForm.quantityUnit,
         fscClaimType: materialForm.fscClaimType,
         supplierCertificateCode: materialForm.supplierCertificateCode,
@@ -2058,9 +3083,143 @@ function App() {
         inspectionNotes: materialForm.inspectionNotes,
         fscRelated: materialForm.fscRelated,
       };
-      setData((current) => ({ ...current, materialReceipts: [newReceipt, ...current.materialReceipts] }));
+      const movement = createInventoryMovement({
+        movementDate: materialForm.receivedDate,
+        movementType: 'Received',
+        itemType: 'Material Lot',
+        barcode: newReceipt.barcode,
+        itemId: newReceipt.id,
+        itemCode: newReceipt.receiptNumber,
+        itemName: `${newReceipt.paperType} ${newReceipt.gsm}`.trim() || newReceipt.internalRollCode,
+        quantityMoved: newReceipt.quantityReceived,
+        quantityUnit: newReceipt.quantityUnit,
+        toLocation: newReceipt.storageLocation,
+        notes: 'Material receipt added to inventory.',
+      });
+      setData((current) => ({ ...current, materialReceipts: [newReceipt, ...current.materialReceipts], inventoryMovements: [movement, ...current.inventoryMovements] }));
     }
     resetMaterialEditor();
+  }
+
+  function handleInventoryScanAction() {
+    const barcode = inventoryScanForm.barcode.trim().toLowerCase();
+    const quantityMoved = Number(inventoryScanForm.quantityMoved || 0);
+
+    if (!barcode || !quantityMoved) {
+      setInventoryScanMessage('Scan a barcode and enter a quantity.');
+      return;
+    }
+
+    const match = barcodeIndex.get(barcode);
+    if (!match) {
+      setInventoryScanMessage('Barcode not found in inventory.');
+      return;
+    }
+
+    const linkedJob = inventoryScanForm.jobId ? jobsById.get(inventoryScanForm.jobId) : undefined;
+    const { itemType, item } = match;
+    const { actorName } = getActor();
+
+    if (inventoryScanForm.movementType === 'Issued to Job' && !linkedJob) {
+      setInventoryScanMessage('Select a job before issuing stock to production.');
+      return;
+    }
+
+    setData((current) => {
+      let nextFinishedStock = current.finishedGoodsStock;
+      let nextSpareParts = current.spareParts;
+      let nextMaterialReceipts = current.materialReceipts;
+
+      if (itemType === 'Finished Goods') {
+        const currentItem = item as FinishedGoodsStock;
+        if (inventoryScanForm.movementType === 'Issued to Job' || inventoryScanForm.movementType === 'Adjusted') {
+          if (quantityMoved > currentItem.quantityAvailable) {
+            setInventoryScanMessage(`Only ${currentItem.quantityAvailable} ${currentItem.quantityUnit} available on this stock lot.`);
+            return current;
+          }
+          nextFinishedStock = current.finishedGoodsStock.map((entry) => entry.id === currentItem.id ? {
+            ...entry,
+            quantityOnHand: inventoryScanForm.movementType === 'Adjusted' ? Math.max(entry.quantityOnHand - quantityMoved, 0) : entry.quantityOnHand,
+            quantityAvailable: Math.max(entry.quantityAvailable - quantityMoved, 0),
+          } : entry);
+        } else if (inventoryScanForm.movementType === 'Returned') {
+          nextFinishedStock = current.finishedGoodsStock.map((entry) => entry.id === currentItem.id ? {
+            ...entry,
+            quantityOnHand: entry.quantityOnHand + quantityMoved,
+            quantityAvailable: entry.quantityAvailable + quantityMoved,
+          } : entry);
+        } else if (inventoryScanForm.movementType === 'Transferred') {
+          nextFinishedStock = current.finishedGoodsStock.map((entry) => entry.id === currentItem.id ? {
+            ...entry,
+            storageLocation: inventoryScanForm.toLocation,
+          } : entry);
+        }
+      }
+
+      if (itemType === 'Spare Part') {
+        const currentItem = item as SparePart;
+        if ((inventoryScanForm.movementType === 'Issued to Job' || inventoryScanForm.movementType === 'Adjusted') && quantityMoved > currentItem.quantityOnHand) {
+          setInventoryScanMessage(`Only ${currentItem.quantityOnHand} ${currentItem.unitOfMeasure} available on this spare item.`);
+          return current;
+        }
+        nextSpareParts = current.spareParts.map((entry) => entry.id === currentItem.id ? {
+          ...entry,
+          quantityOnHand:
+            inventoryScanForm.movementType === 'Returned'
+              ? entry.quantityOnHand + quantityMoved
+              : inventoryScanForm.movementType === 'Transferred'
+                ? entry.quantityOnHand
+                : Math.max(entry.quantityOnHand - quantityMoved, 0),
+          storageLocation: inventoryScanForm.movementType === 'Transferred' ? inventoryScanForm.toLocation : entry.storageLocation,
+        } : entry);
+      }
+
+      if (itemType === 'Material Lot') {
+        const currentItem = item as MaterialReceipt;
+        if ((inventoryScanForm.movementType === 'Issued to Job' || inventoryScanForm.movementType === 'Adjusted') && quantityMoved > currentItem.quantityAvailable) {
+          setInventoryScanMessage(`Only ${currentItem.quantityAvailable} ${currentItem.quantityUnit} available on this material lot.`);
+          return current;
+        }
+        nextMaterialReceipts = current.materialReceipts.map((entry) => entry.id === currentItem.id ? {
+          ...entry,
+          quantityAvailable:
+            inventoryScanForm.movementType === 'Returned'
+              ? Math.min(entry.quantityAvailable + quantityMoved, entry.quantityReceived)
+              : inventoryScanForm.movementType === 'Transferred'
+                ? entry.quantityAvailable
+                : Math.max(entry.quantityAvailable - quantityMoved, 0),
+          storageLocation: inventoryScanForm.movementType === 'Transferred' ? inventoryScanForm.toLocation : entry.storageLocation,
+        } : entry);
+      }
+
+      const movement = createInventoryMovement({
+        movementDate: inventoryScanForm.movementDate,
+        movementType: inventoryScanForm.movementType,
+        itemType,
+        barcode: item.barcode,
+        itemId: item.id,
+        itemCode: itemType === 'Finished Goods' ? (item as FinishedGoodsStock).stockNumber : itemType === 'Spare Part' ? (item as SparePart).partCode : (item as MaterialReceipt).receiptNumber,
+        itemName: itemType === 'Finished Goods' ? (item as FinishedGoodsStock).productName : itemType === 'Spare Part' ? (item as SparePart).partName : `${(item as MaterialReceipt).paperType} ${(item as MaterialReceipt).gsm}`.trim(),
+        quantityMoved,
+        quantityUnit: itemType === 'Finished Goods' ? (item as FinishedGoodsStock).quantityUnit : itemType === 'Spare Part' ? (item as SparePart).unitOfMeasure : (item as MaterialReceipt).quantityUnit,
+        fromLocation: 'storageLocation' in item ? item.storageLocation : '',
+        toLocation: inventoryScanForm.toLocation,
+        jobId: linkedJob?.id ?? '',
+        jobNumber: linkedJob?.jobNumber ?? '',
+        notes: inventoryScanForm.notes || `${inventoryScanForm.movementType} by ${actorName}`,
+      });
+
+      return {
+        ...current,
+        finishedGoodsStock: nextFinishedStock,
+        spareParts: nextSpareParts,
+        materialReceipts: nextMaterialReceipts,
+        inventoryMovements: [movement, ...current.inventoryMovements],
+      };
+    });
+
+    setInventoryScanForm(createInitialInventoryScanForm());
+    setInventoryScanMessage('Inventory movement recorded.');
   }
 
   function handleSaveProduction() {
@@ -2368,6 +3527,7 @@ function App() {
       productId: item.productId,
       clientId: item.clientId,
       jobId: item.jobId,
+      barcode: item.barcode,
       quantityOnHand: String(item.quantityOnHand),
       quantityReserved: String(item.quantityReserved),
       quantityUnit: item.quantityUnit,
@@ -2388,6 +3548,7 @@ function App() {
       machineReference: part.machineReference,
       supplierId: part.supplierId,
       supplierName: part.supplierName,
+      barcode: part.barcode,
       quantityOnHand: String(part.quantityOnHand),
       minimumStockLevel: String(part.minimumStockLevel),
       reorderLevel: String(part.reorderLevel),
@@ -2529,6 +3690,7 @@ function App() {
       supplierName: receipt.supplierName,
       supplierBatchNumber: receipt.supplierBatchNumber,
       internalRollCode: receipt.internalRollCode,
+      barcode: receipt.barcode,
       paperType: receipt.paperType,
       gsm: receipt.gsm,
       width: receipt.width,
@@ -2726,6 +3888,7 @@ function App() {
     setClientEditingId(client.id);
     setClientForm({
       name: client.name,
+      companyName: client.companyName ?? '',
       code: client.code,
       pricingTierId: client.pricingTierId,
       brandingDefault: client.brandingDefault,
@@ -2733,9 +3896,64 @@ function App() {
       creditLimit: String(client.creditLimit),
       currentBalance: String(client.currentBalance),
       paymentTerms: client.paymentTerms,
+      primaryPaymentMethod: client.primaryPaymentMethod ?? 'EFT',
+      currency: client.currency ?? 'ZAR',
+      invoiceLanguage: client.invoiceLanguage ?? 'English',
+      vatNumber: client.vatNumber ?? '',
+      openingBalance: String(client.openingBalance ?? 0),
+      openingBalanceAsOf: client.openingBalanceAsOf ?? '',
       accountHold: client.accountHold,
+      title: client.title ?? '',
+      firstName: client.firstName ?? '',
+      middleName: client.middleName ?? '',
+      lastName: client.lastName ?? '',
+      suffix: client.suffix ?? '',
       contactName: client.contactName,
       contactEmail: client.contactEmail,
+      phoneNumber: client.phoneNumber ?? '',
+      mobileNumber: client.mobileNumber ?? '',
+      otherPhone: client.otherPhone ?? '',
+      faxNumber: client.faxNumber ?? '',
+      ccEmail: client.ccEmail ?? '',
+      bccEmail: client.bccEmail ?? '',
+      website: client.website ?? '',
+      marketingConsent: client.marketingConsent ?? false,
+      billingAddressLine1: client.billingAddressLine1 ?? '',
+      billingAddressLine2: client.billingAddressLine2 ?? '',
+      billingCity: client.billingCity ?? '',
+      billingState: client.billingState ?? '',
+      billingPostalCode: client.billingPostalCode ?? '',
+      billingCountry: client.billingCountry ?? 'South Africa',
+      deliveryAddressLine1: client.deliveryAddressLine1 ?? '',
+      deliveryAddressLine2: client.deliveryAddressLine2 ?? '',
+      deliveryCity: client.deliveryCity ?? '',
+      deliveryState: client.deliveryState ?? '',
+      deliveryPostalCode: client.deliveryPostalCode ?? '',
+      deliveryCountry: client.deliveryCountry ?? 'South Africa',
+      stockHoldingEnabled: client.stockHoldingEnabled ?? false,
+      stockHoldingAgreementSigned: client.stockHoldingAgreementSigned ?? false,
+      stockHoldingAgreementSignedDate: client.stockHoldingAgreementSignedDate ?? '',
+      stockHoldingAgreementReference: client.stockHoldingAgreementReference ?? '',
+      stockHoldingReviewDate: client.stockHoldingReviewDate ?? '',
+      creditAgreementSigned: client.creditAgreementSigned ?? false,
+      creditAgreementSignedDate: client.creditAgreementSignedDate ?? '',
+      creditAgreementReference: client.creditAgreementReference ?? '',
+      storageGracePeriodDays: String(client.storageGracePeriodDays ?? 0),
+      maxStoragePeriodDays: String(client.maxStoragePeriodDays ?? 0),
+      storageFeeApplies: client.storageFeeApplies ?? false,
+      storageFeeType: client.storageFeeType ?? 'None',
+      storageFeeRate: String(client.storageFeeRate ?? 0),
+      depositRequiredPercent: String(client.depositRequiredPercent ?? 0),
+      minimumMonthlyReleaseQuantity: String(client.minimumMonthlyReleaseQuantity ?? 0),
+      minimumMonthlyReleaseUnit: client.minimumMonthlyReleaseUnit ?? 'units',
+      minimumReleaseQuantity: String(client.minimumReleaseQuantity ?? 0),
+      deliveryChargePolicy: client.deliveryChargePolicy ?? 'Charge Every Release',
+      releaseApprovalRequired: client.releaseApprovalRequired ?? true,
+      portalEnabled: client.portalEnabled ?? false,
+      portalViewQuotes: client.portalViewQuotes ?? true,
+      portalViewInvoices: client.portalViewInvoices ?? true,
+      portalViewStock: client.portalViewStock ?? true,
+      portalRequestRelease: client.portalRequestRelease ?? false,
       notes: client.notes,
       active: client.active,
     });
@@ -2850,23 +4068,60 @@ function App() {
     setView('dispatch');
   }
 
+  function editDeliveryNote(note: DeliveryNote) {
+    setDeliveryNoteEditingId(note.id);
+    setDeliveryNoteForm({
+      noteDate: note.noteDate,
+      clientId: note.clientId,
+      clientContactName: note.clientContactName,
+      clientContactPhone: note.clientContactPhone,
+      clientEmail: note.clientEmail,
+      clientAddress: note.clientAddress,
+      companyName: note.companyName,
+      companyPhone: note.companyPhone,
+      companyEmail: note.companyEmail,
+      companyAddress: note.companyAddress,
+      jobId: note.jobId,
+      dispatchRecordId: '',
+      customerStockReleaseId: '',
+      deliveryMethod: note.deliveryMethod,
+      deliveryReference: note.deliveryReference,
+      vehicleRegistration: note.vehicleRegistration,
+      driverName: note.driverName,
+      dispatchedBy: note.dispatchedBy,
+      receivedBy: note.receivedBy,
+      status: note.status,
+      clientVisible: note.clientVisible,
+      lineItems: note.lineItems,
+      notes: note.notes,
+    });
+    setView('deliveryNotes');
+  }
+
   function exportReports() {
     downloadCsv(
       `jomopak-report-${reportFilters.month || 'custom-range'}.csv`,
-      reportProductionRows.map((row) => ({
-        'Job Number': row.jobNumber,
-        'Job Date': row.jobDate,
-        Customer: row.customerName,
-        Product: row.productName,
-        Status: row.status,
-        'Qty Planned': row.quantityPlanned,
-        'Qty Completed': row.quantityCompleted,
-        'Production Logs': getProductionLogsForJob(reportJobs.find((job) => job.jobNumber === row.jobNumber)?.id ?? '', data.productionLogs),
-        'Paper Used': row.paperUsed,
-        'Total Waste': row.totalWaste,
-        'Waste %': row.wastePercent,
-        FSC: row.fscRelated,
-      })),
+      reportProductionRows.map((row) => {
+        const linkedClient = reportClientTrackingRows.find((client) => client.clientName === row.customerName);
+        return {
+          'Job Number': row.jobNumber,
+          'Job Date': row.jobDate,
+          Customer: row.customerName,
+          Product: row.productName,
+          Status: row.status,
+          'Qty Planned': row.quantityPlanned,
+          'Qty Completed': row.quantityCompleted,
+          'Production Logs': getProductionLogsForJob(reportJobs.find((job) => job.jobNumber === row.jobNumber)?.id ?? '', data.productionLogs),
+          'Paper Used': row.paperUsed,
+          'Total Waste': row.totalWaste,
+          'Waste %': row.wastePercent,
+          'Client Active Jobs': linkedClient?.activeJobs ?? 0,
+          'Client Completed Jobs': linkedClient?.completedJobs ?? 0,
+          'Client Overdue Jobs': linkedClient?.overdueJobs ?? 0,
+          'Last Client Activity': linkedClient?.lastActivityLabel ?? '',
+          FSC: row.fscRelated,
+        };
+      }),
     );
   }
 
@@ -3006,6 +4261,7 @@ function App() {
           setSupplierForm={setSupplierForm}
           supplierEditingId={supplierEditingId}
           supplierMessage={supplierMessage}
+          supplierSaveCount={supplierSaveCount}
           onSave={handleSaveSupplier}
           onDelete={handleDeleteSupplier}
           onReset={resetSupplierEditor}
@@ -3088,6 +4344,29 @@ function App() {
         />
       )}
 
+      {view === 'deliveryNotes' && (
+        <DeliveryNotesPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          jobs={data.jobs}
+          dispatchRecords={data.dispatchRecords}
+          customerStockReleases={data.customerStockReleases}
+          deliveryNoteForm={deliveryNoteForm}
+          setDeliveryNoteForm={setDeliveryNoteForm}
+          deliveryNoteEditingId={deliveryNoteEditingId}
+          deliveryNoteMessage={deliveryNoteMessage}
+          onSave={handleSaveDeliveryNote}
+          onReset={resetDeliveryNoteEditor}
+          onAddDispatchLine={addDispatchLineToDeliveryNote}
+          onAddReleaseLine={addReleaseLineToDeliveryNote}
+          onRemoveLineItem={removeDeliveryLineItem}
+          deliveryNoteFilters={deliveryNoteFilters}
+          setDeliveryNoteFilters={setDeliveryNoteFilters}
+          filteredDeliveryNotes={filteredDeliveryNotes}
+          onEdit={editDeliveryNote}
+        />
+      )}
+
       {view === 'jobs' && (
         <JobCardsPage
           monthOptions={monthOptions}
@@ -3099,6 +4378,7 @@ function App() {
           setJobForm={setJobForm}
           jobEditingId={jobEditingId}
           jobMessage={jobMessage}
+          jobSaveCount={jobSaveCount}
           onSave={handleSaveJob}
           onReset={resetJobEditor}
           jobFilters={jobFilters}
@@ -3208,6 +4488,7 @@ function App() {
 
       {view === 'materials' && (
         <MaterialsReceivingPage
+          jobs={filteredJobs}
           suppliers={data.suppliers}
           monthOptions={monthOptions}
           materialForm={materialForm}
@@ -3220,6 +4501,12 @@ function App() {
           setMaterialFilters={setMaterialFilters}
           filteredMaterialReceipts={filteredMaterialReceipts}
           materialOrderRequests={data.materialOrderRequests}
+          inventoryScanForm={inventoryScanForm}
+          setInventoryScanForm={setInventoryScanForm}
+          inventoryScanMessage={inventoryScanMessage}
+          inventoryScannedItem={scannedInventoryMatch}
+          inventoryMovements={data.inventoryMovements}
+          onInventoryScanAction={handleInventoryScanAction}
           onEdit={editMaterial}
         />
       )}
@@ -3319,6 +4606,11 @@ function App() {
           wasteByJob={reportWasteByJob}
           paperByJob={reportPaperByJob}
           paperByType={reportPaperByType}
+          timelineRows={reportTimelineRows}
+          staffWorkloadRows={reportStaffWorkload}
+          bottleneckRows={reportBottlenecks}
+          clientTrackingRows={reportClientTrackingRows}
+          auditRows={reportAuditRows}
           onExport={exportReports}
           onPrint={() => window.print()}
         />
