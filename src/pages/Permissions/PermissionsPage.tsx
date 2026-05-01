@@ -17,6 +17,12 @@ interface CreateUserFormState {
   email: string;
   password: string;
   fullName: string;
+  username: string;
+  phoneNumber: string;
+  clientId: string;
+  accountType: UserProfile['accountType'];
+  publicDisplayName: string;
+  publicDisplayRole: string;
   role: UserProfile['role'];
   permissions: View[];
   dashboardWidgets: DashboardWidget[];
@@ -33,6 +39,12 @@ const initialCreateUserForm = (): CreateUserFormState => ({
   email: '',
   password: '',
   fullName: '',
+  username: '',
+  phoneNumber: '',
+  clientId: '',
+  accountType: 'internal',
+  publicDisplayName: '',
+  publicDisplayRole: '',
   role: 'artwork',
   permissions: ROLE_DEFAULT_VIEWS.artwork,
   dashboardWidgets: ROLE_DEFAULT_DASHBOARD_WIDGETS.artwork,
@@ -41,6 +53,12 @@ const initialCreateUserForm = (): CreateUserFormState => ({
 export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: PermissionsPageProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [draftUsername, setDraftUsername] = useState('');
+  const [draftPhoneNumber, setDraftPhoneNumber] = useState('');
+  const [draftClientId, setDraftClientId] = useState('');
+  const [draftAccountType, setDraftAccountType] = useState<UserProfile['accountType']>('internal');
+  const [draftPublicDisplayName, setDraftPublicDisplayName] = useState('');
+  const [draftPublicDisplayRole, setDraftPublicDisplayRole] = useState('');
   const [draftRole, setDraftRole] = useState<UserProfile['role']>('ops');
   const [draftPermissions, setDraftPermissions] = useState<View[]>(ROLE_DEFAULT_VIEWS.ops);
   const [draftDashboardWidgets, setDraftDashboardWidgets] = useState<DashboardWidget[]>(ROLE_DEFAULT_DASHBOARD_WIDGETS.ops);
@@ -69,6 +87,12 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
       await onSave({
         ...current,
         fullName: draftName,
+        username: draftUsername,
+        phoneNumber: draftPhoneNumber,
+        clientId: draftClientId,
+        accountType: draftAccountType,
+        publicDisplayName: draftPublicDisplayName,
+        publicDisplayRole: draftPublicDisplayRole,
         role: draftRole,
         permissions: normalizeProfilePermissions(draftRole, draftPermissions),
         dashboardWidgets: normalizeDashboardWidgets(draftRole, draftDashboardWidgets),
@@ -84,6 +108,12 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
   function handleSelectProfile(profile: UserProfile) {
     setSelectedProfileId(profile.id);
     setDraftName(profile.fullName);
+    setDraftUsername(profile.username);
+    setDraftPhoneNumber(profile.phoneNumber);
+    setDraftClientId(profile.clientId);
+    setDraftAccountType(profile.accountType);
+    setDraftPublicDisplayName(profile.publicDisplayName);
+    setDraftPublicDisplayRole(profile.publicDisplayRole);
     setDraftRole(profile.role);
     setDraftPermissions(profile.permissions);
     setDraftDashboardWidgets(profile.dashboardWidgets);
@@ -145,6 +175,56 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                 value={createUserForm.fullName}
                 onChange={(event) => setCreateUserForm({ ...createUserForm, fullName: event.target.value })}
                 required
+              />
+            </label>
+            <label>
+              <span>Username</span>
+              <input
+                value={createUserForm.username}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, username: event.target.value })}
+                placeholder="lebo"
+              />
+            </label>
+            <label>
+              <span>Phone number</span>
+              <input
+                value={createUserForm.phoneNumber}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, phoneNumber: event.target.value })}
+                placeholder="+27..."
+              />
+            </label>
+            <label>
+              <span>Linked client ID</span>
+              <input
+                value={createUserForm.clientId}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, clientId: event.target.value })}
+                placeholder="Only for client accounts"
+              />
+            </label>
+            <label>
+              <span>Account type</span>
+              <select
+                value={createUserForm.accountType}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, accountType: event.target.value as UserProfile['accountType'] })}
+              >
+                <option value="internal">internal</option>
+                <option value="client">client</option>
+              </select>
+            </label>
+            <label>
+              <span>Display name</span>
+              <input
+                value={createUserForm.publicDisplayName}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, publicDisplayName: event.target.value })}
+                placeholder="Lebo"
+              />
+            </label>
+            <label>
+              <span>Display role</span>
+              <input
+                value={createUserForm.publicDisplayRole}
+                onChange={(event) => setCreateUserForm({ ...createUserForm, publicDisplayRole: event.target.value })}
+                placeholder="Client Care"
               />
             </label>
             <label>
@@ -251,6 +331,9 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                   <div>
                     <strong>{selectedProfile.fullName || 'No name set'}</strong>
                     <p className="muted">{selectedProfile.email || 'No email stored'}</p>
+                    <p className="muted">
+                      {selectedProfile.accountType} · {selectedProfile.clientId || 'No linked client'} · {selectedProfile.publicDisplayName || 'No display name'} · {selectedProfile.publicDisplayRole || 'No display role'}
+                    </p>
                   </div>
                   <span className="badge badge-muted">{selectedProfile.role}</span>
                 </div>
@@ -264,6 +347,33 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                   <label>
                     <span>Full name</span>
                     <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Username</span>
+                    <input value={draftUsername} onChange={(event) => setDraftUsername(event.target.value)} placeholder="lebo" />
+                  </label>
+                  <label>
+                    <span>Phone number</span>
+                    <input value={draftPhoneNumber} onChange={(event) => setDraftPhoneNumber(event.target.value)} placeholder="+27..." />
+                  </label>
+                  <label>
+                    <span>Linked client ID</span>
+                    <input value={draftClientId} onChange={(event) => setDraftClientId(event.target.value)} placeholder="Only for client accounts" />
+                  </label>
+                  <label>
+                    <span>Account type</span>
+                    <select value={draftAccountType} onChange={(event) => setDraftAccountType(event.target.value as UserProfile['accountType'])}>
+                      <option value="internal">internal</option>
+                      <option value="client">client</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Display name</span>
+                    <input value={draftPublicDisplayName} onChange={(event) => setDraftPublicDisplayName(event.target.value)} placeholder="Lebo" />
+                  </label>
+                  <label>
+                    <span>Display role</span>
+                    <input value={draftPublicDisplayRole} onChange={(event) => setDraftPublicDisplayRole(event.target.value)} placeholder="Client Care" />
                   </label>
                   <label>
                     <span>Role</span>

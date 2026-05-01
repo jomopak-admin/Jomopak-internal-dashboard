@@ -17,6 +17,7 @@ const VIEW_LABELS = {
   quotes: 'Quotes & Estimates',
   artwork: 'Artwork',
   customerStock: 'Customer Stock',
+  deliveryNotes: 'Delivery Notes',
   machines: 'Machines',
   jobs: 'Job Cards',
   products: 'Products',
@@ -62,6 +63,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'artwork',
     'customerStock',
+    'deliveryNotes',
     'machines',
     'jobs',
     'products',
@@ -84,6 +86,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'artwork',
     'customerStock',
+    'deliveryNotes',
     'machines',
     'jobs',
     'products',
@@ -113,6 +116,7 @@ const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'calculator',
     'quotes',
     'artwork',
+    'deliveryNotes',
     'jobs',
     'products',
     'reports',
@@ -227,7 +231,13 @@ Deno.serve(async (request) => {
     const email = String(body.email ?? '').trim().toLowerCase();
     const password = String(body.password ?? '');
     const fullName = String(body.fullName ?? '').trim();
+    const username = String(body.username ?? '').trim().toLowerCase();
+    const phoneNumber = String(body.phoneNumber ?? '').trim();
+    const clientId = String(body.clientId ?? '').trim();
     const role = (String(body.role ?? 'ops') as UserRole);
+    const accountType = String(body.accountType ?? 'internal').trim() === 'client' ? 'client' : 'internal';
+    const publicDisplayName = String(body.publicDisplayName ?? fullName).trim();
+    const publicDisplayRole = String(body.publicDisplayRole ?? role).trim();
     const permissions = normalizePermissions(role, body.permissions);
     const dashboardWidgets = normalizeDashboardWidgets(role, body.dashboardWidgets);
 
@@ -243,7 +253,16 @@ Deno.serve(async (request) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role },
+      user_metadata: {
+        full_name: fullName,
+        role,
+        username,
+        phone_number: phoneNumber,
+        client_id: clientId || null,
+        account_type: accountType,
+        public_display_name: publicDisplayName,
+        public_display_role: publicDisplayRole,
+      },
     });
 
     if (createUserError || !createdUser.user) {
@@ -254,6 +273,12 @@ Deno.serve(async (request) => {
       id: createdUser.user.id,
       email,
       full_name: fullName,
+      username: username || null,
+      phone_number: phoneNumber || null,
+      client_id: clientId || null,
+      account_type: accountType,
+      public_display_name: publicDisplayName || null,
+      public_display_role: publicDisplayRole || null,
       role,
       permissions,
       dashboard_widgets: dashboardWidgets,

@@ -3,7 +3,11 @@ import {
   AppData,
   ArtworkRecord,
   CustomerStockRelease,
+  DeliveryNote,
+  DeliveryNoteLineItem,
   DispatchRecord,
+  FinishedGoodsStock,
+  InventoryMovement,
   JobCard,
   Lead,
   Machine,
@@ -20,7 +24,7 @@ import {
 } from '../types';
 import { getToday } from './calculations';
 
-const STORAGE_KEY = 'jomopak-dashboard-data-v5';
+const STORAGE_KEY = 'jomopak-dashboard-data-v6';
 
 function normalizeJob(raw: any): JobCard {
   const code = raw.jobNumber ?? raw.id;
@@ -329,11 +333,86 @@ function normalizeCustomerStockRelease(raw: any): CustomerStockRelease {
   };
 }
 
+function normalizeDeliveryNoteLineItem(raw: any, index: number): DeliveryNoteLineItem {
+  return {
+    id: raw.id ?? `delivery-line-${Date.now()}-${index}`,
+    description: raw.description ?? '',
+    productName: raw.productName ?? raw.product_name ?? '',
+    stockNumber: raw.stockNumber ?? raw.stock_number ?? '',
+    quantity: Number(raw.quantity ?? 0),
+    quantityUnit: raw.quantityUnit ?? raw.quantity_unit ?? 'units',
+    dispatchRecordId: raw.dispatchRecordId ?? raw.dispatch_record_id ?? '',
+    customerStockReleaseId: raw.customerStockReleaseId ?? raw.customer_stock_release_id ?? '',
+  };
+}
+
+function normalizeDeliveryNote(raw: any): DeliveryNote {
+  const code = raw.deliveryNoteNumber ?? raw.delivery_note_number ?? raw.id ?? '';
+  return {
+    id: raw.id ?? code,
+    deliveryNoteNumber: code,
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date(`${raw.noteDate ?? raw.note_date ?? getToday()}T08:00:00.000Z`).toISOString(),
+    noteDate: raw.noteDate ?? raw.note_date ?? getToday(),
+    clientId: raw.clientId ?? raw.client_id ?? '',
+    clientName: raw.clientName ?? raw.client_name ?? '',
+    clientContactName: raw.clientContactName ?? raw.client_contact_name ?? '',
+    clientContactPhone: raw.clientContactPhone ?? raw.client_contact_phone ?? '',
+    clientEmail: raw.clientEmail ?? raw.client_email ?? '',
+    clientAddress: raw.clientAddress ?? raw.client_address ?? '',
+    companyName: raw.companyName ?? raw.company_name ?? 'JomoPak',
+    companyPhone: raw.companyPhone ?? raw.company_phone ?? '',
+    companyEmail: raw.companyEmail ?? raw.company_email ?? '',
+    companyAddress: raw.companyAddress ?? raw.company_address ?? '',
+    jobId: raw.jobId ?? raw.job_id ?? '',
+    jobNumber: raw.jobNumber ?? raw.job_number ?? '',
+    dispatchRecordIds: Array.isArray(raw.dispatchRecordIds ?? raw.dispatch_record_ids) ? (raw.dispatchRecordIds ?? raw.dispatch_record_ids) : [],
+    customerStockReleaseIds: Array.isArray(raw.customerStockReleaseIds ?? raw.customer_stock_release_ids) ? (raw.customerStockReleaseIds ?? raw.customer_stock_release_ids) : [],
+    deliveryMethod: raw.deliveryMethod ?? raw.delivery_method ?? 'Delivery',
+    deliveryReference: raw.deliveryReference ?? raw.delivery_reference ?? '',
+    vehicleRegistration: raw.vehicleRegistration ?? raw.vehicle_registration ?? '',
+    driverName: raw.driverName ?? raw.driver_name ?? '',
+    dispatchedBy: raw.dispatchedBy ?? raw.dispatched_by ?? '',
+    receivedBy: raw.receivedBy ?? raw.received_by ?? '',
+    status: raw.status ?? 'Draft',
+    clientVisible: raw.clientVisible ?? raw.client_visible ?? false,
+    lineItems: Array.isArray(raw.lineItems ?? raw.line_items)
+      ? (raw.lineItems ?? raw.line_items).map((item: any, index: number) => normalizeDeliveryNoteLineItem(item, index))
+      : [],
+    notes: raw.notes ?? '',
+  };
+}
+
+function normalizeFinishedGoodsStock(raw: any): FinishedGoodsStock {
+  const code = raw.stockNumber ?? raw.id ?? '';
+  return {
+    id: code,
+    stockNumber: code,
+    barcode: raw.barcode ?? code,
+    createdAt: raw.createdAt ?? new Date(`${raw.storedDate ?? getToday()}T08:00:00.000Z`).toISOString(),
+    storedDate: raw.storedDate ?? getToday(),
+    productId: raw.productId ?? '',
+    productName: raw.productName ?? '',
+    clientId: raw.clientId ?? '',
+    clientName: raw.clientName ?? '',
+    jobId: raw.jobId ?? '',
+    jobNumber: raw.jobNumber ?? '',
+    quantityOnHand: Number(raw.quantityOnHand ?? 0),
+    quantityReserved: Number(raw.quantityReserved ?? 0),
+    quantityAvailable: Number(raw.quantityAvailable ?? Math.max(Number(raw.quantityOnHand ?? 0) - Number(raw.quantityReserved ?? 0), 0)),
+    quantityUnit: raw.quantityUnit ?? 'units',
+    storageLocation: raw.storageLocation ?? '',
+    stockStatus: raw.stockStatus ?? 'In Storage',
+    brandingStatus: raw.brandingStatus ?? '',
+    notes: raw.notes ?? '',
+  };
+}
+
 function normalizeSparePart(raw: any): SparePart {
   const code = raw.partCode ?? raw.id ?? '';
   return {
     id: code,
     partCode: code,
+    barcode: raw.barcode ?? code,
     createdAt: raw.createdAt ?? new Date(`${raw.lastPurchaseDate ?? getToday()}T08:00:00.000Z`).toISOString(),
     partName: raw.partName ?? '',
     category: raw.category ?? '',
@@ -357,6 +436,7 @@ function normalizeMaterialReceipt(raw: any): MaterialReceipt {
   return {
     id: code,
     receiptNumber: code,
+    barcode: raw.barcode ?? raw.internalRollCode ?? code,
     createdAt: raw.createdAt ?? new Date(`${raw.receivedDate ?? getToday()}T08:00:00.000Z`).toISOString(),
     receivedDate: raw.receivedDate ?? getToday(),
     supplierId: raw.supplierId ?? '',
@@ -367,6 +447,7 @@ function normalizeMaterialReceipt(raw: any): MaterialReceipt {
     gsm: raw.gsm ?? '',
     width: raw.width ?? '',
     quantityReceived: Number(raw.quantityReceived ?? 0),
+    quantityAvailable: Number(raw.quantityAvailable ?? raw.quantityReceived ?? 0),
     quantityUnit: raw.quantityUnit ?? 'kg',
     fscClaimType: raw.fscClaimType ?? (raw.fscRelated ? 'FSC Mix' : 'None'),
     supplierCertificateCode: raw.supplierCertificateCode ?? '',
@@ -506,6 +587,31 @@ function normalizeStockChangeLog(raw: any): StockChangeLog {
   };
 }
 
+function normalizeInventoryMovement(raw: any): InventoryMovement {
+  const code = raw.movementNumber ?? raw.id ?? '';
+  return {
+    id: code,
+    movementNumber: code,
+    createdAt: raw.createdAt ?? new Date(`${raw.movementDate ?? getToday()}T08:00:00.000Z`).toISOString(),
+    movementDate: raw.movementDate ?? getToday(),
+    itemType: raw.itemType ?? 'Material Lot',
+    movementType: raw.movementType ?? 'Received',
+    barcode: raw.barcode ?? '',
+    itemId: raw.itemId ?? '',
+    itemCode: raw.itemCode ?? '',
+    itemName: raw.itemName ?? '',
+    quantityMoved: Number(raw.quantityMoved ?? 0),
+    quantityUnit: raw.quantityUnit ?? 'units',
+    fromLocation: raw.fromLocation ?? '',
+    toLocation: raw.toLocation ?? '',
+    jobId: raw.jobId ?? '',
+    jobNumber: raw.jobNumber ?? '',
+    movedByUserId: raw.movedByUserId ?? '',
+    movedByName: raw.movedByName ?? '',
+    notes: raw.notes ?? '',
+  };
+}
+
 export function saveData(key: string, data: unknown): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
@@ -550,6 +656,7 @@ export function loadAppData(): AppData {
       quoteEstimates: (parsed.quoteEstimates ?? []).map(normalizeQuoteEstimate),
       artworkRecords: (parsed.artworkRecords ?? []).map(normalizeArtwork),
       customerStockReleases: (parsed.customerStockReleases ?? []).map(normalizeCustomerStockRelease),
+      deliveryNotes: (parsed.deliveryNotes ?? []).map(normalizeDeliveryNote),
       paperRates: (parsed.paperRates ?? []).map(normalizePaperRate),
       costProfiles: parsed.costProfiles ?? [],
       pricingTiers: parsed.pricingTiers ?? [],
@@ -570,7 +677,7 @@ export function loadAppData(): AppData {
         active: product.active !== false,
       })),
       jobs: (parsed.jobs ?? []).map(normalizeJob),
-      finishedGoodsStock: parsed.finishedGoodsStock ?? [],
+      finishedGoodsStock: (parsed.finishedGoodsStock ?? []).map(normalizeFinishedGoodsStock),
       spareParts: (parsed.spareParts ?? []).map(normalizeSparePart),
       materialReceipts: (parsed.materialReceipts ?? []).map(normalizeMaterialReceipt),
       productionLogs: (parsed.productionLogs ?? []).map(normalizeProductionLog),
@@ -579,6 +686,8 @@ export function loadAppData(): AppData {
       dispatchRecords: (parsed.dispatchRecords ?? []).map(normalizeDispatch),
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
+      inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),
+      biEvents: parsed.biEvents ?? [],
     };
   } catch {
     return buildSeedData();

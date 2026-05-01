@@ -8,6 +8,7 @@ export function buildSeedData(): AppData {
     quoteEstimates: [],
     artworkRecords: [],
     customerStockReleases: [],
+    deliveryNotes: [],
     paperRates: [],
     costProfiles: [],
     pricingTiers: [],
@@ -23,5 +24,7 @@ export function buildSeedData(): AppData {
     dispatchRecords: [],
     stockChangeLogs: [],
     materialOrderRequests: [],
+    inventoryMovements: [],
+    biEvents: [],
   };
 }

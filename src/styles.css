@@ -802,6 +802,98 @@ th {
   background: rgba(16, 34, 26, 0.04);
 }
 
+.delivery-note-grid {
+  margin-top: 16px;
+}
+
+.delivery-line-builder {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.delivery-line-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.delivery-note-preview-list {
+  margin-top: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.delivery-note-preview {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(16, 34, 26, 0.04);
+  display: grid;
+  gap: 14px;
+}
+
+.delivery-note-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.delivery-note-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(207, 150, 48, 0.12);
+  color: #8a5804;
+  font-weight: 700;
+}
+
+.delivery-note-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.delivery-note-preview-grid span {
+  display: block;
+  color: #617165;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+.delivery-note-line-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.delivery-note-line-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 252, 246, 0.8);
+}
+
+.bi-workload-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(16, 34, 26, 0.04);
+}
+
+.bi-workload-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #556558;
+  font-size: 0.88rem;
+}
+
 .empty-state {
   padding: 28px 12px 10px;
   text-align: center;
@@ -898,6 +990,7 @@ th {
   .filters-grid-wide,
   .dashboard-grid,
   .reports-grid,
+  .delivery-note-preview-grid,
   .job-detail-header,
   .job-detail-grid {
     grid-template-columns: 1fr 1fr;
@@ -941,8 +1034,13 @@ th {
   .filters-grid-wide,
   .dashboard-grid,
   .reports-grid,
+  .delivery-note-preview-grid,
   .job-detail-header,
   .job-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-line-toolbar {
     grid-template-columns: 1fr;
   }
 }

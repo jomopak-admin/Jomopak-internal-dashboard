@@ -113,6 +113,10 @@ export function FinishedGoodsStockPage({
               </select>
             </label>
             <label>
+              <span>Barcode</span>
+              <input value={stockForm.barcode} onChange={(event) => setStockForm({ ...stockForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
+            </label>
+            <label>
               <span>Quantity on hand</span>
               <input type="number" min="0" value={stockForm.quantityOnHand} onChange={(event) => setStockForm({ ...stockForm, quantityOnHand: event.target.value })} />
             </label>
@@ -179,6 +183,7 @@ export function FinishedGoodsStockPage({
                     <tr>
                       <th>Stock</th>
                       <th>Product</th>
+                      <th>Barcode</th>
                       <th>Client</th>
                       <th>Qty On Hand</th>
                       <th>Available</th>
@@ -203,6 +208,7 @@ export function FinishedGoodsStockPage({
                             <div className="table-subtext">{item.stockStatus}</div>
                           </td>
                           <td>{item.productName}</td>
+                          <td>{item.barcode}</td>
                           <td>{item.clientName || 'General stock'}</td>
                           <td>{formatNumber(item.quantityOnHand)} {item.quantityUnit}</td>
                           <td>{formatNumber(item.quantityAvailable)} {item.quantityUnit}</td>

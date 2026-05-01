@@ -115,6 +115,7 @@ export function SparePartsPage({
                 ))}
               </select>
             </label>
+            <label><span>Barcode</span><input value={spareForm.barcode} onChange={(event) => setSpareForm({ ...spareForm, barcode: event.target.value })} placeholder="Scan or enter barcode" /></label>
             <label><span>Quantity on hand</span><input type="number" min="0" value={spareForm.quantityOnHand} onChange={(event) => setSpareForm({ ...spareForm, quantityOnHand: event.target.value })} /></label>
             <label><span>Minimum stock</span><input type="number" min="0" value={spareForm.minimumStockLevel} onChange={(event) => setSpareForm({ ...spareForm, minimumStockLevel: event.target.value })} /></label>
             <label><span>Reorder level</span><input type="number" min="0" value={spareForm.reorderLevel} onChange={(event) => setSpareForm({ ...spareForm, reorderLevel: event.target.value })} /></label>
@@ -145,6 +146,7 @@ export function SparePartsPage({
                   <tr>
                     <th>Part</th>
                     <th>Machine</th>
+                    <th>Barcode</th>
                     <th>On hand</th>
                     <th>Reorder</th>
                     <th>Supplier</th>
@@ -160,6 +162,7 @@ export function SparePartsPage({
                         <div className="table-subtext">{part.partCode} · {part.category || 'No category'}</div>
                       </td>
                       <td>{part.machineReference || 'General'}</td>
+                      <td>{part.barcode}</td>
                       <td>{formatNumber(part.quantityOnHand)} {part.unitOfMeasure}</td>
                       <td>{formatNumber(part.reorderLevel)} {part.unitOfMeasure}</td>
                       <td>{part.supplierName || 'Not set'}</td>

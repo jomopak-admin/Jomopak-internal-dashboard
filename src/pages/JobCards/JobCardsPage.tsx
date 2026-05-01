@@ -29,6 +29,7 @@ interface JobCardsPageProps {
   setJobForm: (value: JobFormState) => void;
   jobEditingId: string | null;
   jobMessage: string;
+  jobSaveCount: number;
   onSave: () => void;
   onReset: () => void;
   jobFilters: JobFilters;
@@ -60,6 +61,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
     setJobForm,
     jobEditingId,
     jobMessage,
+    jobSaveCount,
     onSave,
     onReset,
     jobFilters,
@@ -88,6 +90,12 @@ export function JobCardsPage(props: JobCardsPageProps) {
       setMode('form');
     }
   }, [jobEditingId]);
+
+  useEffect(() => {
+    if (jobSaveCount > 0) {
+      setMode('list');
+    }
+  }, [jobSaveCount]);
 
   function handleStartCreate() {
     onReset();

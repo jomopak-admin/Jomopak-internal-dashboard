@@ -93,6 +93,10 @@ export function DashboardPage({
       quotedUnitPrice,
     };
   }, [calculator]);
+  const recentDashboardJobs = useMemo(
+    () => [...dashboardJobs].sort((left, right) => right.jobDate.localeCompare(left.jobDate)).slice(0, 6),
+    [dashboardJobs],
+  );
 
   const totalWasteThisMonth = dashboardWaste.reduce((sum, entry) => sum + entry.wasteQuantity, 0);
   const openJobsThisMonth = dashboardJobs.filter((job) => job.status !== 'Completed').length;
@@ -379,7 +383,7 @@ export function DashboardPage({
         {widgetSet.has('recentJobs') ? (
         <div className="card">
           <SectionTitle title="Recent jobs" />
-          {jobs.length ? (
+          {recentDashboardJobs.length ? (
             <table>
               <thead>
                 <tr>
@@ -391,7 +395,7 @@ export function DashboardPage({
                 </tr>
               </thead>
               <tbody>
-                {jobs.slice(0, 6).map((job) => (
+                {recentDashboardJobs.map((job) => (
                   <tr key={job.id}>
                     <td>{job.jobNumber}</td>
                     <td>{job.customerName}</td>
@@ -403,7 +407,7 @@ export function DashboardPage({
               </tbody>
             </table>
           ) : (
-            <EmptyState title="No jobs yet" body="Create a job card to start building the digital production history." />
+            <EmptyState title="No jobs in this dashboard month" body="Change the dashboard month if the jobs were created in a different period." />
           )}
         </div>
         ) : null}
