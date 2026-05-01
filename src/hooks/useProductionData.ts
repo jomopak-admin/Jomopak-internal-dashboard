@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { buildSeedData } from '../data/seedData';
 import { AppData } from '../types';
+import { loadAppData, saveAppData } from '../utils/storage';
 import { fetchAppData, syncAppData } from '../utils/supabaseData';
 
-export function useProductionData() {
-  const [data, setData] = useState<AppData>(buildSeedData());
-  const [loading, setLoading] = useState(true);
+export function useProductionData(enabled = true) {
+  const [data, setData] = useState<AppData>(() => loadAppData());
+  const [loading, setLoading] = useState(enabled);
   const hasLoaded = useRef(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(true);
+      hasLoaded.current = false;
+      return;
+    }
+
     let isActive = true;
 
     async function load() {
@@ -32,17 +38,21 @@ export function useProductionData() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    if (!hasLoaded.current) {
+    saveAppData(data);
+  }, [data]);
+
+  useEffect(() => {
+    if (!enabled || !hasLoaded.current) {
       return;
     }
 
     syncAppData(data).catch((error) => {
       console.error('Failed to sync Supabase data', error);
     });
-  }, [data]);
+  }, [data, enabled]);
 
   return { data, setData, loading };
 }

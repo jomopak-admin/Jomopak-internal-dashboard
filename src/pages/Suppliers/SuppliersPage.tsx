@@ -11,6 +11,7 @@ interface SuppliersPageProps {
   setSupplierForm: (value: SupplierFormState) => void;
   supplierEditingId: string | null;
   supplierMessage: string;
+  supplierSaveCount: number;
   onSave: () => void;
   onReset: () => void;
   supplierFilters: SupplierFilters;
@@ -27,6 +28,7 @@ export function SuppliersPage({
   setSupplierForm,
   supplierEditingId,
   supplierMessage,
+  supplierSaveCount,
   onSave,
   onReset,
   supplierFilters,
@@ -42,6 +44,12 @@ export function SuppliersPage({
       setMode('form');
     }
   }, [supplierEditingId]);
+
+  useEffect(() => {
+    if (supplierSaveCount > 0) {
+      setMode('list');
+    }
+  }, [supplierSaveCount]);
 
   function handleStartCreate() {
     onReset();

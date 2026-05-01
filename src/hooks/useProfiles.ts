@@ -6,6 +6,12 @@ interface CreateUserInput {
   email: string;
   password: string;
   fullName: string;
+  username: string;
+  phoneNumber: string;
+  clientId: string;
+  accountType: UserProfile['accountType'];
+  publicDisplayName: string;
+  publicDisplayRole: string;
   role: UserProfile['role'];
   permissions: UserProfile['permissions'];
   dashboardWidgets: UserProfile['dashboardWidgets'];
@@ -15,6 +21,12 @@ interface CreateUserResultRow {
   id: string;
   email: string | null;
   full_name: string | null;
+  username?: string | null;
+  phone_number?: string | null;
+  client_id?: string | null;
+  account_type?: string | null;
+  public_display_name?: string | null;
+  public_display_role?: string | null;
   role: string | null;
   permissions: string[] | null;
   dashboard_widgets?: string[] | null;
@@ -70,6 +82,12 @@ export function useProfiles(enabled: boolean) {
             id: row.id,
             email: row.email ?? '',
             fullName: row.full_name ?? '',
+            username: row.username ?? '',
+            phoneNumber: row.phone_number ?? '',
+            clientId: row.client_id ?? '',
+            accountType: row.account_type === 'client' ? 'client' : 'internal',
+            publicDisplayName: row.public_display_name ?? row.full_name ?? '',
+            publicDisplayRole: row.public_display_role ?? row.role ?? '',
             role: (row.role ?? 'ops') as UserProfile['role'],
             permissions: normalizeProfilePermissions(row.role ?? 'ops', row.permissions),
             dashboardWidgets: normalizeDashboardWidgets(
@@ -97,6 +115,12 @@ export function useProfiles(enabled: boolean) {
       id: nextProfile.id,
       email: nextProfile.email || null,
       full_name: nextProfile.fullName || null,
+      username: nextProfile.username || null,
+      phone_number: nextProfile.phoneNumber || null,
+      client_id: nextProfile.clientId || null,
+      account_type: nextProfile.accountType,
+      public_display_name: nextProfile.publicDisplayName || null,
+      public_display_role: nextProfile.publicDisplayRole || null,
       role: nextProfile.role,
       permissions: nextProfile.permissions,
       dashboard_widgets: nextProfile.dashboardWidgets,
@@ -111,6 +135,12 @@ export function useProfiles(enabled: boolean) {
         id: nextProfile.id,
         email: nextProfile.email || null,
         full_name: nextProfile.fullName || null,
+        username: nextProfile.username || null,
+        phone_number: nextProfile.phoneNumber || null,
+        client_id: nextProfile.clientId || null,
+        account_type: nextProfile.accountType,
+        public_display_name: nextProfile.publicDisplayName || null,
+        public_display_role: nextProfile.publicDisplayRole || null,
         role: nextProfile.role,
         permissions: nextProfile.permissions,
       }));
@@ -152,6 +182,12 @@ async function createUser(input: CreateUserInput) {
         email: input.email,
         password: input.password,
         fullName: input.fullName,
+        username: input.username,
+        phoneNumber: input.phoneNumber,
+        clientId: input.clientId,
+        accountType: input.accountType,
+        publicDisplayName: input.publicDisplayName,
+        publicDisplayRole: input.publicDisplayRole,
         role: input.role,
         permissions: input.permissions,
         dashboardWidgets: input.dashboardWidgets,
@@ -174,6 +210,12 @@ async function createUser(input: CreateUserInput) {
     id: row.id,
     email: row.email ?? input.email,
     fullName: row.full_name ?? input.fullName,
+    username: row.username ?? input.username,
+    phoneNumber: row.phone_number ?? input.phoneNumber,
+    clientId: row.client_id ?? input.clientId,
+    accountType: row.account_type === 'client' ? 'client' : input.accountType,
+    publicDisplayName: row.public_display_name ?? input.publicDisplayName,
+    publicDisplayRole: row.public_display_role ?? input.publicDisplayRole,
     role: (row.role ?? input.role) as UserProfile['role'],
     permissions: normalizeProfilePermissions(
       (row.role ?? input.role) as UserProfile['role'],
