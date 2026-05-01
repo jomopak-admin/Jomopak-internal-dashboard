@@ -115,8 +115,6 @@ export function JobCardsPage(props: JobCardsPageProps) {
   return (
     <>
       <SectionTitle
-        title="Job Cards"
-        subtitle="Create, update, duplicate, and search production jobs."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Job Card</button>

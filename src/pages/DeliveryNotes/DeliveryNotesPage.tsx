@@ -84,8 +84,6 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
   return (
     <>
       <SectionTitle
-        title="Delivery Notes"
-        subtitle="Issue formal delivery notes linked to dispatches, customer-held stock, and client-facing delivery history."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Delivery Note</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Delivery Notes</button>}
       />
 

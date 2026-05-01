@@ -123,8 +123,6 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
   return (
     <>
       <SectionTitle
-        title="Materials Receiving"
-        subtitle="Record incoming paper, supplier information, FSC claim, and storage location."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Material Receipt</button>

@@ -49,8 +49,6 @@ export function MachinesPage({
   return (
     <>
       <SectionTitle
-        title="Machines"
-        subtitle="Register the machines used in production and maintenance tracking."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Machine</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Machines</button>}
       />
 

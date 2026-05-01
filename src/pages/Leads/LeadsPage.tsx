@@ -58,8 +58,6 @@ export function LeadsPage({
   return (
     <>
       <SectionTitle
-        title="Leads"
-        subtitle="Capture commercial opportunities before they become quotes, then track what converts."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Lead</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Leads</button>}
       />
 

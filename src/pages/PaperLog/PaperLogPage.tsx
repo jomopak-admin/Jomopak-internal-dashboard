@@ -65,8 +65,6 @@ export function PaperLogPage(props: PaperLogPageProps) {
   return (
     <>
       <SectionTitle
-        title="Paper Log"
-        subtitle="Track paper usage by job and prepare the base for future stock and FSC traceability."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Paper Log</button>

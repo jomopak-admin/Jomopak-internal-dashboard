@@ -86,11 +86,6 @@ export function CalculatorPage({
 
   return (
     <>
-      <SectionTitle
-        title="Calculator"
-        subtitle="Use current approved cost inputs to quote customers quickly without exposing the internal rate cards."
-      />
-
       <div className="calculator-shell">
       <section className="card calculator-quote-card">
         <SectionTitle title="Quote Calculator" subtitle={canViewInternalCosts ? 'This quote engine uses the current approved internal cost inputs and also shows internal costing diagnostics.' : 'This quote engine uses the latest approved internal cost inputs and only shows the customer-facing quote output.'} />

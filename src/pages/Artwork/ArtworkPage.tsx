@@ -71,8 +71,6 @@ export function ArtworkPage({
   return (
     <>
       <SectionTitle
-        title="Artwork"
-        subtitle="Track artwork receipt, proofs, approvals, and client change requests."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Artwork Record</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Artwork</button>}
       />
 

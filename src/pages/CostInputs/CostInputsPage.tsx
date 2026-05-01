@@ -73,11 +73,6 @@ export function CostInputsPage({
 
   return (
     <>
-      <SectionTitle
-        title="Cost Inputs"
-        subtitle="Maintain internal rate cards and cost assumptions here. The sales calculator consumes these values but does not expose them."
-      />
-
       <div className="calculator-tabs">
         <button className={tab === 'paperRates' ? 'tab-button active' : 'tab-button'} onClick={() => setTab('paperRates')}>
           Paper Rates

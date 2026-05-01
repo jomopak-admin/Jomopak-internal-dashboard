@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CommercialFlags } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, JobCard, Product, StockChangeLog } from '../../types';
@@ -71,8 +72,6 @@ export function FinishedGoodsStockPage({
   return (
     <>
       <SectionTitle
-        title="Finished Goods Stock"
-        subtitle="Track sellable stock, client-held inventory, and stored finished goods ready for release."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Finished Stock</button>
@@ -200,6 +199,7 @@ export function FinishedGoodsStockPage({
                         .filter((log) => log.finishedGoodsStockId === item.id)
                         .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
                       const latestLog = itemLogs[0];
+                      const stockClient = clients.find((client) => client.id === item.clientId);
 
                       return (
                         <tr key={item.id}>
@@ -209,7 +209,7 @@ export function FinishedGoodsStockPage({
                           </td>
                           <td>{item.productName}</td>
                           <td>{item.barcode}</td>
-                          <td>{item.clientName || 'General stock'}</td>
+                          <td>{item.clientName || 'General stock'}{stockClient ? <CommercialFlags client={stockClient} /> : null}</td>
                           <td>{formatNumber(item.quantityOnHand)} {item.quantityUnit}</td>
                           <td>{formatNumber(item.quantityAvailable)} {item.quantityUnit}</td>
                           <td>{latestLog ? formatDate(latestLog.createdAt) : 'No changes yet'}</td>

@@ -174,45 +174,133 @@ export function DashboardPage({
   ];
   const widgetSet = useMemo(() => new Set(visibleWidgets), [visibleWidgets]);
 
+  const ALERTS_PRIMARY_LIMIT = 8;
+  const visibleAlerts = alerts.slice(0, ALERTS_PRIMARY_LIMIT);
+  const overflowAlerts = Math.max(alerts.length - ALERTS_PRIMARY_LIMIT, 0);
+
+  // Anything other than the three primary widgets is now grouped under "More" so the home
+  // view stays calm. The user's widget toggles still control what renders inside More.
+  const hasMoreContent =
+    widgetSet.has('stats')
+    || widgetSet.has('monthSummary')
+    || widgetSet.has('quickCalculator')
+    || widgetSet.has('finishedStock')
+    || widgetSet.has('partsAttention')
+    || widgetSet.has('recentMaterials')
+    || widgetSet.has('recentWaste')
+    || widgetSet.has('recentProduction')
+    || widgetSet.has('recentPaper')
+    || widgetSet.has('recentDispatch')
+    || widgetSet.has('wasteByReason')
+    || widgetSet.has('topPaper');
+
   return (
     <>
-      <SectionTitle
-        title="Dashboard"
-        subtitle={`Operational snapshot for ${getMonthLabel(dashboardMonth)}`}
-        action={
-          <label className="compact-field">
-            <span>Dashboard month</span>
-            <select value={dashboardMonth} onChange={(event) => setDashboardMonth(event.target.value)}>
-              {monthOptions.map((option) => (
-                <option key={option} value={option}>
-                  {getMonthLabel(option)}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-      />
+      <div className="dashboard-controls">
+        <label className="compact-field">
+          <span>Dashboard month</span>
+          <select value={dashboardMonth} onChange={(event) => setDashboardMonth(event.target.value)}>
+            {monthOptions.map((option) => (
+              <option key={option} value={option}>
+                {getMonthLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted dashboard-controls-caption">Snapshot for {getMonthLabel(dashboardMonth)}</p>
+      </div>
 
       {widgetSet.has('stats') ? (
-      <div className="stats-grid">
-        <StatCard label="Total jobs this month" value={String(dashboardJobs.length)} />
-        <StatCard label="Jobs currently open" value={String(openJobsThisMonth)} />
-        <StatCard label="Jobs completed this month" value={String(completedJobsThisMonth)} />
-        <StatCard label="Material receipts" value={String(dashboardMaterials.length)} />
-        <StatCard label="Production log rows" value={String(dashboardProductionLogs.length)} />
-        <StatCard label="Total waste this month" value={formatNumber(totalWasteThisMonth)} helper="Based on captured waste logs" />
-        <StatCard label="Average waste per job" value={formatNumber(averageWasteThisMonth, 2)} />
-        <StatCard label="Paper usage records" value={String(dashboardPaper.length)} />
-        <StatCard label="Dispatches" value={String(dashboardDispatch.length)} />
-        <StatCard label="Finished stock batches" value={String(dashboardFinishedStock.length)} />
-        <StatCard label="Low spares alerts" value={String(lowStockSpares)} />
-        <StatCard label="Jobs awaiting artwork" value={String(awaitingArtwork)} />
-        <StatCard label="Jobs awaiting proof action" value={String(awaitingApproval)} />
-        <StatCard label="Stock-reserved jobs" value={String(stockReservedJobs)} />
-        <StatCard label="Production-needed jobs" value={String(productionNeededJobs)} />
-        <StatCard label="Clients over credit" value={String(clientsOverLimit)} />
-        <StatCard label="Clients on hold" value={String(clientsOnHold)} />
+      <div className="stats-grid stats-grid-compact">
+        <StatCard label="Open jobs" value={String(openJobsThisMonth)} />
+        <StatCard label="Awaiting artwork" value={String(awaitingArtwork)} />
+        <StatCard label="Awaiting proof action" value={String(awaitingApproval)} />
+        <StatCard label="Total waste" value={formatNumber(totalWasteThisMonth)} helper="This month" />
         <StatCard label="Stock over 60 days" value={String(stockOverSixtyDays)} />
+      </div>
+      ) : null}
+
+      {widgetSet.has('alerts') ? (
+      <div className="card">
+        <SectionTitle title="Needs attention" subtitle={alerts.length ? `${alerts.length} item${alerts.length === 1 ? '' : 's'} flagged across operations` : undefined} />
+        {alerts.length ? (
+          <>
+            <div className="ranking-list">
+              {visibleAlerts.map((alert) => (
+                <div key={alert.id} className="ranking-item">
+                  <span>{alert.label}</span>
+                  <strong>{alert.detail}</strong>
+                </div>
+              ))}
+            </div>
+            {overflowAlerts > 0 ? (
+              <p className="muted" style={{ marginTop: 8 }}>+{overflowAlerts} more — open the relevant module to review.</p>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState title="No active exceptions" body="The main operational exceptions list is currently clear." />
+        )}
+      </div>
+      ) : null}
+
+      {widgetSet.has('recentJobs') ? (
+      <div className="card">
+        <SectionTitle title="Recent jobs" subtitle="Latest jobs from the selected month" />
+        {recentDashboardJobs.length ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Waste %</th>
+                <th>FSC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentDashboardJobs.map((job) => (
+                <tr key={job.id}>
+                  <td>{job.jobNumber}</td>
+                  <td>{job.customerName}</td>
+                  <td><StatusBadge status={job.status} /></td>
+                  <td>{formatNumber(getWastePercentForJob(job, wasteEntries), 2)}%</td>
+                  <td><FlagBadge value={job.fscRelated} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState title="No jobs in this dashboard month" body="Change the dashboard month if the jobs were created in a different period." />
+        )}
+      </div>
+      ) : null}
+
+      {hasMoreContent ? (
+      <details className="dashboard-more">
+        <summary>
+          <span>More metrics &amp; history</span>
+          <span className="dashboard-more-hint muted">Detailed stats, calculator, recent activity</span>
+        </summary>
+        <div className="dashboard-more-body">
+
+      {widgetSet.has('stats') ? (
+      <div className="card">
+        <SectionTitle title="Detailed metrics" subtitle="Full stat set for the selected month" />
+        <div className="stats-grid">
+          <StatCard label="Total jobs this month" value={String(dashboardJobs.length)} />
+          <StatCard label="Jobs completed this month" value={String(completedJobsThisMonth)} />
+          <StatCard label="Material receipts" value={String(dashboardMaterials.length)} />
+          <StatCard label="Production log rows" value={String(dashboardProductionLogs.length)} />
+          <StatCard label="Average waste per job" value={formatNumber(averageWasteThisMonth, 2)} />
+          <StatCard label="Paper usage records" value={String(dashboardPaper.length)} />
+          <StatCard label="Dispatches" value={String(dashboardDispatch.length)} />
+          <StatCard label="Finished stock batches" value={String(dashboardFinishedStock.length)} />
+          <StatCard label="Low spares alerts" value={String(lowStockSpares)} />
+          <StatCard label="Stock-reserved jobs" value={String(stockReservedJobs)} />
+          <StatCard label="Production-needed jobs" value={String(productionNeededJobs)} />
+          <StatCard label="Clients over credit" value={String(clientsOverLimit)} />
+          <StatCard label="Clients on hold" value={String(clientsOnHold)} />
+        </div>
       </div>
       ) : null}
 
@@ -242,24 +330,6 @@ export function DashboardPage({
           <span>Long-held stock alerts</span>
           <strong>{stockOverSixtyDays}</strong>
         </div>
-      </div>
-      ) : null}
-
-      {widgetSet.has('alerts') ? (
-      <div className="card">
-        <SectionTitle title="Exceptions & Alerts" subtitle="Operational items that need attention before they become bigger problems." />
-        {alerts.length ? (
-          <div className="ranking-list">
-            {alerts.map((alert) => (
-              <div key={alert.id} className="ranking-item">
-                <span>{alert.label}</span>
-                <strong>{alert.detail}</strong>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No active exceptions" body="The main operational exceptions list is currently clear." />
-        )}
       </div>
       ) : null}
 
@@ -376,38 +446,6 @@ export function DashboardPage({
             </table>
           ) : (
             <EmptyState title="No spare parts yet" body="Critical maintenance stock will appear here once recorded." />
-          )}
-        </div>
-        ) : null}
-
-        {widgetSet.has('recentJobs') ? (
-        <div className="card">
-          <SectionTitle title="Recent jobs" />
-          {recentDashboardJobs.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Waste %</th>
-                  <th>FSC</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentDashboardJobs.map((job) => (
-                  <tr key={job.id}>
-                    <td>{job.jobNumber}</td>
-                    <td>{job.customerName}</td>
-                    <td><StatusBadge status={job.status} /></td>
-                    <td>{formatNumber(getWastePercentForJob(job, wasteEntries), 2)}%</td>
-                    <td><FlagBadge value={job.fscRelated} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState title="No jobs in this dashboard month" body="Change the dashboard month if the jobs were created in a different period." />
           )}
         </div>
         ) : null}
@@ -598,6 +636,9 @@ export function DashboardPage({
         </div>
         ) : null}
       </div>
+        </div>
+      </details>
+      ) : null}
     </>
   );
 }

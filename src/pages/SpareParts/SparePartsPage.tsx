@@ -59,8 +59,6 @@ export function SparePartsPage({
   return (
     <>
       <SectionTitle
-        title="Parts & Spares"
-        subtitle="Manage internal maintenance stock so low parts do not stop production."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Part / Spare</button>

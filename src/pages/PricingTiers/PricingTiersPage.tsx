@@ -54,8 +54,6 @@ export function PricingTiersPage({
   return (
     <>
       <SectionTitle
-        title="Pricing Tiers"
-        subtitle="Set default commercial rules such as wholesale, retail, and ecommerce before building the estimator."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Pricing Tier</button>

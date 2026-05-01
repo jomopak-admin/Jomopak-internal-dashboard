@@ -77,8 +77,6 @@ export function QuotesPage({
   return (
     <>
       <SectionTitle
-        title="Quotes & Estimates"
-        subtitle="Save quoted prices and estimate assumptions before they become live jobs."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Quote</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Quotes</button>}
       />
 

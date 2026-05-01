@@ -74,8 +74,6 @@ export function ProductionLogsPage(props: ProductionLogsPageProps) {
   return (
     <>
       <SectionTitle
-        title="Production Logs"
-        subtitle="Capture the actual shop-floor process records against jobs and material batches."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Production Log</button>

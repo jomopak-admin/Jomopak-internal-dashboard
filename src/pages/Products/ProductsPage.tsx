@@ -60,8 +60,6 @@ export function ProductsPage({
   return (
     <>
       <SectionTitle
-        title="Products"
-        subtitle="Define what you make, what you buy in, and how each product behaves in the system."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Product</button>

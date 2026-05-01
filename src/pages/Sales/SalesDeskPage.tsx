@@ -72,8 +72,6 @@ export function SalesDeskPage({
   return (
     <>
       <SectionTitle
-        title="Sales Desk"
-        subtitle={`${salesperson} can manage quote requests, customer orders, and commission tracking from one place.`}
         action={
           <div className="topbar-actions">
             <button className="secondary-button" onClick={onOpenQuotesRegister}>Open Quotes</button>

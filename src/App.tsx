@@ -810,6 +810,213 @@ function App() {
   const dashboardDispatch = useMemo(() => data.dispatchRecords.filter((record) => getMonthKey(record.dispatchDate) === dashboardMonth), [dashboardMonth, data.dispatchRecords]);
   const dashboardFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => getMonthKey(item.storedDate) === dashboardMonth), [dashboardMonth, data.finishedGoodsStock]);
 
+  const topbarSummary = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    type Chip = { label: string; value: number | string; tone?: 'warn' | 'alert' };
+    const renderChips = (items: Chip[]) => (
+      <>
+        {items.map((item) => (
+          <span key={item.label} className={item.tone ? `topbar-chip is-${item.tone}` : 'topbar-chip'}>
+            <span className="topbar-chip-label">{item.label}</span>
+            <strong className="topbar-chip-value">{item.value}</strong>
+          </span>
+        ))}
+      </>
+    );
+
+    switch (view) {
+      case 'dashboard': {
+        const openJobs = dashboardJobs.filter((job) => job.status !== 'Completed').length;
+        const awaitingArtwork = dashboardJobs.filter((job) => !job.artworkReceived && job.status !== 'Completed').length;
+        const overdue = dashboardJobs.filter((job) => job.dueDate && job.dueDate < todayStr && job.status !== 'Completed').length;
+        const overCredit = data.clients.filter((client) => client.creditLimit > 0 && client.currentBalance > client.creditLimit).length;
+        const onHold = data.clients.filter((client) => client.accountHold).length;
+        return renderChips([
+          { label: 'Open jobs', value: openJobs },
+          { label: 'Awaiting artwork', value: awaitingArtwork, tone: awaitingArtwork > 0 ? 'warn' : undefined },
+          { label: 'Overdue', value: overdue, tone: overdue > 0 ? 'alert' : undefined },
+          { label: 'Over credit', value: overCredit, tone: overCredit > 0 ? 'alert' : undefined },
+          { label: 'On hold', value: onHold, tone: onHold > 0 ? 'warn' : undefined },
+        ]);
+      }
+      case 'salesDesk': {
+        const open = data.quoteEstimates.filter((q) => q.status === 'Draft' || q.status === 'Quoted' || q.status === 'Approved').length;
+        const converted = data.quoteEstimates.filter((q) => q.status === 'Converted to Job').length;
+        const lost = data.quoteEstimates.filter((q) => q.status === 'Lost').length;
+        const activeOrders = data.jobs.filter((j) => j.status !== 'Completed').length;
+        return renderChips([
+          { label: 'Open quotes', value: open },
+          { label: 'Converted', value: converted },
+          { label: 'Active orders', value: activeOrders },
+          { label: 'Lost', value: lost, tone: lost > 0 ? 'warn' : undefined },
+        ]);
+      }
+      case 'leads': {
+        const newLeads = data.leads.filter((l) => l.status === 'New').length;
+        const qualified = data.leads.filter((l) => l.status === 'Qualified').length;
+        const awaitingInfo = data.leads.filter((l) => l.status === 'Awaiting Info').length;
+        const won = data.leads.filter((l) => l.status === 'Won').length;
+        return renderChips([
+          { label: 'New', value: newLeads, tone: newLeads > 0 ? 'warn' : undefined },
+          { label: 'Qualified', value: qualified },
+          { label: 'Awaiting info', value: awaitingInfo, tone: awaitingInfo > 0 ? 'warn' : undefined },
+          { label: 'Won', value: won },
+        ]);
+      }
+      case 'quotes': {
+        const draft = data.quoteEstimates.filter((q) => q.status === 'Draft').length;
+        const quoted = data.quoteEstimates.filter((q) => q.status === 'Quoted').length;
+        const approved = data.quoteEstimates.filter((q) => q.status === 'Approved').length;
+        const converted = data.quoteEstimates.filter((q) => q.status === 'Converted to Job').length;
+        return renderChips([
+          { label: 'Draft', value: draft },
+          { label: 'Quoted', value: quoted },
+          { label: 'Approved', value: approved, tone: approved > 0 ? 'warn' : undefined },
+          { label: 'Converted', value: converted },
+        ]);
+      }
+      case 'artwork': {
+        const awaiting = data.artworkRecords.filter((a) => a.stage === 'Awaiting Artwork').length;
+        const proof = data.artworkRecords.filter((a) => a.stage === 'Proof Sent').length;
+        const changes = data.artworkRecords.filter((a) => a.stage === 'Changes Requested').length;
+        const approved = data.artworkRecords.filter((a) => a.stage === 'Approved').length;
+        return renderChips([
+          { label: 'Awaiting', value: awaiting, tone: awaiting > 0 ? 'warn' : undefined },
+          { label: 'Proof sent', value: proof },
+          { label: 'Changes', value: changes, tone: changes > 0 ? 'alert' : undefined },
+          { label: 'Approved', value: approved },
+        ]);
+      }
+      case 'jobs': {
+        const open = data.jobs.filter((j) => j.status !== 'Completed').length;
+        const awaitingArtwork = data.jobs.filter((j) => !j.artworkReceived && j.status !== 'Completed').length;
+        const overdue = data.jobs.filter((j) => j.dueDate && j.dueDate < todayStr && j.status !== 'Completed').length;
+        const completed = data.jobs.filter((j) => j.status === 'Completed').length;
+        return renderChips([
+          { label: 'Open', value: open },
+          { label: 'Awaiting artwork', value: awaitingArtwork, tone: awaitingArtwork > 0 ? 'warn' : undefined },
+          { label: 'Overdue', value: overdue, tone: overdue > 0 ? 'alert' : undefined },
+          { label: 'Completed', value: completed },
+        ]);
+      }
+      case 'clients': {
+        const active = data.clients.filter((c) => c.active).length;
+        const onHold = data.clients.filter((c) => c.accountHold).length;
+        const overCredit = data.clients.filter((c) => c.creditLimit > 0 && c.currentBalance > c.creditLimit).length;
+        return renderChips([
+          { label: 'Active', value: active },
+          { label: 'On hold', value: onHold, tone: onHold > 0 ? 'warn' : undefined },
+          { label: 'Over credit', value: overCredit, tone: overCredit > 0 ? 'alert' : undefined },
+        ]);
+      }
+      case 'finishedStock': {
+        const inStorage = data.finishedGoodsStock.filter((s) => s.stockStatus === 'In Storage').length;
+        const reserved = data.finishedGoodsStock.filter((s) => s.stockStatus === 'Reserved').length;
+        const ready = data.finishedGoodsStock.filter((s) => s.stockStatus === 'Ready to Dispatch').length;
+        const dispatched = data.finishedGoodsStock.filter((s) => s.stockStatus === 'Dispatched').length;
+        return renderChips([
+          { label: 'In storage', value: inStorage },
+          { label: 'Reserved', value: reserved, tone: reserved > 0 ? 'warn' : undefined },
+          { label: 'Ready', value: ready },
+          { label: 'Dispatched', value: dispatched },
+        ]);
+      }
+      case 'spares': {
+        const total = data.spareParts.length;
+        const lowStock = data.spareParts.filter((s) => s.reorderLevel > 0 && s.quantityOnHand <= s.reorderLevel).length;
+        return renderChips([
+          { label: 'Parts', value: total },
+          { label: 'Low stock', value: lowStock, tone: lowStock > 0 ? 'alert' : undefined },
+        ]);
+      }
+      case 'suppliers': {
+        const active = data.suppliers.filter((s) => s.active).length;
+        const inactive = data.suppliers.filter((s) => !s.active).length;
+        return renderChips([
+          { label: 'Active', value: active },
+          { label: 'Inactive', value: inactive },
+        ]);
+      }
+      case 'machines': {
+        const active = data.machines.filter((m) => m.active && m.status === 'Active').length;
+        const maintenance = data.machines.filter((m) => m.status === 'Maintenance').length;
+        const offline = data.machines.filter((m) => m.status === 'Offline').length;
+        return renderChips([
+          { label: 'Active', value: active },
+          { label: 'Maintenance', value: maintenance, tone: maintenance > 0 ? 'warn' : undefined },
+          { label: 'Offline', value: offline, tone: offline > 0 ? 'alert' : undefined },
+        ]);
+      }
+      case 'products': {
+        const active = data.products.filter((p) => p.active).length;
+        const total = data.products.length;
+        return renderChips([
+          { label: 'Active', value: active },
+          { label: 'Total', value: total },
+        ]);
+      }
+      case 'pricing': {
+        return renderChips([
+          { label: 'Tiers', value: data.pricingTiers.length },
+        ]);
+      }
+      case 'materials': {
+        const monthReceipts = data.materialReceipts.filter((r) => getMonthKey(r.receivedDate) === dashboardMonth);
+        const fsc = monthReceipts.filter((r) => r.fscRelated).length;
+        return renderChips([
+          { label: 'This month', value: monthReceipts.length },
+          { label: 'FSC related', value: fsc },
+        ]);
+      }
+      case 'production': {
+        const monthLogs = data.productionLogs.filter((l) => getMonthKey(l.logDate) === dashboardMonth);
+        const fsc = monthLogs.filter((l) => l.fscRelated).length;
+        return renderChips([
+          { label: 'This month', value: monthLogs.length },
+          { label: 'FSC related', value: fsc },
+        ]);
+      }
+      case 'waste': {
+        const monthEntries = data.wasteEntries.filter((e) => getMonthKey(e.wasteDate) === dashboardMonth);
+        const fsc = monthEntries.filter((e) => e.fscRelated).length;
+        return renderChips([
+          { label: 'Records (month)', value: monthEntries.length },
+          { label: 'FSC related', value: fsc },
+        ]);
+      }
+      case 'paper': {
+        const monthLogs = data.paperLogs.filter((l) => getMonthKey(l.logDate) === dashboardMonth);
+        return renderChips([
+          { label: 'Logs (month)', value: monthLogs.length },
+        ]);
+      }
+      case 'dispatch': {
+        const monthDispatch = data.dispatchRecords.filter((r) => getMonthKey(r.dispatchDate) === dashboardMonth);
+        return renderChips([
+          { label: 'Dispatched (month)', value: monthDispatch.length },
+        ]);
+      }
+      case 'deliveryNotes': {
+        const draft = data.deliveryNotes.filter((d) => d.status === 'Draft').length;
+        const issued = data.deliveryNotes.filter((d) => d.status === 'Issued').length;
+        const delivered = data.deliveryNotes.filter((d) => d.status === 'Delivered').length;
+        return renderChips([
+          { label: 'Draft', value: draft, tone: draft > 0 ? 'warn' : undefined },
+          { label: 'Issued', value: issued },
+          { label: 'Delivered', value: delivered },
+        ]);
+      }
+      case 'customerStock': {
+        const monthReleases = data.customerStockReleases.filter((r) => getMonthKey(r.releaseDate) === dashboardMonth);
+        return renderChips([
+          { label: 'Releases (month)', value: monthReleases.length },
+        ]);
+      }
+      default:
+        return undefined;
+    }
+  }, [view, dashboardJobs, dashboardMonth, data]);
+
   useEffect(() => {
     if (loading) {
       return;
@@ -4135,7 +4342,14 @@ function App() {
     ) : !session || recoveryMode ? (
       <LoginPage recoveryMode={recoveryMode} onRecoveryComplete={clearRecoveryMode} />
     ) : (
-    <AppLayout view={view} onViewChange={setView} navItems={navItems} profile={profile} onSignOut={handleSignOut}>
+    <AppLayout
+      view={view}
+      onViewChange={setView}
+      navItems={navItems}
+      profile={profile}
+      onSignOut={handleSignOut}
+      topbarSummary={topbarSummary}
+    >
       {loading && (
         <div className="card">
           <p className="muted">Loading shared JomoPak data from Supabase...</p>

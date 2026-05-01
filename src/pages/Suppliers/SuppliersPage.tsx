@@ -69,8 +69,6 @@ export function SuppliersPage({
   return (
     <>
       <SectionTitle
-        title="Suppliers"
-        subtitle="Keep supplier contacts in one place and reuse them across paper rates, receipts, and spare parts."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Supplier</button>

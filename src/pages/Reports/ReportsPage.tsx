@@ -121,8 +121,6 @@ export function ReportsPage(props: ReportsPageProps) {
   return (
     <>
       <SectionTitle
-        title="Reports"
-        subtitle="Management summaries for production, waste, paper usage, and FSC-tagged records."
         action={
           <div className="inline-actions">
             <button className="secondary-button" onClick={onExport}>Export CSV</button>

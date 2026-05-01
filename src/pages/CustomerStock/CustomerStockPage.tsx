@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CommercialFlags, isClientAtRisk, isClientOverCredit } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, CustomerStockRelease, CustomerStockReleaseFilters, CustomerStockReleaseFormState, FinishedGoodsStock, JobCard } from '../../types';
@@ -55,11 +56,19 @@ export function CustomerStockPage({
     setMode('list');
   }
 
+  const selectedClient = clients.find((client) => client.id === releaseForm.clientId) || null;
+  const releaseBlocked = !!selectedClient && isClientAtRisk(selectedClient);
+  const blockingReason = !selectedClient
+    ? null
+    : selectedClient.accountHold
+      ? `${selectedClient.name} is on account hold. Clear the hold before releasing stock.`
+      : isClientOverCredit(selectedClient)
+        ? `${selectedClient.name} is over credit (balance ${selectedClient.currentBalance} / limit ${selectedClient.creditLimit}). Settle the account before releasing stock.`
+        : null;
+
   return (
     <>
       <SectionTitle
-        title="Customer Stock Releases"
-        subtitle="Track stock held on behalf of customers and each release from storage."
         action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Release</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>}
       />
 
@@ -77,8 +86,14 @@ export function CustomerStockPage({
             <label><span>Destination</span><input value={releaseForm.destination} onChange={(event) => setReleaseForm({ ...releaseForm, destination: event.target.value })} placeholder="Dispatch / Client collection / Transfer" /></label>
             <label className="full-span"><span>Notes</span><textarea value={releaseForm.notes} onChange={(event) => setReleaseForm({ ...releaseForm, notes: event.target.value })} /></label>
           </div>
+          {releaseBlocked && blockingReason ? (
+            <div className="commercial-warning">
+              <strong>Release blocked</strong>
+              <span>{blockingReason}</span>
+            </div>
+          ) : null}
           <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{releaseEditingId ? 'Save Changes' : 'Save Release'}</button>
+            <button className="primary-button" onClick={onSave} disabled={releaseBlocked}>{releaseEditingId ? 'Save Changes' : 'Save Release'}</button>
             <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
           </div>
         </section>
@@ -94,7 +109,20 @@ export function CustomerStockPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Release</th><th>Date</th><th>Client</th><th>Stock Batch</th><th>Qty</th><th>Destination</th><th>Actions</th></tr></thead>
-                <tbody>{filteredReleases.map((release) => <tr key={release.id}><td><strong>{release.releaseNumber}</strong><div className="table-subtext">{release.jobNumber || 'No job linked'}</div></td><td>{formatDate(release.releaseDate)}</td><td>{release.clientName}</td><td>{release.finishedGoodsStockNumber}</td><td>{formatNumber(release.quantityReleased)} {release.quantityUnit}</td><td>{release.destination || 'Not set'}</td><td><button className="table-button" onClick={() => { onEdit(release); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredReleases.map((release) => {
+                  const releaseClient = clients.find((client) => client.id === release.clientId);
+                  return (
+                    <tr key={release.id}>
+                      <td><strong>{release.releaseNumber}</strong><div className="table-subtext">{release.jobNumber || 'No job linked'}</div></td>
+                      <td>{formatDate(release.releaseDate)}</td>
+                      <td>{release.clientName}{releaseClient ? <CommercialFlags client={releaseClient} /> : null}</td>
+                      <td>{release.finishedGoodsStockNumber}</td>
+                      <td>{formatNumber(release.quantityReleased)} {release.quantityUnit}</td>
+                      <td>{release.destination || 'Not set'}</td>
+                      <td><button className="table-button" onClick={() => { onEdit(release); setMode('form'); }}>Edit</button></td>
+                    </tr>
+                  );
+                })}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No customer stock releases yet" body="Track customer-held stock as it leaves storage or gets released for dispatch." />}

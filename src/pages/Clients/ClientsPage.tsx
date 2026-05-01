@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CommercialFlags, isClientOverCredit } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, ClientFilters, ClientFormState, PricingTier } from '../../types';
@@ -56,8 +57,6 @@ export function ClientsPage({
   return (
     <>
       <SectionTitle
-        title="Clients"
-        subtitle="Store customers and attach pricing behavior so quotes and jobs start with the right commercial profile."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Client</button>
@@ -182,7 +181,7 @@ export function ClientsPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
-                <tbody>{filteredClients.map((client) => <tr key={client.id}><td><strong>{client.name}</strong><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td><td>{client.pricingTierName || 'Not set'}</td><td>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td><td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td><td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td><td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td><td><button className="table-button" onClick={() => handleStartEdit(client)}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredClients.map((client) => <tr key={client.id}><td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td><td>{client.pricingTierName || 'Not set'}</td><td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td><td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td><td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td><td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td><td><button className="table-button" onClick={() => handleStartEdit(client)}>Edit</button></td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No clients yet" body="Add clients so pricing and jobs can follow real commercial profiles." />}

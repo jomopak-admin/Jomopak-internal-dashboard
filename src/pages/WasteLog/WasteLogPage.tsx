@@ -65,8 +65,6 @@ export function WasteLogPage(props: WasteLogPageProps) {
   return (
     <>
       <SectionTitle
-        title="Waste Log"
-        subtitle="Capture waste against jobs and report monthly averages."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Waste Log</button>

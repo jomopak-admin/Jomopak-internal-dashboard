@@ -63,8 +63,6 @@ export function DispatchPage(props: DispatchPageProps) {
   return (
     <>
       <SectionTitle
-        title="Dispatch"
-        subtitle="Link finished goods dispatches back to jobs, labels, and customer delivery references."
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Dispatch</button>

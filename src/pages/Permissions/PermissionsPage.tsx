@@ -137,11 +137,6 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
 
   return (
     <>
-      <SectionTitle
-        title="Permissions"
-        subtitle="Admin-only access to create users and edit names and roles for dashboard users."
-      />
-
       <section className="card">
         {message ? <div className="message-strip">{message}</div> : null}
         <form className="permissions-create-form" onSubmit={handleCreateUser}>
