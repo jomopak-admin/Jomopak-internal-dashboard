@@ -1,7 +1,26 @@
 :root {
+  /* Jomopak palette — earthy, refined.
+     Brand primary is the deep forest green used on the sidebar and primary CTAs.
+     Accent is the warm kraft/ochre used for callouts and the eyebrow tag. */
+  --jp-primary: #1f5239;
+  --jp-primary-dark: #163b29;
+  --jp-primary-soft: #2a6a4a;
+  --jp-accent: #c89148;
+  --jp-accent-dark: #8a5e15;
+  --jp-cream: #f5f1e8;
+  --jp-cream-warm: #faf6ed;
+  --jp-card: #ffffff;
+  --jp-text: #172a20;
+  --jp-text-muted: #5d6a60;
+  --jp-border: #e6dfd2;
+  --jp-border-strong: rgba(23, 42, 32, 0.12);
+  --jp-success: #24613a;
+  --jp-warn: #8a5804;
+  --jp-alert: #8a2727;
+
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #142019;
-  background: #f4f1ea;
+  color: var(--jp-text);
+  background: var(--jp-cream);
   line-height: 1.4;
 }
 
@@ -12,7 +31,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f4f1ea;
+  background: var(--jp-cream);
 }
 
 button,
@@ -71,7 +90,7 @@ p {
 .sidebar {
   padding: 24px 18px;
   color: #f6f3eb;
-  background: #1e2b23;
+  background: linear-gradient(180deg, var(--jp-primary) 0%, var(--jp-primary-dark) 100%);
   border-right: 1px solid rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
@@ -100,7 +119,7 @@ p {
   letter-spacing: 0.1em;
   font-size: 0.68rem;
   font-weight: 700;
-  color: #b98c3d;
+  color: var(--jp-accent);
 }
 
 .nav-groups {
@@ -209,8 +228,8 @@ p {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #f2c56b 0%, #d48e22 100%);
-  color: #173126;
+  background: linear-gradient(135deg, #f0c478 0%, var(--jp-accent) 100%);
+  color: var(--jp-primary-dark);
   font-weight: 800;
 }
 
@@ -246,9 +265,10 @@ p {
 }
 
 .nav-button.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(200, 145, 72, 0.45);
   color: #fffdf8;
+  box-shadow: inset 3px 0 0 var(--jp-accent);
 }
 
 .main-content {
@@ -262,7 +282,7 @@ p {
   align-items: flex-start;
   margin-bottom: 22px;
   padding-bottom: 18px;
-  border-bottom: 1px solid rgba(20, 32, 25, 0.08);
+  border-bottom: 1px solid var(--jp-border);
 }
 
 .topbar-title {
@@ -273,6 +293,7 @@ p {
 .page-heading {
   font-size: 1.7rem;
   margin-bottom: 0;
+  color: var(--jp-primary-dark);
 }
 
 .topbar-subtitle {
@@ -292,29 +313,29 @@ p {
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(30, 43, 35, 0.06);
-  border: 1px solid rgba(30, 43, 35, 0.08);
+  background: rgba(31, 82, 57, 0.06);
+  border: 1px solid rgba(31, 82, 57, 0.12);
   font-size: 0.78rem;
-  color: #2d3a32;
+  color: var(--jp-primary-dark);
 }
 
 .topbar-chip-label {
-  color: #617165;
+  color: var(--jp-text-muted);
   letter-spacing: 0.01em;
 }
 
 .topbar-chip-value {
   font-weight: 700;
-  color: #142019;
+  color: var(--jp-text);
 }
 
 .topbar-chip.is-warn {
-  background: rgba(217, 161, 47, 0.12);
-  border-color: rgba(185, 140, 61, 0.35);
+  background: rgba(200, 145, 72, 0.14);
+  border-color: rgba(200, 145, 72, 0.35);
 }
 
 .topbar-chip.is-warn .topbar-chip-value {
-  color: #8a5e15;
+  color: var(--jp-accent-dark);
 }
 
 .topbar-chip.is-alert {
@@ -553,10 +574,11 @@ p {
 .section-title h2 {
   margin-bottom: 4px;
   font-size: 1.3rem;
+  color: var(--jp-primary-dark);
 }
 
 .muted {
-  color: #617165;
+  color: var(--jp-text-muted);
 }
 
 .stats-grid {
@@ -662,8 +684,8 @@ p {
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(33, 45, 38, 0.08);
+  background: var(--jp-card);
+  border: 1px solid var(--jp-border-strong);
   border-radius: 16px;
   padding: 18px;
   box-shadow: 0 6px 18px rgba(14, 31, 21, 0.04);
@@ -689,7 +711,7 @@ p {
   width: 110px;
   height: 110px;
   border-radius: 999px;
-  background: rgba(185, 140, 61, 0.08);
+  background: rgba(31, 82, 57, 0.07);
 }
 
 .stat-card h3 {
@@ -897,21 +919,36 @@ textarea {
 
 .primary-button {
   border: 0;
-  background: #ad6a12;
-  color: #fffdf8;
+  background: var(--jp-primary);
+  color: #fdfaf2;
+}
+
+.primary-button:hover {
+  background: var(--jp-primary-soft);
 }
 
 .secondary-button {
-  border: 1px solid rgba(16, 34, 26, 0.12);
+  border: 1px solid var(--jp-border-strong);
   background: #fff;
-  color: #18241d;
+  color: var(--jp-primary-dark);
+}
+
+.secondary-button:hover {
+  border-color: var(--jp-primary);
+  color: var(--jp-primary);
 }
 
 .ghost-button,
 .table-button {
-  border: 1px solid rgba(16, 34, 26, 0.1);
+  border: 1px solid var(--jp-border-strong);
   background: transparent;
-  color: #284030;
+  color: var(--jp-primary);
+}
+
+.ghost-button:hover,
+.table-button:hover {
+  background: rgba(31, 82, 57, 0.06);
+  border-color: rgba(31, 82, 57, 0.25);
 }
 
 .message-strip,
@@ -922,9 +959,9 @@ textarea {
 }
 
 .message-strip {
-  background: rgba(173, 106, 18, 0.1);
-  color: #7b4a07;
-  border: 1px solid rgba(173, 106, 18, 0.16);
+  background: rgba(200, 145, 72, 0.12);
+  color: var(--jp-accent-dark);
+  border: 1px solid rgba(200, 145, 72, 0.28);
 }
 
 .linked-record {
