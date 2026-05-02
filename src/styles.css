@@ -1,27 +1,55 @@
 :root {
-  /* Jomopak palette — earthy, refined.
-     Brand primary is the deep forest green used on the sidebar and primary CTAs.
-     Accent is the warm kraft/ochre used for callouts and the eyebrow tag. */
-  --jp-primary: #1f5239;
-  --jp-primary-dark: #163b29;
-  --jp-primary-soft: #2a6a4a;
-  --jp-accent: #c89148;
-  --jp-accent-dark: #8a5e15;
-  --jp-cream: #f5f1e8;
-  --jp-cream-warm: #faf6ed;
-  --jp-card: #ffffff;
-  --jp-text: #172a20;
-  --jp-text-muted: #5d6a60;
-  --jp-border: #e6dfd2;
-  --jp-border-strong: rgba(23, 42, 32, 0.12);
-  --jp-success: #24613a;
-  --jp-warn: #8a5804;
-  --jp-alert: #8a2727;
+  /* Official Jomopak palette — mirrors the website (orange primary, sage secondary,
+     ink-on-paper neutrals). Defined once here so the dashboard always matches. */
+  --jp-orange: #db5a1f;
+  --jp-orange-deep: #b8470f;
+  --jp-orange-soft: #f4b98f;
+  --jp-orange-tint: #fbe6d5;
 
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --jp-sage: #5e6e4d;
+  --jp-sage-soft: #c9d2b7;
+  --jp-sage-tint: #e8ebdc;
+
+  --jp-ink: #1b1815;
+  --jp-ink-2: #2e2a24;
+  --jp-muted: #6f665a;
+  --jp-muted-2: #98897a;
+  --jp-line: #e5ddcf;
+  --jp-line-2: #ede6d8;
+
+  --jp-paper: #f4ecdc;
+  --jp-paper-2: #efe5d2;
+  --jp-bone: #faf4e8;
+  --jp-white: #ffffff;
+
+  /* Semantic aliases used throughout the dashboard. */
+  --jp-primary: var(--jp-orange);
+  --jp-primary-dark: var(--jp-orange-deep);
+  --jp-primary-soft: var(--jp-orange-soft);
+  --jp-accent: var(--jp-sage);
+  --jp-accent-dark: var(--jp-orange-deep);
+  --jp-cream: var(--jp-paper);
+  --jp-cream-warm: var(--jp-bone);
+  --jp-card: var(--jp-white);
+  --jp-text: var(--jp-ink);
+  --jp-text-muted: var(--jp-muted);
+  --jp-border: var(--jp-line);
+  --jp-border-strong: rgba(27, 24, 21, 0.12);
+  --jp-success: var(--jp-sage);
+  --jp-warn: #8a5804;
+  --jp-alert: #b8470f;
+
+  /* Type stack — matches the website. */
+  --jp-serif: "Fraunces", "Times New Roman", serif;
+  --jp-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --jp-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  font-family: var(--jp-sans);
   color: var(--jp-text);
-  background: var(--jp-cream);
-  line-height: 1.4;
+  background: var(--jp-paper);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -31,7 +59,19 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--jp-cream);
+  background: var(--jp-paper);
+  color: var(--jp-ink);
+  font-family: var(--jp-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--jp-serif);
+  font-weight: 500;
+  letter-spacing: -0.018em;
+  color: var(--jp-ink);
 }
 
 button,
@@ -89,8 +129,8 @@ p {
 
 .sidebar {
   padding: 24px 18px;
-  color: #f6f3eb;
-  background: linear-gradient(180deg, var(--jp-primary) 0%, var(--jp-primary-dark) 100%);
+  color: var(--jp-bone);
+  background: var(--jp-ink);
   border-right: 1px solid rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
@@ -105,8 +145,19 @@ p {
 }
 
 .brand-block h1 {
-  font-size: 1.7rem;
+  font-family: var(--jp-serif);
+  font-size: 1.85rem;
+  font-weight: 500;
+  letter-spacing: -0.012em;
   margin-bottom: 8px;
+  color: var(--jp-bone);
+}
+
+.brand-block h1 em,
+.brand-block h1 .acc {
+  color: var(--jp-orange);
+  font-style: italic;
+  font-weight: 500;
 }
 
 .sidebar-copy,
@@ -115,11 +166,12 @@ p {
 }
 
 .eyebrow {
+  font-family: var(--jp-mono);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--jp-accent);
+  letter-spacing: 0.16em;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--jp-orange);
 }
 
 .nav-groups {
@@ -228,9 +280,12 @@ p {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #f0c478 0%, var(--jp-accent) 100%);
-  color: var(--jp-primary-dark);
-  font-weight: 800;
+  background: linear-gradient(135deg, var(--jp-orange-soft) 0%, var(--jp-orange) 100%);
+  color: var(--jp-ink);
+  font-family: var(--jp-serif);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 1.1rem;
 }
 
 .account-copy {
@@ -239,7 +294,7 @@ p {
 }
 
 .account-copy strong {
-  color: #f7f8f2;
+  color: var(--jp-bone);
 }
 
 .account-copy span,
@@ -250,7 +305,7 @@ p {
 
 .sidebar-signout {
   border-color: rgba(255, 255, 255, 0.14);
-  color: #f3f4ec;
+  color: var(--jp-bone);
 }
 
 .nav-button {
@@ -265,10 +320,14 @@ p {
 }
 
 .nav-button.active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(200, 145, 72, 0.45);
-  color: #fffdf8;
-  box-shadow: inset 3px 0 0 var(--jp-accent);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(219, 90, 31, 0.45);
+  color: var(--jp-white);
+  box-shadow: inset 3px 0 0 var(--jp-orange);
+}
+
+.nav-button:hover:not(.active) {
+  color: var(--jp-orange-soft);
 }
 
 .main-content {
@@ -291,9 +350,12 @@ p {
 }
 
 .page-heading {
-  font-size: 1.7rem;
+  font-family: var(--jp-serif);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  font-size: 2rem;
   margin-bottom: 0;
-  color: var(--jp-primary-dark);
+  color: var(--jp-ink);
 }
 
 .topbar-subtitle {
@@ -313,38 +375,42 @@ p {
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(31, 82, 57, 0.06);
-  border: 1px solid rgba(31, 82, 57, 0.12);
+  background: var(--jp-bone);
+  border: 1px solid var(--jp-line);
   font-size: 0.78rem;
-  color: var(--jp-primary-dark);
+  color: var(--jp-ink);
 }
 
 .topbar-chip-label {
-  color: var(--jp-text-muted);
-  letter-spacing: 0.01em;
+  font-family: var(--jp-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jp-muted);
 }
 
 .topbar-chip-value {
-  font-weight: 700;
-  color: var(--jp-text);
+  font-family: var(--jp-serif);
+  font-weight: 600;
+  color: var(--jp-ink);
 }
 
 .topbar-chip.is-warn {
-  background: rgba(200, 145, 72, 0.14);
-  border-color: rgba(200, 145, 72, 0.35);
+  background: var(--jp-sage-tint);
+  border-color: rgba(94, 110, 77, 0.32);
 }
 
 .topbar-chip.is-warn .topbar-chip-value {
-  color: var(--jp-accent-dark);
+  color: var(--jp-sage);
 }
 
 .topbar-chip.is-alert {
-  background: rgba(178, 53, 36, 0.10);
-  border-color: rgba(178, 53, 36, 0.32);
+  background: var(--jp-orange-tint);
+  border-color: rgba(219, 90, 31, 0.32);
 }
 
 .topbar-chip.is-alert .topbar-chip-value {
-  color: #8a2418;
+  color: var(--jp-orange-deep);
 }
 
 .topbar-actions {
@@ -418,7 +484,7 @@ p {
 .password-toggle {
   border: 1px solid rgba(16, 34, 26, 0.1);
   background: rgba(255, 255, 255, 0.72);
-  color: #284030;
+  color: var(--jp-ink-2);
   border-radius: 12px;
   padding: 11px 12px;
   cursor: pointer;
@@ -495,11 +561,11 @@ p {
   text-align: left;
   display: grid;
   gap: 4px;
-  color: #18241d;
+  color: var(--jp-ink);
 }
 
 .permissions-person span {
-  color: #617165;
+  color: var(--jp-muted);
   font-size: 0.88rem;
   text-transform: capitalize;
 }
@@ -545,7 +611,7 @@ p {
 
 .permissions-meta span {
   font-size: 0.82rem;
-  color: #617165;
+  color: var(--jp-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -554,7 +620,7 @@ p {
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 0.85rem;
-  color: #284030;
+  color: var(--jp-ink-2);
 }
 
 .permissions-tags {
@@ -572,9 +638,12 @@ p {
 }
 
 .section-title h2 {
+  font-family: var(--jp-serif);
+  font-weight: 500;
+  letter-spacing: -0.018em;
   margin-bottom: 4px;
-  font-size: 1.3rem;
-  color: var(--jp-primary-dark);
+  font-size: 1.45rem;
+  color: var(--jp-ink);
 }
 
 .muted {
@@ -634,7 +703,7 @@ p {
   align-items: baseline;
   gap: 12px;
   font-weight: 600;
-  color: #142019;
+  color: var(--jp-ink);
   user-select: none;
 }
 
@@ -646,7 +715,7 @@ p {
   content: "+";
   margin-left: auto;
   font-size: 1.1rem;
-  color: #617165;
+  color: var(--jp-muted);
   width: 16px;
   text-align: center;
 }
@@ -711,12 +780,16 @@ p {
   width: 110px;
   height: 110px;
   border-radius: 999px;
-  background: rgba(31, 82, 57, 0.07);
+  background: rgba(219, 90, 31, 0.08);
 }
 
 .stat-card h3 {
-  font-size: 1.65rem;
+  font-family: var(--jp-serif);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: 1.85rem;
   margin-bottom: 4px;
+  color: var(--jp-ink);
 }
 
 .stat-label {
@@ -919,36 +992,43 @@ textarea {
 
 .primary-button {
   border: 0;
-  background: var(--jp-primary);
-  color: #fdfaf2;
+  background: var(--jp-orange);
+  color: var(--jp-white);
 }
 
 .primary-button:hover {
-  background: var(--jp-primary-soft);
+  background: var(--jp-orange-deep);
+}
+
+.primary-button:disabled {
+  background: var(--jp-muted-2);
+  color: var(--jp-bone);
+  cursor: not-allowed;
 }
 
 .secondary-button {
-  border: 1px solid var(--jp-border-strong);
-  background: #fff;
-  color: var(--jp-primary-dark);
+  border: 1.5px solid var(--jp-ink);
+  background: transparent;
+  color: var(--jp-ink);
 }
 
 .secondary-button:hover {
-  border-color: var(--jp-primary);
-  color: var(--jp-primary);
+  background: var(--jp-ink);
+  color: var(--jp-white);
 }
 
 .ghost-button,
 .table-button {
-  border: 1px solid var(--jp-border-strong);
+  border: 1px solid var(--jp-line);
   background: transparent;
-  color: var(--jp-primary);
+  color: var(--jp-ink-2);
 }
 
 .ghost-button:hover,
 .table-button:hover {
-  background: rgba(31, 82, 57, 0.06);
-  border-color: rgba(31, 82, 57, 0.25);
+  background: rgba(219, 90, 31, 0.06);
+  border-color: rgba(219, 90, 31, 0.32);
+  color: var(--jp-orange-deep);
 }
 
 .message-strip,
@@ -959,9 +1039,9 @@ textarea {
 }
 
 .message-strip {
-  background: rgba(200, 145, 72, 0.12);
-  color: var(--jp-accent-dark);
-  border: 1px solid rgba(200, 145, 72, 0.28);
+  background: var(--jp-orange-tint);
+  color: var(--jp-orange-deep);
+  border: 1px solid rgba(219, 90, 31, 0.22);
 }
 
 .linked-record {
@@ -972,7 +1052,7 @@ textarea {
 .linked-record span {
   display: block;
   font-size: 0.82rem;
-  color: #617165;
+  color: var(--jp-muted);
   margin-bottom: 4px;
 }
 
@@ -995,12 +1075,12 @@ td {
 }
 
 th {
-  color: #617165;
+  color: var(--jp-muted);
   font-weight: 700;
 }
 
 .table-subtext {
-  color: #617165;
+  color: var(--jp-muted);
   font-size: 0.82rem;
   margin-top: 2px;
 }
@@ -1018,7 +1098,7 @@ th {
 
 .badge-muted {
   background: rgba(73, 84, 76, 0.1);
-  color: #48544c;
+  color: var(--jp-muted);
 }
 
 .badge-fsc {
@@ -1027,14 +1107,14 @@ th {
 }
 
 .badge-warn {
-  background: rgba(206, 148, 29, 0.16);
-  color: #8a5804;
+  background: var(--jp-sage-tint);
+  color: var(--jp-sage);
   min-width: 0;
 }
 
 .badge-alert {
-  background: rgba(184, 53, 53, 0.14);
-  color: #8a2727;
+  background: var(--jp-orange-tint);
+  color: var(--jp-orange-deep);
   min-width: 0;
 }
 
@@ -1047,29 +1127,31 @@ th {
 
 .commercial-warning {
   margin-top: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(184, 53, 53, 0.08);
-  border: 1px solid rgba(184, 53, 53, 0.25);
-  color: #8a2727;
-  font-size: 0.88rem;
+  padding: 12px 16px;
+  border-radius: var(--jp-radius, 14px);
+  background: var(--jp-orange-tint);
+  border: 1px solid rgba(219, 90, 31, 0.28);
+  color: var(--jp-orange-deep);
+  font-size: 0.92rem;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
 .commercial-warning strong {
-  font-weight: 700;
+  font-family: var(--jp-serif);
+  font-weight: 600;
+  color: var(--jp-orange-deep);
 }
 
 .commercial-warning.is-soft {
-  background: rgba(206, 148, 29, 0.10);
-  border-color: rgba(206, 148, 29, 0.28);
-  color: #8a5804;
+  background: var(--jp-sage-tint);
+  border-color: rgba(94, 110, 77, 0.32);
+  color: var(--jp-sage);
 }
 
 .cell-alert {
-  color: #8a2727;
+  color: var(--jp-orange-deep);
   font-weight: 600;
 }
 
@@ -1164,7 +1246,7 @@ th {
 
 .delivery-note-preview-grid span {
   display: block;
-  color: #617165;
+  color: var(--jp-muted);
   font-size: 0.82rem;
   margin-bottom: 4px;
 }
@@ -1202,7 +1284,7 @@ th {
 .empty-state {
   padding: 28px 12px 10px;
   text-align: center;
-  color: #617165;
+  color: var(--jp-muted);
 }
 
 .empty-state strong {
@@ -1231,7 +1313,7 @@ th {
 }
 
 .job-detail-chip span {
-  color: #617165;
+  color: var(--jp-muted);
   font-size: 0.82rem;
 }
 
@@ -1245,7 +1327,7 @@ th {
 .tab-button {
   border: 1px solid rgba(16, 34, 26, 0.1);
   background: transparent;
-  color: #284030;
+  color: var(--jp-ink-2);
   border-radius: 999px;
   padding: 9px 14px;
   cursor: pointer;
@@ -1284,7 +1366,7 @@ th {
 }
 
 .detail-list span {
-  color: #617165;
+  color: var(--jp-muted);
 }
 
 @media (max-width: 1180px) {
