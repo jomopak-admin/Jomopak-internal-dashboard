@@ -102,7 +102,7 @@ p {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: 248px minmax(0, 1fr);
 }
 
 .login-shell {
@@ -332,6 +332,7 @@ p {
 
 .main-content {
   padding: 24px 28px 40px;
+  min-width: 0;
 }
 
 .topbar {
@@ -339,6 +340,7 @@ p {
   justify-content: space-between;
   gap: 20px;
   align-items: flex-start;
+  flex-wrap: wrap;
   margin-bottom: 22px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--jp-border);
@@ -347,6 +349,8 @@ p {
 .topbar-title {
   display: grid;
   gap: 4px;
+  min-width: 0;
+  flex: 1 1 320px;
 }
 
 .page-heading {
@@ -356,6 +360,7 @@ p {
   font-size: 2rem;
   margin-bottom: 0;
   color: var(--jp-ink);
+  overflow-wrap: break-word;
 }
 
 .topbar-subtitle {
@@ -439,6 +444,7 @@ p {
 .page-body {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .sales-toolbar {
@@ -1388,7 +1394,7 @@ th {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
