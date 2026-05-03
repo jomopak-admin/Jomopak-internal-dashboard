@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CommercialFlags } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, JobCard, Product, StockChangeLog } from '../../types';
 import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
@@ -69,6 +70,121 @@ export function FinishedGoodsStockPage({
     overSixty: filteredStock.filter((item) => getStorageAgeBand(getDaysInStorage(item.storedDate)) === '60+').length,
   };
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'identity',
+      title: 'Stock identity',
+      subtitle: 'What product was stored, when, and which barcode tracks it.',
+      missingRequired: [
+        ...(stockForm.storedDate ? [] : ['Stored date']),
+        ...(stockForm.productId ? [] : ['Product']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Stored date <RequiredMarker /></span><input type="date" value={stockForm.storedDate} onChange={(event) => setStockForm({ ...stockForm, storedDate: event.target.value })} /></label>
+          <label>
+            <span>Product <RequiredMarker /></span>
+            <select value={stockForm.productId} onChange={(event) => setStockForm({ ...stockForm, productId: event.target.value })}>
+              <option value="">Select product</option>
+              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Barcode</span>
+            <input value={stockForm.barcode} onChange={(event) => setStockForm({ ...stockForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'links',
+      title: 'Client & job link',
+      subtitle: 'Optional — leave blank for general stock.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Client</span>
+            <select value={stockForm.clientId} onChange={(event) => setStockForm({ ...stockForm, clientId: event.target.value })}>
+              <option value="">No linked client</option>
+              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Linked job</span>
+            <select value={stockForm.jobId} onChange={(event) => setStockForm({ ...stockForm, jobId: event.target.value })}>
+              <option value="">No linked job</option>
+              {jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} · {job.customerName}</option>)}
+            </select>
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      title: 'Quantity & status',
+      subtitle: 'How much is on hand, how much is reserved, and where in the workflow it sits.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Quantity on hand</span>
+            <input type="number" min="0" value={stockForm.quantityOnHand} onChange={(event) => setStockForm({ ...stockForm, quantityOnHand: event.target.value })} />
+          </label>
+          <label>
+            <span>Quantity reserved</span>
+            <input type="number" min="0" value={stockForm.quantityReserved} onChange={(event) => setStockForm({ ...stockForm, quantityReserved: event.target.value })} />
+          </label>
+          <label>
+            <span>Unit</span>
+            <select value={stockForm.quantityUnit} onChange={(event) => setStockForm({ ...stockForm, quantityUnit: event.target.value as FinishedGoodsStockFormState['quantityUnit'] })}>
+              <option>units</option>
+              <option>kg</option>
+              <option>rolls</option>
+              <option>sheets</option>
+            </select>
+          </label>
+          <label>
+            <span>Stock status</span>
+            <select value={stockForm.stockStatus} onChange={(event) => setStockForm({ ...stockForm, stockStatus: event.target.value as FinishedGoodsStock['stockStatus'] })}>
+              <option>In Storage</option>
+              <option>Reserved</option>
+              <option>Ready to Dispatch</option>
+              <option>Dispatched</option>
+            </select>
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'storage',
+      title: 'Storage & branding',
+      subtitle: 'Where it lives in the warehouse and how it is finished.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Storage location</span>
+            <input value={stockForm.storageLocation} onChange={(event) => setStockForm({ ...stockForm, storageLocation: event.target.value })} />
+          </label>
+          <label>
+            <span>Branding status</span>
+            <input value={stockForm.brandingStatus} onChange={(event) => setStockForm({ ...stockForm, brandingStatus: event.target.value })} placeholder="Branded / Plain / Awaiting artwork" />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Notes</span>
+            <textarea value={stockForm.notes} onChange={(event) => setStockForm({ ...stockForm, notes: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -82,84 +198,17 @@ export function FinishedGoodsStockPage({
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{stockEditingId ? 'Edit stock item' : 'New stock item'}</h3></div>
-          {stockMessage ? <div className="message-strip">{stockMessage}</div> : null}
-          <div className="form-grid">
-            <label>
-              <span>Stored date</span>
-              <input type="date" value={stockForm.storedDate} onChange={(event) => setStockForm({ ...stockForm, storedDate: event.target.value })} />
-            </label>
-            <label>
-              <span>Product</span>
-              <select value={stockForm.productId} onChange={(event) => setStockForm({ ...stockForm, productId: event.target.value })}>
-                <option value="">Select product</option>
-                {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Client</span>
-              <select value={stockForm.clientId} onChange={(event) => setStockForm({ ...stockForm, clientId: event.target.value })}>
-                <option value="">No linked client</option>
-                {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Linked job</span>
-              <select value={stockForm.jobId} onChange={(event) => setStockForm({ ...stockForm, jobId: event.target.value })}>
-                <option value="">No linked job</option>
-                {jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} · {job.customerName}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Barcode</span>
-              <input value={stockForm.barcode} onChange={(event) => setStockForm({ ...stockForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
-            </label>
-            <label>
-              <span>Quantity on hand</span>
-              <input type="number" min="0" value={stockForm.quantityOnHand} onChange={(event) => setStockForm({ ...stockForm, quantityOnHand: event.target.value })} />
-            </label>
-            <label>
-              <span>Quantity reserved</span>
-              <input type="number" min="0" value={stockForm.quantityReserved} onChange={(event) => setStockForm({ ...stockForm, quantityReserved: event.target.value })} />
-            </label>
-            <label>
-              <span>Unit</span>
-              <select value={stockForm.quantityUnit} onChange={(event) => setStockForm({ ...stockForm, quantityUnit: event.target.value as FinishedGoodsStockFormState['quantityUnit'] })}>
-                <option>units</option>
-                <option>kg</option>
-                <option>rolls</option>
-                <option>sheets</option>
-              </select>
-            </label>
-            <label>
-              <span>Storage location</span>
-              <input value={stockForm.storageLocation} onChange={(event) => setStockForm({ ...stockForm, storageLocation: event.target.value })} />
-            </label>
-            <label>
-              <span>Stock status</span>
-              <select value={stockForm.stockStatus} onChange={(event) => setStockForm({ ...stockForm, stockStatus: event.target.value as FinishedGoodsStock['stockStatus'] })}>
-                <option>In Storage</option>
-                <option>Reserved</option>
-                <option>Ready to Dispatch</option>
-                <option>Dispatched</option>
-              </select>
-            </label>
-            <label>
-              <span>Branding status</span>
-              <input value={stockForm.brandingStatus} onChange={(event) => setStockForm({ ...stockForm, brandingStatus: event.target.value })} placeholder="Branded / Plain / Awaiting artwork" />
-            </label>
-            <label className="full-span">
-              <span>Notes</span>
-              <textarea value={stockForm.notes} onChange={(event) => setStockForm({ ...stockForm, notes: event.target.value })} />
-            </label>
-          </div>
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{stockEditingId ? 'Save Changes' : 'Save Stock Item'}</button>
-            {stockEditingId ? <button className="ghost-button" onClick={onDelete}>Delete Stock Item</button> : null}
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={stockEditingId ? 'Edit stock item' : 'New stock item'}
+          subtitle="Track stored finished goods so dispatch and stock holding stay clean."
+          message={stockMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!stockEditingId}
+          saveLabel="Save Stock Item"
+          footerExtra={stockEditingId ? <button type="button" className="ghost-button" onClick={onDelete}>Delete Stock Item</button> : null}
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Finished stock register" subtitle={`${filteredStock.length} record(s) shown`} />

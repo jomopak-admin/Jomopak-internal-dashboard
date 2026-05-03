@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Product, ProductFilters, ProductFormState, Supplier } from '../../types';
 
@@ -57,6 +58,50 @@ export function ProductsPage({
     setMode('list');
   }
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'identity',
+      title: 'Product identity',
+      subtitle: 'Name, SKU and what kind of product this is.',
+      missingRequired: [
+        ...(productForm.name.trim() ? [] : ['Name']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Name <RequiredMarker /></span><input value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /></label>
+          <label><span>SKU</span><input value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
+          <label><span>Category</span><select value={productForm.category} onChange={(event) => setProductForm({ ...productForm, category: event.target.value as Product['category'] })}><option>Paper Bags</option><option>Paper Cups</option><option>Food Boxes</option><option>Wet Wipes</option><option>Other Packaging</option></select></label>
+          <label><span>Supply type</span><select value={productForm.supplyType} onChange={(event) => setProductForm({ ...productForm, supplyType: event.target.value as Product['supplyType'] })}><option>Manufactured</option><option>Purchased</option></select></label>
+          {canSeeSupplier && <label><span>Preferred supplier</span><select value={productForm.defaultSupplierId} onChange={(event) => setProductForm({ ...productForm, defaultSupplierId: event.target.value })}><option value="">No preferred supplier</option>{suppliers.filter((supplier) => supplier.active).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>}
+        </div>
+      ),
+    },
+    {
+      key: 'defaults',
+      title: 'Defaults & specification',
+      subtitle: 'Sensible defaults so jobs and quotes pre-fill correctly.',
+      body: (
+        <div className="form-grid">
+          <label><span>Default unit</span><select value={productForm.defaultUnit} onChange={(event) => setProductForm({ ...productForm, defaultUnit: event.target.value as Product['defaultUnit'] })}><option>units</option><option>kg</option><option>rolls</option><option>sheets</option></select></label>
+          <label><span>Default paper type</span><input value={productForm.defaultPaperType} onChange={(event) => setProductForm({ ...productForm, defaultPaperType: event.target.value })} /></label>
+          <label><span>Default GSM</span><input value={productForm.defaultGsm} onChange={(event) => setProductForm({ ...productForm, defaultGsm: event.target.value })} /></label>
+          <label className="checkbox-row"><input type="checkbox" checked={productForm.brandingAllowed} onChange={(event) => setProductForm({ ...productForm, brandingAllowed: event.target.checked })} />Branding allowed</label>
+          <label className="checkbox-row"><input type="checkbox" checked={productForm.active} onChange={(event) => setProductForm({ ...productForm, active: event.target.checked })} />Active</label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      subtitle: 'Anything sales or production should know about this product.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={productForm.notes} onChange={(event) => setProductForm({ ...productForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -69,24 +114,19 @@ export function ProductsPage({
         }
       />
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{productEditingId ? 'Edit product' : 'New product'}</h3></div>
-          {productMessage ? <div className="message-strip">{productMessage}</div> : null}
-          <div className="form-grid">
-            <label><span>Name</span><input value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /></label>
-            <label><span>SKU</span><input value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
-            <label><span>Category</span><select value={productForm.category} onChange={(event) => setProductForm({ ...productForm, category: event.target.value as Product['category'] })}><option>Paper Bags</option><option>Paper Cups</option><option>Food Boxes</option><option>Wet Wipes</option><option>Other Packaging</option></select></label>
-            <label><span>Supply type</span><select value={productForm.supplyType} onChange={(event) => setProductForm({ ...productForm, supplyType: event.target.value as Product['supplyType'] })}><option>Manufactured</option><option>Purchased</option></select></label>
-            {canSeeSupplier && <label><span>Preferred supplier</span><select value={productForm.defaultSupplierId} onChange={(event) => setProductForm({ ...productForm, defaultSupplierId: event.target.value })}><option value="">No preferred supplier</option>{suppliers.filter((supplier) => supplier.active).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>}
-            <label><span>Default unit</span><select value={productForm.defaultUnit} onChange={(event) => setProductForm({ ...productForm, defaultUnit: event.target.value as Product['defaultUnit'] })}><option>units</option><option>kg</option><option>rolls</option><option>sheets</option></select></label>
-            <label><span>Default paper type</span><input value={productForm.defaultPaperType} onChange={(event) => setProductForm({ ...productForm, defaultPaperType: event.target.value })} /></label>
-            <label><span>Default GSM</span><input value={productForm.defaultGsm} onChange={(event) => setProductForm({ ...productForm, defaultGsm: event.target.value })} /></label>
-            <label className="checkbox-row"><input type="checkbox" checked={productForm.brandingAllowed} onChange={(event) => setProductForm({ ...productForm, brandingAllowed: event.target.checked })} />Branding allowed</label>
-            <label className="checkbox-row"><input type="checkbox" checked={productForm.active} onChange={(event) => setProductForm({ ...productForm, active: event.target.checked })} />Active</label>
-            <label className="full-span"><span>Notes</span><textarea value={productForm.notes} onChange={(event) => setProductForm({ ...productForm, notes: event.target.value })} /></label>
-          </div>
-          <div className="button-row"><button className="primary-button" onClick={onSave}>{productEditingId ? 'Save Changes' : 'Save Product'}</button>{productEditingId ? <button className="ghost-button" onClick={onDelete}>Delete Product</button> : null}<button className="ghost-button" onClick={handleBackToList}>Cancel</button></div>
-        </section>
+        <FormWizard
+          title={productEditingId ? 'Edit product' : 'New product'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={productMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!productEditingId}
+          saveLabel="Save Product"
+          footerExtra={productEditingId ? (
+            <button className="ghost-button" onClick={onDelete}>Delete Product</button>
+          ) : undefined}
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Product register" subtitle={`${filteredProducts.length} record(s) shown`} />

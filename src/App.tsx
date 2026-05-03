@@ -4598,6 +4598,7 @@ function App() {
           jobFilters={jobFilters}
           setJobFilters={setJobFilters}
           filteredJobs={filteredJobs}
+          allJobs={data.jobs}
           selectedJobId={selectedJobId}
           onSelectJob={setSelectedJobId}
           selectedJobMaterials={selectedJobMaterials}

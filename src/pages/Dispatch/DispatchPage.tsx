@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { DispatchFilters, DispatchFormState, DispatchRecord, FinishedGoodsStock, JobCard } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -60,6 +61,64 @@ export function DispatchPage(props: DispatchPageProps) {
     setMode('list');
   }
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'header',
+      title: 'Dispatch header',
+      subtitle: 'When the goods left and which job they belong to.',
+      missingRequired: [
+        ...(dispatchForm.dispatchDate ? [] : ['Dispatch date']),
+        ...(dispatchForm.jobId ? [] : ['Job card']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Dispatch date <RequiredMarker /></span><input type="date" value={dispatchForm.dispatchDate} onChange={(event) => setDispatchForm({ ...dispatchForm, dispatchDate: event.target.value })} /></label>
+          <label><span>Job card <RequiredMarker /></span><select value={dispatchForm.jobId} onChange={(event) => setDispatchForm({ ...dispatchForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'stock',
+      title: 'Stock & quantity',
+      subtitle: 'Pick a finished stock batch to deduct from, or leave blank for a manual line.',
+      missingRequired: [
+        ...(dispatchForm.quantityDispatched && Number(dispatchForm.quantityDispatched) > 0 ? [] : ['Quantity dispatched']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Finished stock batch</span><select value={dispatchForm.finishedGoodsStockId} onChange={(event) => setDispatchForm({ ...dispatchForm, finishedGoodsStockId: event.target.value })}><option value="">No stock deduction</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName} ({formatNumber(item.quantityAvailable)} {item.quantityUnit} available)</option>)}</select></label>
+          <label><span>Quantity dispatched <RequiredMarker /></span><input type="number" min="0" value={dispatchForm.quantityDispatched} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityDispatched: event.target.value })} /></label>
+          <label><span>Unit</span><select value={dispatchForm.quantityUnit} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityUnit: event.target.value as DispatchRecord['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'references',
+      title: 'Labels & references',
+      subtitle: 'Connect this dispatch to the labels and delivery paperwork.',
+      body: (
+        <div className="form-grid">
+          <label><span>Label reference</span><input value={dispatchForm.labelReference} onChange={(event) => setDispatchForm({ ...dispatchForm, labelReference: event.target.value })} /></label>
+          <label><span>Delivery reference</span><input value={dispatchForm.deliveryReference} onChange={(event) => setDispatchForm({ ...dispatchForm, deliveryReference: event.target.value })} /></label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={dispatchForm.fscRelated} onChange={(event) => setDispatchForm({ ...dispatchForm, fscRelated: event.target.checked })} />
+            FSC-related
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'issues',
+      title: 'Issues & notes',
+      subtitle: 'Anything that came up at dispatch that downstream teams need to see.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Issue notes</span><textarea value={dispatchForm.issueNotes} onChange={(event) => setDispatchForm({ ...dispatchForm, issueNotes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -73,36 +132,16 @@ export function DispatchPage(props: DispatchPageProps) {
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header">
-            <div>
-              <h3>{dispatchEditingId ? 'Edit dispatch record' : 'New dispatch record'}</h3>
-              <p className="muted">Use dispatch records to show what was delivered, how it was labelled, and any issues.</p>
-            </div>
-          </div>
-
-          {dispatchMessage ? <div className="message-strip">{dispatchMessage}</div> : null}
-
-          <div className="form-grid">
-            <label><span>Dispatch date</span><input type="date" value={dispatchForm.dispatchDate} onChange={(event) => setDispatchForm({ ...dispatchForm, dispatchDate: event.target.value })} /></label>
-            <label><span>Job card</span><select value={dispatchForm.jobId} onChange={(event) => setDispatchForm({ ...dispatchForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
-            <label><span>Finished stock batch</span><select value={dispatchForm.finishedGoodsStockId} onChange={(event) => setDispatchForm({ ...dispatchForm, finishedGoodsStockId: event.target.value })}><option value="">No stock deduction</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName} ({formatNumber(item.quantityAvailable)} {item.quantityUnit} available)</option>)}</select></label>
-            <label><span>Quantity dispatched</span><input type="number" min="0" value={dispatchForm.quantityDispatched} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityDispatched: event.target.value })} /></label>
-            <label><span>Unit</span><select value={dispatchForm.quantityUnit} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityUnit: event.target.value as DispatchRecord['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
-            <label><span>Label reference</span><input value={dispatchForm.labelReference} onChange={(event) => setDispatchForm({ ...dispatchForm, labelReference: event.target.value })} /></label>
-            <label><span>Delivery reference</span><input value={dispatchForm.deliveryReference} onChange={(event) => setDispatchForm({ ...dispatchForm, deliveryReference: event.target.value })} /></label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={dispatchForm.fscRelated} onChange={(event) => setDispatchForm({ ...dispatchForm, fscRelated: event.target.checked })} />
-              FSC-related
-            </label>
-            <label className="full-span"><span>Issue notes</span><textarea value={dispatchForm.issueNotes} onChange={(event) => setDispatchForm({ ...dispatchForm, issueNotes: event.target.value })} /></label>
-          </div>
-
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{dispatchEditingId ? 'Save Changes' : 'Save Dispatch Record'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={dispatchEditingId ? 'Edit dispatch record' : 'New dispatch record'}
+          subtitle="Use dispatch records to show what was delivered, how it was labelled, and any issues."
+          message={dispatchMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!dispatchEditingId}
+          saveLabel="Save Dispatch Record"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Dispatch register" subtitle={`${filteredDispatchRecords.length} record(s) shown`} />

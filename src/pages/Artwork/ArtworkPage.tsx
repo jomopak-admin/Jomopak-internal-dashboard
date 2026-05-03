@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { ArtworkFilters, ArtworkFormState, ArtworkRecord, JobCard } from '../../types';
 import { formatDate } from '../../utils/calculations';
@@ -68,6 +69,46 @@ export function ArtworkPage({
     setMode('list');
   }
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'job',
+      title: 'Job link & stage',
+      subtitle: 'Which job this artwork record belongs to and where it sits in the flow.',
+      missingRequired: [
+        ...(artworkForm.jobId ? [] : ['Job card']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Job card <RequiredMarker /></span><select value={artworkForm.jobId} onChange={(event) => setArtworkForm({ ...artworkForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
+          <label><span>Stage</span><select value={artworkForm.stage} onChange={(event) => setArtworkForm({ ...artworkForm, stage: event.target.value as ArtworkFormState['stage'] })}><option value="Awaiting Artwork">Awaiting Artwork</option><option value="Artwork Received">Artwork Received</option><option value="Proof Sent">Proof Sent</option><option value="Approved">Approved</option><option value="Changes Requested">Changes Requested</option></select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'timeline',
+      title: 'Timeline',
+      subtitle: 'Dates that mark each step of the approval process.',
+      body: (
+        <div className="form-grid">
+          <label><span>Artwork received date</span><input type="date" value={artworkForm.artworkReceivedDate} onChange={(event) => setArtworkForm({ ...artworkForm, artworkReceivedDate: event.target.value })} /></label>
+          <label><span>Proof sent date</span><input type="date" value={artworkForm.proofSentDate} onChange={(event) => setArtworkForm({ ...artworkForm, proofSentDate: event.target.value })} /></label>
+          <label><span>Approval date</span><input type="date" value={artworkForm.approvalDate} onChange={(event) => setArtworkForm({ ...artworkForm, approvalDate: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'changes',
+      title: 'Changes & notes',
+      subtitle: 'Anything the studio or operator needs to know before printing.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Changes requested</span><textarea value={artworkForm.changesRequested} onChange={(event) => setArtworkForm({ ...artworkForm, changesRequested: event.target.value })} /></label>
+          <label className="full-span"><span>Notes</span><textarea value={artworkForm.notes} onChange={(event) => setArtworkForm({ ...artworkForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -75,23 +116,16 @@ export function ArtworkPage({
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{artworkEditingId ? 'Edit artwork record' : 'New artwork record'}</h3></div>
-          {artworkMessage ? <div className="message-strip">{artworkMessage}</div> : null}
-          <div className="form-grid">
-            <label><span>Job card</span><select value={artworkForm.jobId} onChange={(event) => setArtworkForm({ ...artworkForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
-            <label><span>Stage</span><select value={artworkForm.stage} onChange={(event) => setArtworkForm({ ...artworkForm, stage: event.target.value as ArtworkFormState['stage'] })}><option value="Awaiting Artwork">Awaiting Artwork</option><option value="Artwork Received">Artwork Received</option><option value="Proof Sent">Proof Sent</option><option value="Approved">Approved</option><option value="Changes Requested">Changes Requested</option></select></label>
-            <label><span>Artwork received date</span><input type="date" value={artworkForm.artworkReceivedDate} onChange={(event) => setArtworkForm({ ...artworkForm, artworkReceivedDate: event.target.value })} /></label>
-            <label><span>Proof sent date</span><input type="date" value={artworkForm.proofSentDate} onChange={(event) => setArtworkForm({ ...artworkForm, proofSentDate: event.target.value })} /></label>
-            <label><span>Approval date</span><input type="date" value={artworkForm.approvalDate} onChange={(event) => setArtworkForm({ ...artworkForm, approvalDate: event.target.value })} /></label>
-            <label className="full-span"><span>Changes requested</span><textarea value={artworkForm.changesRequested} onChange={(event) => setArtworkForm({ ...artworkForm, changesRequested: event.target.value })} /></label>
-            <label className="full-span"><span>Notes</span><textarea value={artworkForm.notes} onChange={(event) => setArtworkForm({ ...artworkForm, notes: event.target.value })} /></label>
-          </div>
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{artworkEditingId ? 'Save Changes' : 'Save Artwork Record'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={artworkEditingId ? 'Edit artwork record' : 'New artwork record'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={artworkMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!artworkEditingId}
+          saveLabel="Save Artwork Record"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Artwork queue" subtitle={`${filteredArtworkJobs.length} live job(s) in artwork flow`} />

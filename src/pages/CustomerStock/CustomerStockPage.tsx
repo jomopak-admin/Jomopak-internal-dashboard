@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CommercialFlags, isClientAtRisk, isClientOverCredit } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, CustomerStockRelease, CustomerStockReleaseFilters, CustomerStockReleaseFormState, FinishedGoodsStock, JobCard } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -66,25 +67,21 @@ export function CustomerStockPage({
         ? `${selectedClient.name} is over credit (balance ${selectedClient.currentBalance} / limit ${selectedClient.creditLimit}). Settle the account before releasing stock.`
         : null;
 
-  return (
-    <>
-      <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Release</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>}
-      />
-
-      {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{releaseEditingId ? 'Edit stock release' : 'New stock release'}</h3></div>
-          {releaseMessage ? <div className="message-strip">{releaseMessage}</div> : null}
+  const sections: FormWizardSection[] = [
+    {
+      key: 'header',
+      title: 'Release header',
+      subtitle: 'When and to whom this stock release belongs.',
+      missingRequired: [
+        ...(releaseForm.releaseDate ? [] : ['Release date']),
+        ...(releaseForm.clientId ? [] : ['Client']),
+      ],
+      body: (
+        <>
           <div className="form-grid">
-            <label><span>Release date</span><input type="date" value={releaseForm.releaseDate} onChange={(event) => setReleaseForm({ ...releaseForm, releaseDate: event.target.value })} /></label>
-            <label><span>Client</span><select value={releaseForm.clientId} onChange={(event) => setReleaseForm({ ...releaseForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-            <label><span>Finished stock batch</span><select value={releaseForm.finishedGoodsStockId} onChange={(event) => setReleaseForm({ ...releaseForm, finishedGoodsStockId: event.target.value })}><option value="">Select stock batch</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName}</option>)}</select></label>
+            <label><span>Release date <RequiredMarker /></span><input type="date" value={releaseForm.releaseDate} onChange={(event) => setReleaseForm({ ...releaseForm, releaseDate: event.target.value })} /></label>
+            <label><span>Client <RequiredMarker /></span><select value={releaseForm.clientId} onChange={(event) => setReleaseForm({ ...releaseForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
             <label><span>Job</span><select value={releaseForm.jobId} onChange={(event) => setReleaseForm({ ...releaseForm, jobId: event.target.value })}><option value="">Select job</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber}</option>)}</select></label>
-            <label><span>Quantity released</span><input type="number" min="0" value={releaseForm.quantityReleased} onChange={(event) => setReleaseForm({ ...releaseForm, quantityReleased: event.target.value })} /></label>
-            <label><span>Unit</span><select value={releaseForm.quantityUnit} onChange={(event) => setReleaseForm({ ...releaseForm, quantityUnit: event.target.value as CustomerStockReleaseFormState['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
-            <label><span>Destination</span><input value={releaseForm.destination} onChange={(event) => setReleaseForm({ ...releaseForm, destination: event.target.value })} placeholder="Dispatch / Client collection / Transfer" /></label>
-            <label className="full-span"><span>Notes</span><textarea value={releaseForm.notes} onChange={(event) => setReleaseForm({ ...releaseForm, notes: event.target.value })} /></label>
           </div>
           {releaseBlocked && blockingReason ? (
             <div className="commercial-warning">
@@ -92,11 +89,56 @@ export function CustomerStockPage({
               <span>{blockingReason}</span>
             </div>
           ) : null}
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave} disabled={releaseBlocked}>{releaseEditingId ? 'Save Changes' : 'Save Release'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        </>
+      ),
+    },
+    {
+      key: 'stock',
+      title: 'Stock & quantity',
+      subtitle: 'Which finished stock batch is being released and how much.',
+      missingRequired: [
+        ...(releaseForm.finishedGoodsStockId ? [] : ['Finished stock batch']),
+        ...(releaseForm.quantityReleased && Number(releaseForm.quantityReleased) > 0 ? [] : ['Quantity released']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Finished stock batch <RequiredMarker /></span><select value={releaseForm.finishedGoodsStockId} onChange={(event) => setReleaseForm({ ...releaseForm, finishedGoodsStockId: event.target.value })}><option value="">Select stock batch</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName}</option>)}</select></label>
+          <label><span>Quantity released <RequiredMarker /></span><input type="number" min="0" value={releaseForm.quantityReleased} onChange={(event) => setReleaseForm({ ...releaseForm, quantityReleased: event.target.value })} /></label>
+          <label><span>Unit</span><select value={releaseForm.quantityUnit} onChange={(event) => setReleaseForm({ ...releaseForm, quantityUnit: event.target.value as CustomerStockReleaseFormState['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'destination',
+      title: 'Destination & notes',
+      subtitle: 'Where the stock is going and anything dispatch should know.',
+      body: (
+        <div className="form-grid">
+          <label><span>Destination</span><input value={releaseForm.destination} onChange={(event) => setReleaseForm({ ...releaseForm, destination: event.target.value })} placeholder="Dispatch / Client collection / Transfer" /></label>
+          <label className="full-span"><span>Notes</span><textarea value={releaseForm.notes} onChange={(event) => setReleaseForm({ ...releaseForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <SectionTitle
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Release</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>}
+      />
+
+      {mode === 'form' ? (
+        <FormWizard
+          title={releaseEditingId ? 'Edit stock release' : 'New stock release'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={releaseMessage || undefined}
+          sections={sections}
+          onSave={releaseBlocked ? () => undefined : onSave}
+          onCancel={handleBackToList}
+          isEditing={!!releaseEditingId}
+          saveLabel="Save Release"
+          allowIncompleteSave={releaseBlocked}
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Release register" subtitle={`${filteredReleases.length} release(s) shown`} />

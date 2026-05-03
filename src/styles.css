@@ -835,6 +835,433 @@ p {
   gap: 12px;
 }
 
+/* ---------- FormWizard ---------- */
+
+.form-wizard {
+  display: grid;
+  gap: 18px;
+}
+
+.form-wizard-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.form-wizard-header h3 {
+  font-family: var(--jp-serif);
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+  color: var(--jp-ink);
+}
+
+.form-wizard-progress {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--jp-bone);
+  border: 1px solid var(--jp-line);
+  font-family: var(--jp-mono);
+  font-size: 0.78rem;
+}
+
+.form-wizard-progress strong {
+  font-family: var(--jp-serif);
+  font-size: 1rem;
+  color: var(--jp-orange-deep);
+}
+
+/* Stepper nav across the top */
+.form-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--jp-bone);
+  border: 1px solid var(--jp-line);
+}
+
+.form-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--jp-ink-2);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.form-step:hover:not(:disabled) {
+  background: var(--jp-paper-2);
+}
+
+.form-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--jp-line-2);
+  color: var(--jp-ink-2);
+  font-family: var(--jp-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.form-step-label {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-step.is-active {
+  background: var(--jp-white);
+  border-color: var(--jp-orange);
+  box-shadow: 0 1px 0 rgba(219, 90, 31, 0.18);
+}
+
+.form-step.is-active .form-step-num {
+  background: var(--jp-orange);
+  color: var(--jp-white);
+}
+
+.form-step.is-complete .form-step-num {
+  background: var(--jp-sage);
+  color: var(--jp-white);
+}
+
+.form-step.is-incomplete .form-step-num {
+  background: var(--jp-orange-tint);
+  color: var(--jp-orange-deep);
+}
+
+.form-step.is-disabled {
+  cursor: not-allowed;
+  color: var(--jp-muted-2);
+}
+
+.form-step.is-disabled .form-step-num {
+  background: transparent;
+  border: 1px dashed var(--jp-line);
+  color: var(--jp-muted-2);
+}
+
+/* Body sections — all rendered, but visually distinct by state */
+.form-wizard-body {
+  display: grid;
+  gap: 14px;
+}
+
+.form-section {
+  border: 1px solid var(--jp-line);
+  border-radius: 14px;
+  background: var(--jp-white);
+  padding: 18px 20px;
+  scroll-margin-top: 90px;
+  transition: border-color 200ms ease, box-shadow 200ms ease, opacity 200ms ease;
+}
+
+.form-section.is-active {
+  border-color: var(--jp-orange);
+  box-shadow: 0 0 0 3px rgba(219, 90, 31, 0.08);
+}
+
+.form-section.is-incomplete {
+  border-color: var(--jp-orange-soft);
+}
+
+.form-section.is-complete {
+  border-color: var(--jp-line);
+}
+
+.form-section.is-disabled {
+  background: var(--jp-paper);
+  border-style: dashed;
+  border-color: var(--jp-line);
+  opacity: 0.78;
+}
+
+.form-section.is-disabled .form-section-title,
+.form-section.is-disabled .form-section-subtitle {
+  color: var(--jp-muted);
+}
+
+.form-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.form-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--jp-paper-2);
+  color: var(--jp-ink);
+  font-family: var(--jp-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.form-section.is-active .form-section-num {
+  background: var(--jp-orange);
+  color: var(--jp-white);
+}
+
+.form-section.is-complete .form-section-num {
+  background: var(--jp-sage);
+  color: var(--jp-white);
+}
+
+.form-section.is-incomplete .form-section-num {
+  background: var(--jp-orange-tint);
+  color: var(--jp-orange-deep);
+}
+
+.form-section.is-disabled .form-section-num {
+  background: transparent;
+  border: 1px dashed var(--jp-muted-2);
+  color: var(--jp-muted-2);
+}
+
+.form-section-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form-section-title {
+  font-family: var(--jp-serif);
+  font-size: 1.15rem;
+  font-weight: 500;
+  margin: 0 0 2px;
+  color: var(--jp-ink);
+  letter-spacing: -0.01em;
+}
+
+.form-section-subtitle {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--jp-muted);
+}
+
+.form-section-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--jp-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.form-section-tag.is-incomplete {
+  background: var(--jp-orange-tint);
+  color: var(--jp-orange-deep);
+  border: 1px solid rgba(219, 90, 31, 0.28);
+}
+
+.form-section-tag.is-complete {
+  background: var(--jp-sage-tint);
+  color: var(--jp-sage);
+  border: 1px solid rgba(94, 110, 77, 0.28);
+}
+
+.form-section-tag.is-disabled {
+  background: transparent;
+  color: var(--jp-muted-2);
+  border: 1px dashed var(--jp-line);
+}
+
+.form-section-body {
+  display: grid;
+  gap: 12px;
+}
+
+.form-section-gate {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--jp-bone);
+  border: 1px dashed var(--jp-line);
+  display: grid;
+  gap: 10px;
+}
+
+.form-section-gate p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.form-section-gate .checkbox-row {
+  font-weight: 500;
+  color: var(--jp-ink);
+}
+
+.required-marker {
+  color: var(--jp-orange-deep);
+  margin-left: 2px;
+  font-weight: 600;
+}
+
+.form-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--jp-line);
+}
+
+.form-wizard-actions-primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.form-wizard-hint {
+  font-family: var(--jp-mono);
+  font-size: 0.78rem;
+  color: var(--jp-orange-deep);
+}
+
+/* Quick Add card — minimal-fields create flow */
+.quick-add-card {
+  display: grid;
+  gap: 16px;
+  max-width: 640px;
+}
+
+.quick-add-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.quick-add-header h3 {
+  margin: 0 0 4px 0;
+}
+
+.quick-add-tag {
+  font-family: var(--jp-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--jp-orange-deep);
+  background: rgba(229, 99, 41, 0.12);
+  border: 1px solid rgba(229, 99, 41, 0.3);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.quick-add-body {
+  display: grid;
+  gap: 12px;
+}
+
+.quick-add-hint {
+  background: rgba(229, 99, 41, 0.06);
+  border-left: 3px solid var(--jp-orange-deep);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--jp-text-soft, #555);
+}
+
+.quick-add-hint strong {
+  color: var(--jp-text, #1a1a1a);
+}
+
+.quick-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--jp-line);
+}
+
+.quick-add-actions-primary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quick-add-actions-secondary {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--jp-orange-deep);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.link-button:hover {
+  color: var(--jp-orange);
+}
+
+/* Split add button — Quick Add + Full Form */
+.add-button-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 1px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.add-button-group .secondary-button,
+.add-button-group .ghost-button {
+  border-radius: 0;
+}
+
+.add-button-group .secondary-button:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.add-button-group .ghost-button:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+
 .calculator-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

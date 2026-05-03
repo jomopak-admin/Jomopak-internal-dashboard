@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, CostProfile, Lead, PaperRate, PricingTier, Product, QuoteEstimate, QuoteEstimateFilters, QuoteEstimateFormState } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -74,6 +75,80 @@ export function QuotesPage({
     setMode('list');
   }
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'header',
+      title: 'Quote header',
+      subtitle: 'When this quote was prepared and how it ties back to other systems.',
+      missingRequired: [
+        ...(quoteForm.quoteDate ? [] : ['Quote date']),
+        ...(quoteForm.clientId ? [] : ['Client']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Quote date <RequiredMarker /></span><input type="date" value={quoteForm.quoteDate} onChange={(event) => setQuoteForm({ ...quoteForm, quoteDate: event.target.value })} /></label>
+          <label><span>Client <RequiredMarker /></span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+          <label><span>Linked lead</span><select value={quoteForm.linkedLeadId} onChange={(event) => setQuoteForm({ ...quoteForm, linkedLeadId: event.target.value })}><option value="">Select lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.leadNumber} · {lead.companyName || lead.clientName || lead.contactName}</option>)}</select></label>
+          <label><span>QuickBooks estimate #</span><input value={quoteForm.quickbooksEstimateNumber} onChange={(event) => setQuoteForm({ ...quoteForm, quickbooksEstimateNumber: event.target.value })} placeholder="Optional reference" /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'product',
+      title: 'Product & specification',
+      subtitle: 'What is being quoted and the specification it should meet.',
+      missingRequired: [
+        ...(quoteForm.productId ? [] : ['Product']),
+        ...(quoteForm.quantity && Number(quoteForm.quantity) > 0 ? [] : ['Quantity']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Product <RequiredMarker /></span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <label><span>Quantity <RequiredMarker /></span><input type="number" min="0" value={quoteForm.quantity} onChange={(event) => setQuoteForm({ ...quoteForm, quantity: event.target.value })} /></label>
+          <label><span>Size spec</span><input value={quoteForm.sizeSpec} onChange={(event) => setQuoteForm({ ...quoteForm, sizeSpec: event.target.value })} /></label>
+          <label><span>Handle type</span><select value={quoteForm.handleType} onChange={(event) => setQuoteForm({ ...quoteForm, handleType: event.target.value as QuoteEstimateFormState['handleType'] })}><option value="None">None</option><option value="Flat Handle">Flat Handle</option><option value="Rope Handle">Rope Handle</option><option value="Roll Handle">Roll Handle</option></select></label>
+          <label><span>Print method</span><select value={quoteForm.printMethod} onChange={(event) => setQuoteForm({ ...quoteForm, printMethod: event.target.value as QuoteEstimateFormState['printMethod'] })}><option value="Auto">Auto</option><option value="Plain">Plain</option><option value="Screen Print">Screen Print</option><option value="Flexo">Flexo</option></select></label>
+          <label><span>Colors</span><input type="number" min="0" value={quoteForm.colors} onChange={(event) => setQuoteForm({ ...quoteForm, colors: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'pricing-inputs',
+      title: 'Pricing inputs',
+      subtitle: 'Pull a pricing tier, paper rate and cost profile so the calculator stays consistent.',
+      body: (
+        <div className="form-grid">
+          <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
+          <label><span>Paper type</span><select value={quoteForm.paperRateId} onChange={(event) => setQuoteForm({ ...quoteForm, paperRateId: event.target.value })}><option value="">Select paper type</option>{paperTypeOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.gsm ? `${rate.paperType} (${rate.gsm})` : rate.paperType}</option>)}</select></label>
+          <label><span>Cost profile</span><select value={quoteForm.costProfileId} onChange={(event) => setQuoteForm({ ...quoteForm, costProfileId: event.target.value })}><option value="">Select cost profile</option>{costProfiles.filter((profile) => profile.active).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'pricing-outputs',
+      title: 'Pricing outputs',
+      subtitle: 'The numbers you commit to in the quote document.',
+      body: (
+        <div className="form-grid">
+          <label><span>Unit cost</span><input type="number" min="0" step="0.0001" value={quoteForm.unitCost} onChange={(event) => setQuoteForm({ ...quoteForm, unitCost: event.target.value })} /></label>
+          <label><span>Quoted unit price</span><input type="number" min="0" step="0.0001" value={quoteForm.quotedUnitPrice} onChange={(event) => setQuoteForm({ ...quoteForm, quotedUnitPrice: event.target.value })} /></label>
+          <label><span>Total quote</span><input type="number" min="0" step="0.01" value={quoteForm.totalQuote} onChange={(event) => setQuoteForm({ ...quoteForm, totalQuote: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      title: 'Status & notes',
+      subtitle: 'Where this quote is in the funnel and anything sales should remember.',
+      body: (
+        <div className="form-grid">
+          <label><span>Status</span><select value={quoteForm.status} onChange={(event) => setQuoteForm({ ...quoteForm, status: event.target.value as QuoteEstimateFormState['status'] })}><option value="Draft">Draft</option><option value="Quoted">Quoted</option><option value="Approved">Approved</option><option value="Converted to Job">Converted to Job</option><option value="Lost">Lost</option></select></label>
+          <label className="full-span"><span>Notes</span><textarea value={quoteForm.notes} onChange={(event) => setQuoteForm({ ...quoteForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -81,34 +156,16 @@ export function QuotesPage({
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{quoteEditingId ? 'Edit quote' : 'New quote'}</h3></div>
-          {quoteMessage ? <div className="message-strip">{quoteMessage}</div> : null}
-          <div className="form-grid">
-            <label><span>Quote date</span><input type="date" value={quoteForm.quoteDate} onChange={(event) => setQuoteForm({ ...quoteForm, quoteDate: event.target.value })} /></label>
-            <label><span>QuickBooks estimate #</span><input value={quoteForm.quickbooksEstimateNumber} onChange={(event) => setQuoteForm({ ...quoteForm, quickbooksEstimateNumber: event.target.value })} placeholder="Optional reference" /></label>
-            <label><span>Linked lead</span><select value={quoteForm.linkedLeadId} onChange={(event) => setQuoteForm({ ...quoteForm, linkedLeadId: event.target.value })}><option value="">Select lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.leadNumber} · {lead.companyName || lead.clientName || lead.contactName}</option>)}</select></label>
-            <label><span>Client</span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-            <label><span>Product</span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-            <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
-            <label><span>Paper type</span><select value={quoteForm.paperRateId} onChange={(event) => setQuoteForm({ ...quoteForm, paperRateId: event.target.value })}><option value="">Select paper type</option>{paperTypeOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.gsm ? `${rate.paperType} (${rate.gsm})` : rate.paperType}</option>)}</select></label>
-            <label><span>Cost profile</span><select value={quoteForm.costProfileId} onChange={(event) => setQuoteForm({ ...quoteForm, costProfileId: event.target.value })}><option value="">Select cost profile</option>{costProfiles.filter((profile) => profile.active).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
-            <label><span>Quantity</span><input type="number" min="0" value={quoteForm.quantity} onChange={(event) => setQuoteForm({ ...quoteForm, quantity: event.target.value })} /></label>
-            <label><span>Size spec</span><input value={quoteForm.sizeSpec} onChange={(event) => setQuoteForm({ ...quoteForm, sizeSpec: event.target.value })} /></label>
-            <label><span>Handle type</span><select value={quoteForm.handleType} onChange={(event) => setQuoteForm({ ...quoteForm, handleType: event.target.value as QuoteEstimateFormState['handleType'] })}><option value="None">None</option><option value="Flat Handle">Flat Handle</option><option value="Rope Handle">Rope Handle</option><option value="Roll Handle">Roll Handle</option></select></label>
-            <label><span>Print method</span><select value={quoteForm.printMethod} onChange={(event) => setQuoteForm({ ...quoteForm, printMethod: event.target.value as QuoteEstimateFormState['printMethod'] })}><option value="Auto">Auto</option><option value="Plain">Plain</option><option value="Screen Print">Screen Print</option><option value="Flexo">Flexo</option></select></label>
-            <label><span>Colors</span><input type="number" min="0" value={quoteForm.colors} onChange={(event) => setQuoteForm({ ...quoteForm, colors: event.target.value })} /></label>
-            <label><span>Unit cost</span><input type="number" min="0" step="0.0001" value={quoteForm.unitCost} onChange={(event) => setQuoteForm({ ...quoteForm, unitCost: event.target.value })} /></label>
-            <label><span>Quoted unit price</span><input type="number" min="0" step="0.0001" value={quoteForm.quotedUnitPrice} onChange={(event) => setQuoteForm({ ...quoteForm, quotedUnitPrice: event.target.value })} /></label>
-            <label><span>Total quote</span><input type="number" min="0" step="0.01" value={quoteForm.totalQuote} onChange={(event) => setQuoteForm({ ...quoteForm, totalQuote: event.target.value })} /></label>
-            <label><span>Status</span><select value={quoteForm.status} onChange={(event) => setQuoteForm({ ...quoteForm, status: event.target.value as QuoteEstimateFormState['status'] })}><option value="Draft">Draft</option><option value="Quoted">Quoted</option><option value="Approved">Approved</option><option value="Converted to Job">Converted to Job</option><option value="Lost">Lost</option></select></label>
-            <label className="full-span"><span>Notes</span><textarea value={quoteForm.notes} onChange={(event) => setQuoteForm({ ...quoteForm, notes: event.target.value })} /></label>
-          </div>
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{quoteEditingId ? 'Save Changes' : 'Save Quote'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={quoteEditingId ? 'Edit quote' : 'New quote'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={quoteMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!quoteEditingId}
+          saveLabel="Save Quote"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Quote register" subtitle={`${filteredQuotes.length} quote(s) shown`} />

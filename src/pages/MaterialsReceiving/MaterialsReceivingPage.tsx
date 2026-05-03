@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { InventoryMovement, InventoryScanFormState, JobCard, MaterialFilters, MaterialOrderRequest, MaterialReceipt, MaterialReceiptFormState, Supplier } from '../../types';
 import { FSC_CLAIM_TYPES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -120,6 +121,155 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     };
   }, [inventoryScannedItem]);
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'header',
+      title: 'Receipt header',
+      subtitle: 'When the material arrived and from whom.',
+      missingRequired: [
+        ...(materialForm.receivedDate ? [] : ['Received date']),
+        ...(materialForm.supplierId ? [] : ['Supplier']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Received date <RequiredMarker /></span>
+            <input type="date" value={materialForm.receivedDate} onChange={(event) => setMaterialForm({ ...materialForm, receivedDate: event.target.value })} />
+          </label>
+          <label>
+            <span>Supplier <RequiredMarker /></span>
+            <select
+              value={materialForm.supplierId}
+              onChange={(event) => {
+                const supplier = suppliers.find((item) => item.id === event.target.value);
+                setMaterialForm({
+                  ...materialForm,
+                  supplierId: supplier?.id ?? '',
+                  supplierName: supplier?.name ?? materialForm.supplierName,
+                });
+              }}
+            >
+              <option value="">Select supplier</option>
+              {suppliers.filter((supplier) => supplier.active).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Supplier batch number</span>
+            <input value={materialForm.supplierBatchNumber} onChange={(event) => setMaterialForm({ ...materialForm, supplierBatchNumber: event.target.value })} />
+          </label>
+          <label>
+            <span>Invoice / delivery ref</span>
+            <input value={materialForm.invoiceReference} onChange={(event) => setMaterialForm({ ...materialForm, invoiceReference: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'identification',
+      title: 'Identification',
+      subtitle: 'How the roll is identified on the floor.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Barcode</span>
+            <input value={materialForm.barcode} onChange={(event) => setMaterialForm({ ...materialForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
+          </label>
+          <label>
+            <span>Internal roll code</span>
+            <input value={materialForm.internalRollCode} onChange={(event) => setMaterialForm({ ...materialForm, internalRollCode: event.target.value })} />
+          </label>
+          <label>
+            <span>Storage location</span>
+            <input value={materialForm.storageLocation} onChange={(event) => setMaterialForm({ ...materialForm, storageLocation: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'spec',
+      title: 'Paper specification',
+      subtitle: 'What was actually delivered.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Paper type</span>
+            <input value={materialForm.paperType} onChange={(event) => setMaterialForm({ ...materialForm, paperType: event.target.value })} />
+          </label>
+          <label>
+            <span>GSM</span>
+            <input value={materialForm.gsm} onChange={(event) => setMaterialForm({ ...materialForm, gsm: event.target.value })} />
+          </label>
+          <label>
+            <span>Width</span>
+            <input value={materialForm.width} onChange={(event) => setMaterialForm({ ...materialForm, width: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      title: 'Quantity',
+      subtitle: 'How much was received in what unit.',
+      missingRequired: [
+        ...(materialForm.quantityReceived && Number(materialForm.quantityReceived) > 0 ? [] : ['Quantity received']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Quantity received <RequiredMarker /></span>
+            <input type="number" min="0" value={materialForm.quantityReceived} onChange={(event) => setMaterialForm({ ...materialForm, quantityReceived: event.target.value })} />
+          </label>
+          <label>
+            <span>Quantity unit</span>
+            <select value={materialForm.quantityUnit} onChange={(event) => setMaterialForm({ ...materialForm, quantityUnit: event.target.value as MaterialReceipt['quantityUnit'] })}>
+              <option value="kg">kg</option>
+              <option value="rolls">rolls</option>
+              <option value="sheets">sheets</option>
+              <option value="units">units</option>
+            </select>
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'fsc',
+      title: 'FSC chain-of-custody',
+      subtitle: 'Capture FSC details if this material falls under chain-of-custody.',
+      body: (
+        <div className="form-grid">
+          <label className="checkbox-row">
+            <input type="checkbox" checked={materialForm.fscRelated} onChange={(event) => setMaterialForm({ ...materialForm, fscRelated: event.target.checked })} />
+            FSC-related
+          </label>
+          <label>
+            <span>FSC claim type</span>
+            <select value={materialForm.fscClaimType} onChange={(event) => setMaterialForm({ ...materialForm, fscClaimType: event.target.value as MaterialReceipt['fscClaimType'] })}>
+              {FSC_CLAIM_TYPES.map((claim) => <option key={claim} value={claim}>{claim}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Supplier certificate code</span>
+            <input value={materialForm.supplierCertificateCode} onChange={(event) => setMaterialForm({ ...materialForm, supplierCertificateCode: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Inspection notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Inspection notes</span>
+            <textarea value={materialForm.inspectionNotes} onChange={(event) => setMaterialForm({ ...materialForm, inspectionNotes: event.target.value })} />
+          </label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -133,110 +283,16 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header">
-            <div>
-              <h3>{materialEditingId ? 'Edit material receipt' : 'New material receipt'}</h3>
-              <p className="muted">Each receipt becomes a traceable source material for production logs and paper usage.</p>
-            </div>
-          </div>
-
-          {materialMessage ? <div className="message-strip">{materialMessage}</div> : null}
-
-          <div className="form-grid">
-            <label>
-              Received date
-              <input type="date" value={materialForm.receivedDate} onChange={(event) => setMaterialForm({ ...materialForm, receivedDate: event.target.value })} />
-            </label>
-            <label>
-              Supplier
-              <select
-                value={materialForm.supplierId}
-                onChange={(event) => {
-                  const supplier = suppliers.find((item) => item.id === event.target.value);
-                  setMaterialForm({
-                    ...materialForm,
-                    supplierId: supplier?.id ?? '',
-                    supplierName: supplier?.name ?? materialForm.supplierName,
-                  });
-                }}
-              >
-                <option value="">Select supplier</option>
-                {suppliers.filter((supplier) => supplier.active).map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Supplier batch number
-              <input value={materialForm.supplierBatchNumber} onChange={(event) => setMaterialForm({ ...materialForm, supplierBatchNumber: event.target.value })} />
-            </label>
-            <label>
-              Barcode
-              <input value={materialForm.barcode} onChange={(event) => setMaterialForm({ ...materialForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
-            </label>
-            <label>
-              Internal roll code
-              <input value={materialForm.internalRollCode} onChange={(event) => setMaterialForm({ ...materialForm, internalRollCode: event.target.value })} />
-            </label>
-            <label>
-              Paper type
-              <input value={materialForm.paperType} onChange={(event) => setMaterialForm({ ...materialForm, paperType: event.target.value })} />
-            </label>
-            <label>
-              GSM
-              <input value={materialForm.gsm} onChange={(event) => setMaterialForm({ ...materialForm, gsm: event.target.value })} />
-            </label>
-            <label>
-              Width
-              <input value={materialForm.width} onChange={(event) => setMaterialForm({ ...materialForm, width: event.target.value })} />
-            </label>
-            <label>
-              Quantity received
-              <input type="number" min="0" value={materialForm.quantityReceived} onChange={(event) => setMaterialForm({ ...materialForm, quantityReceived: event.target.value })} />
-            </label>
-            <label>
-              Quantity unit
-              <select value={materialForm.quantityUnit} onChange={(event) => setMaterialForm({ ...materialForm, quantityUnit: event.target.value as MaterialReceipt['quantityUnit'] })}>
-                <option value="kg">kg</option>
-                <option value="rolls">rolls</option>
-                <option value="sheets">sheets</option>
-                <option value="units">units</option>
-              </select>
-            </label>
-            <label>
-              FSC claim type
-              <select value={materialForm.fscClaimType} onChange={(event) => setMaterialForm({ ...materialForm, fscClaimType: event.target.value as MaterialReceipt['fscClaimType'] })}>
-                {FSC_CLAIM_TYPES.map((claim) => <option key={claim} value={claim}>{claim}</option>)}
-              </select>
-            </label>
-            <label>
-              Supplier certificate code
-              <input value={materialForm.supplierCertificateCode} onChange={(event) => setMaterialForm({ ...materialForm, supplierCertificateCode: event.target.value })} />
-            </label>
-            <label>
-              Invoice / delivery ref
-              <input value={materialForm.invoiceReference} onChange={(event) => setMaterialForm({ ...materialForm, invoiceReference: event.target.value })} />
-            </label>
-            <label>
-              Storage location
-              <input value={materialForm.storageLocation} onChange={(event) => setMaterialForm({ ...materialForm, storageLocation: event.target.value })} />
-            </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={materialForm.fscRelated} onChange={(event) => setMaterialForm({ ...materialForm, fscRelated: event.target.checked })} />
-              FSC-related
-            </label>
-            <label className="full-span">
-              Inspection notes
-              <textarea value={materialForm.inspectionNotes} onChange={(event) => setMaterialForm({ ...materialForm, inspectionNotes: event.target.value })} />
-            </label>
-          </div>
-
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{materialEditingId ? 'Save Changes' : 'Save Receipt'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={materialEditingId ? 'Edit material receipt' : 'New material receipt'}
+          subtitle="Each receipt becomes a traceable source material for production logs and paper usage."
+          message={materialMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!materialEditingId}
+          saveLabel="Save Receipt"
+        />
       ) : (
         <>
         <section className="card">

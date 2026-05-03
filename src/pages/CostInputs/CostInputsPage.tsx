@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
   CostProfile,
@@ -71,6 +72,139 @@ export function CostInputsPage({
   const [paperRatesMode, setPaperRatesMode] = useState<PaperRatesMode>('list');
   const [costProfilesMode, setCostProfilesMode] = useState<CostProfilesMode>('list');
 
+  const paperRateSections: FormWizardSection[] = [
+    {
+      key: 'identity',
+      title: 'Rate identity',
+      subtitle: 'How operators recognise this rate in the calculator.',
+      missingRequired: [
+        ...(paperRateForm.name.trim() ? [] : ['Name']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Name <RequiredMarker /></span><input value={paperRateForm.name} onChange={(event) => setPaperRateForm({ ...paperRateForm, name: event.target.value })} /></label>
+          <label>
+            <span>Supplier</span>
+            <select
+              value={paperRateForm.supplierId}
+              onChange={(event) => setPaperRateForm({ ...paperRateForm, supplierId: event.target.value })}
+            >
+              <option value="">Select supplier</option>
+              {suppliers.filter((supplier) => supplier.active).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="checkbox-row"><input type="checkbox" checked={paperRateForm.active} onChange={(event) => setPaperRateForm({ ...paperRateForm, active: event.target.checked })} />Active</label>
+        </div>
+      ),
+    },
+    {
+      key: 'spec-price',
+      title: 'Specification & price',
+      subtitle: 'The paper this rate applies to and the live ton price.',
+      missingRequired: [
+        ...(paperRateForm.pricePerTon && Number(paperRateForm.pricePerTon) > 0 ? [] : ['Price per ton']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Paper type</span><input value={paperRateForm.paperType} onChange={(event) => setPaperRateForm({ ...paperRateForm, paperType: event.target.value })} /></label>
+          <label><span>GSM</span><input value={paperRateForm.gsm} onChange={(event) => setPaperRateForm({ ...paperRateForm, gsm: event.target.value })} /></label>
+          <label><span>Price per ton <RequiredMarker /></span><input type="number" min="0" step="0.01" value={paperRateForm.pricePerTon} onChange={(event) => setPaperRateForm({ ...paperRateForm, pricePerTon: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={paperRateForm.notes} onChange={(event) => setPaperRateForm({ ...paperRateForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
+  const costProfileSections: FormWizardSection[] = [
+    {
+      key: 'core',
+      title: 'Core settings',
+      subtitle: 'Profile name and the headline assumptions used everywhere.',
+      missingRequired: [
+        ...(costProfileForm.name.trim() ? [] : ['Name']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Name <RequiredMarker /></span><input value={costProfileForm.name} onChange={(event) => setCostProfileForm({ ...costProfileForm, name: event.target.value })} /></label>
+          <label><span>Wastage %</span><input type="number" min="0" step="0.1" value={costProfileForm.wastagePercent} onChange={(event) => setCostProfileForm({ ...costProfileForm, wastagePercent: event.target.value })} /></label>
+          <label><span>Default margin %</span><input type="number" min="0" step="0.1" value={costProfileForm.defaultMarginPercent} onChange={(event) => setCostProfileForm({ ...costProfileForm, defaultMarginPercent: event.target.value })} /></label>
+          <label className="checkbox-row"><input type="checkbox" checked={costProfileForm.active} onChange={(event) => setCostProfileForm({ ...costProfileForm, active: event.target.checked })} />Active</label>
+        </div>
+      ),
+    },
+    {
+      key: 'glue',
+      title: 'Glue & handle costs',
+      subtitle: 'Per-bag adhesive and handle component costs.',
+      body: (
+        <div className="form-grid">
+          <label><span>Base glue cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.baseGlueCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, baseGlueCostPerBag: event.target.value })} /></label>
+          <label><span>Hot melt cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.hotMeltCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, hotMeltCostPerBag: event.target.value })} /></label>
+          <label><span>Flat handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.flatHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, flatHandleCostPerBag: event.target.value })} /></label>
+          <label><span>Rope handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.ropeHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, ropeHandleCostPerBag: event.target.value })} /></label>
+          <label><span>Roll handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.rollHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, rollHandleCostPerBag: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'printing',
+      title: 'Printing costs',
+      subtitle: 'Screen, plate, ink, and threshold for switching to flexo.',
+      body: (
+        <div className="form-grid">
+          <label><span>Screen setup cost</span><input type="number" min="0" step="0.01" value={costProfileForm.screenPrintSetupCost} onChange={(event) => setCostProfileForm({ ...costProfileForm, screenPrintSetupCost: event.target.value })} /></label>
+          <label><span>Screen print cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.screenPrintCostPerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, screenPrintCostPerColor: event.target.value })} /></label>
+          <label><span>Flexo ink / 1000 bags / color</span><input type="number" min="0" step="0.01" value={costProfileForm.flexoInkCostPer1000PerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, flexoInkCostPer1000PerColor: event.target.value })} /></label>
+          <label><span>Plate cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.plateCostPerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, plateCostPerColor: event.target.value })} /></label>
+          <label><span>Flexo threshold quantity</span><input type="number" min="0" value={costProfileForm.flexoThresholdQty} onChange={(event) => setCostProfileForm({ ...costProfileForm, flexoThresholdQty: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'labour',
+      title: 'Labour, packaging & transport',
+      subtitle: 'Per-1000 and per-job overheads applied by the calculator.',
+      body: (
+        <div className="form-grid">
+          <label><span>Labour cost / 1000 bags</span><input type="number" min="0" step="0.01" value={costProfileForm.labourCostPer1000} onChange={(event) => setCostProfileForm({ ...costProfileForm, labourCostPer1000: event.target.value })} /></label>
+          <label><span>Packaging cost / 1000 bags</span><input type="number" min="0" step="0.01" value={costProfileForm.packagingCostPer1000} onChange={(event) => setCostProfileForm({ ...costProfileForm, packagingCostPer1000: event.target.value })} /></label>
+          <label><span>Transport cost / job</span><input type="number" min="0" step="0.01" value={costProfileForm.transportCostPerJob} onChange={(event) => setCostProfileForm({ ...costProfileForm, transportCostPerJob: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'allowances',
+      title: 'Bag formula allowances',
+      subtitle: 'Seam and fold allowances used when sizing the cut sheet.',
+      body: (
+        <div className="form-grid">
+          <label><span>Side seam allowance mm</span><input type="number" min="0" value={costProfileForm.sideSeamAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, sideSeamAllowanceMm: event.target.value })} /></label>
+          <label><span>Top fold allowance mm</span><input type="number" min="0" value={costProfileForm.topFoldAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, topFoldAllowanceMm: event.target.value })} /></label>
+          <label><span>Bottom fold allowance mm</span><input type="number" min="0" value={costProfileForm.bottomFoldAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, bottomFoldAllowanceMm: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={costProfileForm.notes} onChange={(event) => setCostProfileForm({ ...costProfileForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <div className="calculator-tabs">
@@ -86,56 +220,19 @@ export function CostInputsPage({
         {tab === 'paperRates' ? (
           <>
             {paperRatesMode === 'form' ? (
-              <section className="card form-card">
-                <SectionTitle
-                  title={paperRateEditingId ? 'Edit Paper Rate' : 'New Paper Rate'}
-                  subtitle="Set the live ton pricing and paper specification the quote calculator will use."
-                  action={
-                    <button
-                      className="ghost-button"
-                      onClick={() => {
-                        onResetPaperRate();
-                        setPaperRatesMode('list');
-                      }}
-                    >
-                      Back to Paper Rates
-                    </button>
-                  }
-                />
-                {paperRateMessage ? <div className="message-strip">{paperRateMessage}</div> : null}
-                <div className="form-grid">
-                  <label><span>Name</span><input value={paperRateForm.name} onChange={(event) => setPaperRateForm({ ...paperRateForm, name: event.target.value })} /></label>
-                  <label>
-                    <span>Supplier</span>
-                    <select
-                      value={paperRateForm.supplierId}
-                      onChange={(event) => setPaperRateForm({ ...paperRateForm, supplierId: event.target.value })}
-                    >
-                      <option value="">Select supplier</option>
-                      {suppliers.filter((supplier) => supplier.active).map((supplier) => (
-                        <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label><span>Paper type</span><input value={paperRateForm.paperType} onChange={(event) => setPaperRateForm({ ...paperRateForm, paperType: event.target.value })} /></label>
-                  <label><span>GSM</span><input value={paperRateForm.gsm} onChange={(event) => setPaperRateForm({ ...paperRateForm, gsm: event.target.value })} /></label>
-                  <label><span>Price per ton</span><input type="number" min="0" step="0.01" value={paperRateForm.pricePerTon} onChange={(event) => setPaperRateForm({ ...paperRateForm, pricePerTon: event.target.value })} /></label>
-                  <label className="checkbox-row"><input type="checkbox" checked={paperRateForm.active} onChange={(event) => setPaperRateForm({ ...paperRateForm, active: event.target.checked })} />Active</label>
-                  <label className="full-span"><span>Notes</span><textarea value={paperRateForm.notes} onChange={(event) => setPaperRateForm({ ...paperRateForm, notes: event.target.value })} /></label>
-                </div>
-                <div className="button-row">
-                  <button className="primary-button" onClick={onSavePaperRate}>{paperRateEditingId ? 'Save Changes' : 'Save Paper Rate'}</button>
-                  <button
-                    className="ghost-button"
-                    onClick={() => {
-                      onResetPaperRate();
-                      setPaperRatesMode('list');
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </section>
+              <FormWizard
+                title={paperRateEditingId ? 'Edit Paper Rate' : 'New Paper Rate'}
+                subtitle="Set the live ton pricing and paper specification the quote calculator will use."
+                message={paperRateMessage || undefined}
+                sections={paperRateSections}
+                onSave={onSavePaperRate}
+                onCancel={() => {
+                  onResetPaperRate();
+                  setPaperRatesMode('list');
+                }}
+                isEditing={!!paperRateEditingId}
+                saveLabel="Save Paper Rate"
+              />
             ) : (
               <section className="card">
                 <SectionTitle
@@ -173,64 +270,19 @@ export function CostInputsPage({
         {tab === 'costProfiles' ? (
           <>
             {costProfilesMode === 'form' ? (
-              <section className="card form-card">
-                <SectionTitle
-                  title={costProfileEditingId ? 'Edit Cost Profile' : 'New Cost Profile'}
-                  subtitle="Set internal manufacturing assumptions and allowances used by the quote engine."
-                  action={
-                    <button
-                      className="ghost-button"
-                      onClick={() => {
-                        onResetCostProfile();
-                        setCostProfilesMode('list');
-                      }}
-                    >
-                      Back to Cost Profiles
-                    </button>
-                  }
-                />
-                {costProfileMessage ? <div className="message-strip">{costProfileMessage}</div> : null}
-                <div className="calculator-profile-grid">
-                  <label className="full-span"><strong>Core Settings</strong></label>
-                  <label><span>Name</span><input value={costProfileForm.name} onChange={(event) => setCostProfileForm({ ...costProfileForm, name: event.target.value })} /></label>
-                  <label><span>Wastage %</span><input type="number" min="0" step="0.1" value={costProfileForm.wastagePercent} onChange={(event) => setCostProfileForm({ ...costProfileForm, wastagePercent: event.target.value })} /></label>
-                  <label><span>Default margin %</span><input type="number" min="0" step="0.1" value={costProfileForm.defaultMarginPercent} onChange={(event) => setCostProfileForm({ ...costProfileForm, defaultMarginPercent: event.target.value })} /></label>
-                  <label className="full-span"><strong>Glue & Handle Costs</strong></label>
-                  <label><span>Base glue cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.baseGlueCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, baseGlueCostPerBag: event.target.value })} /></label>
-                  <label><span>Hot melt cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.hotMeltCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, hotMeltCostPerBag: event.target.value })} /></label>
-                  <label><span>Flat handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.flatHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, flatHandleCostPerBag: event.target.value })} /></label>
-                  <label><span>Rope handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.ropeHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, ropeHandleCostPerBag: event.target.value })} /></label>
-                  <label><span>Roll handle cost / bag</span><input type="number" min="0" step="0.0001" value={costProfileForm.rollHandleCostPerBag} onChange={(event) => setCostProfileForm({ ...costProfileForm, rollHandleCostPerBag: event.target.value })} /></label>
-                  <label className="full-span"><strong>Printing Costs</strong></label>
-                  <label><span>Screen setup cost</span><input type="number" min="0" step="0.01" value={costProfileForm.screenPrintSetupCost} onChange={(event) => setCostProfileForm({ ...costProfileForm, screenPrintSetupCost: event.target.value })} /></label>
-                  <label><span>Screen print cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.screenPrintCostPerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, screenPrintCostPerColor: event.target.value })} /></label>
-                  <label><span>Flexo ink / 1000 bags / color</span><input type="number" min="0" step="0.01" value={costProfileForm.flexoInkCostPer1000PerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, flexoInkCostPer1000PerColor: event.target.value })} /></label>
-                  <label><span>Plate cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.plateCostPerColor} onChange={(event) => setCostProfileForm({ ...costProfileForm, plateCostPerColor: event.target.value })} /></label>
-                  <label><span>Flexo threshold quantity</span><input type="number" min="0" value={costProfileForm.flexoThresholdQty} onChange={(event) => setCostProfileForm({ ...costProfileForm, flexoThresholdQty: event.target.value })} /></label>
-                  <label className="full-span"><strong>Labour, Packaging & Transport</strong></label>
-                  <label><span>Labour cost / 1000 bags</span><input type="number" min="0" step="0.01" value={costProfileForm.labourCostPer1000} onChange={(event) => setCostProfileForm({ ...costProfileForm, labourCostPer1000: event.target.value })} /></label>
-                  <label><span>Packaging cost / 1000 bags</span><input type="number" min="0" step="0.01" value={costProfileForm.packagingCostPer1000} onChange={(event) => setCostProfileForm({ ...costProfileForm, packagingCostPer1000: event.target.value })} /></label>
-                  <label><span>Transport cost / job</span><input type="number" min="0" step="0.01" value={costProfileForm.transportCostPerJob} onChange={(event) => setCostProfileForm({ ...costProfileForm, transportCostPerJob: event.target.value })} /></label>
-                  <label className="full-span"><strong>Bag Formula Allowances</strong></label>
-                  <label><span>Side seam allowance mm</span><input type="number" min="0" value={costProfileForm.sideSeamAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, sideSeamAllowanceMm: event.target.value })} /></label>
-                  <label><span>Top fold allowance mm</span><input type="number" min="0" value={costProfileForm.topFoldAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, topFoldAllowanceMm: event.target.value })} /></label>
-                  <label><span>Bottom fold allowance mm</span><input type="number" min="0" value={costProfileForm.bottomFoldAllowanceMm} onChange={(event) => setCostProfileForm({ ...costProfileForm, bottomFoldAllowanceMm: event.target.value })} /></label>
-                  <label className="checkbox-row"><input type="checkbox" checked={costProfileForm.active} onChange={(event) => setCostProfileForm({ ...costProfileForm, active: event.target.checked })} />Active</label>
-                  <label className="full-span"><span>Notes</span><textarea value={costProfileForm.notes} onChange={(event) => setCostProfileForm({ ...costProfileForm, notes: event.target.value })} /></label>
-                </div>
-                <div className="button-row">
-                  <button className="primary-button" onClick={onSaveCostProfile}>{costProfileEditingId ? 'Save Changes' : 'Save Cost Profile'}</button>
-                  <button
-                    className="ghost-button"
-                    onClick={() => {
-                      onResetCostProfile();
-                      setCostProfilesMode('list');
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </section>
+              <FormWizard
+                title={costProfileEditingId ? 'Edit Cost Profile' : 'New Cost Profile'}
+                subtitle="Set internal manufacturing assumptions and allowances used by the quote engine."
+                message={costProfileMessage || undefined}
+                sections={costProfileSections}
+                onSave={onSaveCostProfile}
+                onCancel={() => {
+                  onResetCostProfile();
+                  setCostProfilesMode('list');
+                }}
+                isEditing={!!costProfileEditingId}
+                saveLabel="Save Cost Profile"
+              />
             ) : (
               <section className="card">
                 <SectionTitle

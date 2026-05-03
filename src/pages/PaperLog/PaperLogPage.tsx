@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { JobCard, MaterialReceipt, PaperFilters, PaperFormState, PaperLog } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -62,36 +63,21 @@ export function PaperLogPage(props: PaperLogPageProps) {
     setMode('list');
   }
 
-  return (
-    <>
-      <SectionTitle
-        action={
-          mode === 'list' ? (
-            <button className="secondary-button" onClick={handleStartCreate}>Add New Paper Log</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Paper Log</button>
-          )
-        }
-      />
-
-      {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header">
-            <div>
-              <h3>{paperEditingId ? 'Edit paper log' : 'New paper log'}</h3>
-              <p className="muted">Paper log numbers are generated automatically when records are saved.</p>
-            </div>
-          </div>
-
-          {paperMessage ? <div className="message-strip">{paperMessage}</div> : null}
-
+  const sections: FormWizardSection[] = [
+    {
+      key: 'header',
+      title: 'Log header',
+      subtitle: 'When the paper was used and which job it was used on.',
+      missingRequired: [
+        ...(paperForm.logDate ? [] : ['Log date']),
+        ...(paperForm.jobId ? [] : ['Linked job']),
+      ],
+      body: (
+        <>
           <div className="form-grid">
+            <label><span>Log date <RequiredMarker /></span><input type="date" value={paperForm.logDate} onChange={(event) => setPaperForm({ ...paperForm, logDate: event.target.value })} /></label>
             <label>
-              Log date
-              <input type="date" value={paperForm.logDate} onChange={(event) => setPaperForm({ ...paperForm, logDate: event.target.value })} />
-            </label>
-            <label>
-              Linked job
+              <span>Linked job <RequiredMarker /></span>
               <select
                 value={paperForm.jobId}
                 onChange={(event) => {
@@ -110,51 +96,13 @@ export function PaperLogPage(props: PaperLogPageProps) {
               </select>
             </label>
             <label>
-              Source receipt
+              <span>Source receipt</span>
               <select value={paperForm.materialReceiptId} onChange={(event) => setPaperForm({ ...paperForm, materialReceiptId: event.target.value })}>
                 <option value="">Select receipt</option>
                 {materialReceipts.map((receipt) => <option key={receipt.id} value={receipt.id}>{receipt.internalRollCode} - {receipt.receiptNumber}</option>)}
               </select>
             </label>
-            <label>
-              Paper description / type
-              <input value={paperForm.paperType} onChange={(event) => setPaperForm({ ...paperForm, paperType: event.target.value })} />
-            </label>
-            <label>
-              GSM
-              <input value={paperForm.gsm} onChange={(event) => setPaperForm({ ...paperForm, gsm: event.target.value })} />
-            </label>
-            <label>
-              Width
-              <input value={paperForm.width} onChange={(event) => setPaperForm({ ...paperForm, width: event.target.value })} />
-            </label>
-            <label>
-              Quantity used
-              <input type="number" min="0" value={paperForm.quantityUsed} onChange={(event) => setPaperForm({ ...paperForm, quantityUsed: event.target.value })} />
-            </label>
-            <label>
-              Quantity unit
-              <select value={paperForm.quantityUnit} onChange={(event) => setPaperForm({ ...paperForm, quantityUnit: event.target.value as PaperLog['quantityUnit'] })}>
-                <option value="kg">kg</option>
-                <option value="sheets">sheets</option>
-                <option value="rolls">rolls</option>
-                <option value="units">units</option>
-              </select>
-            </label>
-            <label>
-              Paper code / batch code
-              <input value={paperForm.paperCode} onChange={(event) => setPaperForm({ ...paperForm, paperCode: event.target.value })} />
-            </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={paperForm.fscRelated} onChange={(event) => setPaperForm({ ...paperForm, fscRelated: event.target.checked })} />
-              FSC-related
-            </label>
-            <label className="full-span">
-              Notes
-              <textarea value={paperForm.notes} onChange={(event) => setPaperForm({ ...paperForm, notes: event.target.value })} />
-            </label>
           </div>
-
           {selectedPaperJob ? (
             <div className="linked-record">
               <span>Linked job</span>
@@ -162,38 +110,108 @@ export function PaperLogPage(props: PaperLogPageProps) {
               <p>{selectedPaperJob.customerName} • {selectedPaperJob.productName}</p>
             </div>
           ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'spec',
+      title: 'Paper specification',
+      subtitle: 'Type, GSM, width — pre-filled from the job when possible.',
+      body: (
+        <div className="form-grid">
+          <label><span>Paper description / type</span><input value={paperForm.paperType} onChange={(event) => setPaperForm({ ...paperForm, paperType: event.target.value })} /></label>
+          <label><span>GSM</span><input value={paperForm.gsm} onChange={(event) => setPaperForm({ ...paperForm, gsm: event.target.value })} /></label>
+          <label><span>Width</span><input value={paperForm.width} onChange={(event) => setPaperForm({ ...paperForm, width: event.target.value })} /></label>
+          <label><span>Paper code / batch code</span><input value={paperForm.paperCode} onChange={(event) => setPaperForm({ ...paperForm, paperCode: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      title: 'Quantity & FSC',
+      subtitle: 'How much was consumed and whether the chain-of-custody applies.',
+      missingRequired: [
+        ...(paperForm.quantityUsed && Number(paperForm.quantityUsed) > 0 ? [] : ['Quantity used']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Quantity used <RequiredMarker /></span><input type="number" min="0" value={paperForm.quantityUsed} onChange={(event) => setPaperForm({ ...paperForm, quantityUsed: event.target.value })} /></label>
+          <label>
+            <span>Quantity unit</span>
+            <select value={paperForm.quantityUnit} onChange={(event) => setPaperForm({ ...paperForm, quantityUnit: event.target.value as PaperLog['quantityUnit'] })}>
+              <option value="kg">kg</option>
+              <option value="sheets">sheets</option>
+              <option value="rolls">rolls</option>
+              <option value="units">units</option>
+            </select>
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={paperForm.fscRelated} onChange={(event) => setPaperForm({ ...paperForm, fscRelated: event.target.checked })} />
+            FSC-related
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={paperForm.notes} onChange={(event) => setPaperForm({ ...paperForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
 
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{paperEditingId ? 'Save Changes' : 'Save Paper Log'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+  return (
+    <>
+      <SectionTitle
+        action={
+          mode === 'list' ? (
+            <button className="secondary-button" onClick={handleStartCreate}>Add New Paper Log</button>
+          ) : (
+            <button className="ghost-button" onClick={handleBackToList}>Back to Paper Log</button>
+          )
+        }
+      />
+
+      {mode === 'form' ? (
+        <FormWizard
+          title={paperEditingId ? 'Edit paper log' : 'New paper log'}
+          subtitle="Paper log numbers are generated automatically when records are saved."
+          message={paperMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!paperEditingId}
+          saveLabel="Save Paper Log"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Paper usage history" subtitle={`${filteredPaperLogs.length} record(s) shown`} />
 
           <div className="filters-grid">
             <label>
-              Search
+              <span>Search</span>
               <input placeholder="Log, job, paper, code" value={paperFilters.search} onChange={(event) => setPaperFilters({ ...paperFilters, search: event.target.value })} />
             </label>
             <label>
-              Month
+              <span>Month</span>
               <select value={paperFilters.month} onChange={(event) => setPaperFilters({ ...paperFilters, month: event.target.value })}>
                 <option value="">All months</option>
                 {monthOptions.map((option) => <option key={option} value={option}>{getMonthLabel(option)}</option>)}
               </select>
             </label>
             <label>
-              Paper type
+              <span>Paper type</span>
               <input value={paperFilters.paperType} onChange={(event) => setPaperFilters({ ...paperFilters, paperType: event.target.value })} />
             </label>
             <label>
-              GSM
+              <span>GSM</span>
               <input value={paperFilters.gsm} onChange={(event) => setPaperFilters({ ...paperFilters, gsm: event.target.value })} />
             </label>
             <label>
-              FSC-related
+              <span>FSC-related</span>
               <select value={paperFilters.fsc} onChange={(event) => setPaperFilters({ ...paperFilters, fsc: event.target.value })}>
                 <option value="all">All</option>
                 <option value="yes">Yes</option>

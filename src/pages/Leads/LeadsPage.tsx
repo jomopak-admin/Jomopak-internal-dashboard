@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, Lead, LeadFilters, LeadFormState, Product, QuoteEstimate } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -55,6 +56,82 @@ export function LeadsPage({
     setMode('list');
   }
 
+  const hasContact = !!(leadForm.contactName.trim() || leadForm.companyName.trim() || leadForm.clientId);
+  const hasReachable = !!(leadForm.phone.trim() || leadForm.email.trim());
+  const isQuoted = leadForm.status === 'Quoted' || leadForm.status === 'Won' || leadForm.status === 'Lost';
+
+  const sections: FormWizardSection[] = [
+    {
+      key: 'enquiry',
+      title: 'Enquiry',
+      subtitle: 'When the lead came in and where it came from.',
+      missingRequired: [
+        ...(leadForm.enquiryDate ? [] : ['Enquiry date']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Enquiry date <RequiredMarker /></span><input type="date" value={leadForm.enquiryDate} onChange={(event) => setLeadForm({ ...leadForm, enquiryDate: event.target.value })} /></label>
+          <label><span>Source</span><select value={leadForm.source} onChange={(event) => setLeadForm({ ...leadForm, source: event.target.value as LeadFormState['source'] })}><option>WhatsApp</option><option>Phone</option><option>Email</option><option>Referral</option><option>Walk-in</option><option>Existing Customer</option><option>Website</option><option>Other</option></select></label>
+          <label><span>Assigned to</span><input value={leadForm.assignedTo} onChange={(event) => setLeadForm({ ...leadForm, assignedTo: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'contact',
+      title: 'Contact',
+      subtitle: 'Who to call back. Pick an existing client or capture a new prospect.',
+      missingRequired: [
+        ...(hasContact ? [] : ['Contact name or company']),
+        ...(hasReachable ? [] : ['Phone or email']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Existing client</span><select value={leadForm.clientId} onChange={(event) => setLeadForm({ ...leadForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+          <label><span>Company name <RequiredMarker /></span><input value={leadForm.companyName} onChange={(event) => setLeadForm({ ...leadForm, companyName: event.target.value })} placeholder="Or pick existing client above" /></label>
+          <label><span>Contact name</span><input value={leadForm.contactName} onChange={(event) => setLeadForm({ ...leadForm, contactName: event.target.value })} /></label>
+          <label><span>Phone / WhatsApp <RequiredMarker /></span><input value={leadForm.phone} onChange={(event) => setLeadForm({ ...leadForm, phone: event.target.value })} placeholder="Phone or email is required" /></label>
+          <label><span>Email <RequiredMarker /></span><input type="email" value={leadForm.email} onChange={(event) => setLeadForm({ ...leadForm, email: event.target.value })} placeholder="Phone or email is required" /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'request',
+      title: 'What they want',
+      subtitle: 'Product, quantity and when they need it.',
+      body: (
+        <div className="form-grid">
+          <label><span>Requested product</span><select value={leadForm.productId} onChange={(event) => setLeadForm({ ...leadForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <label><span>Requested quantity</span><input type="number" min="0" value={leadForm.requestedQuantity} onChange={(event) => setLeadForm({ ...leadForm, requestedQuantity: event.target.value })} /></label>
+          <label><span>Due date</span><input type="date" value={leadForm.dueDate} onChange={(event) => setLeadForm({ ...leadForm, dueDate: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      title: 'Status & quote linkage',
+      subtitle: isQuoted ? 'A QuickBooks reference makes the trail to billing complete.' : 'Promote to "Quoted" once you send pricing.',
+      missingRequired: [
+        ...(isQuoted && !leadForm.quickbooksEstimateNumber.trim() ? ['QuickBooks estimate #'] : []),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Status</span><select value={leadForm.status} onChange={(event) => setLeadForm({ ...leadForm, status: event.target.value as LeadFormState['status'] })}><option value="New">New</option><option value="Qualified">Qualified</option><option value="Awaiting Info">Awaiting Info</option><option value="Quoted">Quoted</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
+          <label><span>QuickBooks estimate # {isQuoted ? <RequiredMarker /> : null}</span><input value={leadForm.quickbooksEstimateNumber} onChange={(event) => setLeadForm({ ...leadForm, quickbooksEstimateNumber: event.target.value })} placeholder="Required once quoted" /></label>
+          <label><span>Linked quote</span><select value={leadForm.linkedQuoteId} onChange={(event) => setLeadForm({ ...leadForm, linkedQuoteId: event.target.value })}><option value="">Select quote</option>{quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quoteNumber} · {quote.clientName || quote.productName}</option>)}</select></label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={leadForm.notes} onChange={(event) => setLeadForm({ ...leadForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -62,31 +139,16 @@ export function LeadsPage({
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{leadEditingId ? 'Edit lead' : 'New lead'}</h3></div>
-          {leadMessage ? <div className="message-strip">{leadMessage}</div> : null}
-          <div className="form-grid">
-            <label><span>Enquiry date</span><input type="date" value={leadForm.enquiryDate} onChange={(event) => setLeadForm({ ...leadForm, enquiryDate: event.target.value })} /></label>
-            <label><span>Existing client</span><select value={leadForm.clientId} onChange={(event) => setLeadForm({ ...leadForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-            <label><span>Company name</span><input value={leadForm.companyName} onChange={(event) => setLeadForm({ ...leadForm, companyName: event.target.value })} /></label>
-            <label><span>Contact name</span><input value={leadForm.contactName} onChange={(event) => setLeadForm({ ...leadForm, contactName: event.target.value })} /></label>
-            <label><span>Phone / WhatsApp</span><input value={leadForm.phone} onChange={(event) => setLeadForm({ ...leadForm, phone: event.target.value })} /></label>
-            <label><span>Email</span><input type="email" value={leadForm.email} onChange={(event) => setLeadForm({ ...leadForm, email: event.target.value })} /></label>
-            <label><span>Source</span><select value={leadForm.source} onChange={(event) => setLeadForm({ ...leadForm, source: event.target.value as LeadFormState['source'] })}><option>WhatsApp</option><option>Phone</option><option>Email</option><option>Referral</option><option>Walk-in</option><option>Existing Customer</option><option>Website</option><option>Other</option></select></label>
-            <label><span>Assigned to</span><input value={leadForm.assignedTo} onChange={(event) => setLeadForm({ ...leadForm, assignedTo: event.target.value })} /></label>
-            <label><span>Requested product</span><select value={leadForm.productId} onChange={(event) => setLeadForm({ ...leadForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-            <label><span>Requested quantity</span><input type="number" min="0" value={leadForm.requestedQuantity} onChange={(event) => setLeadForm({ ...leadForm, requestedQuantity: event.target.value })} /></label>
-            <label><span>Due date</span><input type="date" value={leadForm.dueDate} onChange={(event) => setLeadForm({ ...leadForm, dueDate: event.target.value })} /></label>
-            <label><span>Status</span><select value={leadForm.status} onChange={(event) => setLeadForm({ ...leadForm, status: event.target.value as LeadFormState['status'] })}><option value="New">New</option><option value="Qualified">Qualified</option><option value="Awaiting Info">Awaiting Info</option><option value="Quoted">Quoted</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
-            <label><span>QuickBooks estimate #</span><input value={leadForm.quickbooksEstimateNumber} onChange={(event) => setLeadForm({ ...leadForm, quickbooksEstimateNumber: event.target.value })} placeholder="Required once quoted" /></label>
-            <label><span>Linked quote</span><select value={leadForm.linkedQuoteId} onChange={(event) => setLeadForm({ ...leadForm, linkedQuoteId: event.target.value })}><option value="">Select quote</option>{quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quoteNumber} · {quote.clientName || quote.productName}</option>)}</select></label>
-            <label className="full-span"><span>Notes</span><textarea value={leadForm.notes} onChange={(event) => setLeadForm({ ...leadForm, notes: event.target.value })} /></label>
-          </div>
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{leadEditingId ? 'Save Changes' : 'Save Lead'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={leadEditingId ? 'Edit lead' : 'New lead'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={leadMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!leadEditingId}
+          saveLabel="Save Lead"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Lead register" subtitle={`${filteredLeads.length} lead(s) shown`} />

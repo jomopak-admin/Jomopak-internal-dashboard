@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Machine, MachineFilters, MachineFormState } from '../../types';
 
@@ -46,6 +47,46 @@ export function MachinesPage({
     setMode('list');
   }
 
+  const sections: FormWizardSection[] = [
+    {
+      key: 'identity',
+      title: 'Machine identity',
+      subtitle: 'How operators will recognise and reference this machine.',
+      missingRequired: [
+        ...(machineForm.name.trim() ? [] : ['Machine name']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Machine name <RequiredMarker /></span><input value={machineForm.name} onChange={(event) => setMachineForm({ ...machineForm, name: event.target.value })} /></label>
+          <label><span>Code</span><input value={machineForm.code} onChange={(event) => setMachineForm({ ...machineForm, code: event.target.value })} /></label>
+          <label><span>Department</span><input value={machineForm.department} onChange={(event) => setMachineForm({ ...machineForm, department: event.target.value })} /></label>
+          <label><span>Process type</span><input value={machineForm.processType} onChange={(event) => setMachineForm({ ...machineForm, processType: event.target.value })} placeholder="Flexo / Slitting / Bag Making" /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      title: 'Operational status',
+      subtitle: 'Whether this machine should appear on shop-floor pickers.',
+      body: (
+        <div className="form-grid">
+          <label><span>Status</span><select value={machineForm.status} onChange={(event) => setMachineForm({ ...machineForm, status: event.target.value as MachineFormState['status'] })}><option value="Active">Active</option><option value="Maintenance">Maintenance</option><option value="Offline">Offline</option></select></label>
+          <label className="checkbox-row"><input type="checkbox" checked={machineForm.active} onChange={(event) => setMachineForm({ ...machineForm, active: event.target.checked })} />Active</label>
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      subtitle: 'Setup quirks, maintenance flags, anything operators should know.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={machineForm.notes} onChange={(event) => setMachineForm({ ...machineForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <SectionTitle
@@ -53,23 +94,16 @@ export function MachinesPage({
       />
 
       {mode === 'form' ? (
-        <section className="card form-card">
-          <div className="card-header"><h3>{machineEditingId ? 'Edit machine' : 'New machine'}</h3></div>
-          {machineMessage ? <div className="message-strip">{machineMessage}</div> : null}
-          <div className="form-grid">
-            <label><span>Machine name</span><input value={machineForm.name} onChange={(event) => setMachineForm({ ...machineForm, name: event.target.value })} /></label>
-            <label><span>Code</span><input value={machineForm.code} onChange={(event) => setMachineForm({ ...machineForm, code: event.target.value })} /></label>
-            <label><span>Department</span><input value={machineForm.department} onChange={(event) => setMachineForm({ ...machineForm, department: event.target.value })} /></label>
-            <label><span>Process type</span><input value={machineForm.processType} onChange={(event) => setMachineForm({ ...machineForm, processType: event.target.value })} placeholder="Flexo / Slitting / Bag Making" /></label>
-            <label><span>Status</span><select value={machineForm.status} onChange={(event) => setMachineForm({ ...machineForm, status: event.target.value as MachineFormState['status'] })}><option value="Active">Active</option><option value="Maintenance">Maintenance</option><option value="Offline">Offline</option></select></label>
-            <label className="checkbox-row"><input type="checkbox" checked={machineForm.active} onChange={(event) => setMachineForm({ ...machineForm, active: event.target.checked })} />Active</label>
-            <label className="full-span"><span>Notes</span><textarea value={machineForm.notes} onChange={(event) => setMachineForm({ ...machineForm, notes: event.target.value })} /></label>
-          </div>
-          <div className="button-row">
-            <button className="primary-button" onClick={onSave}>{machineEditingId ? 'Save Changes' : 'Save Machine'}</button>
-            <button className="ghost-button" onClick={handleBackToList}>Cancel</button>
-          </div>
-        </section>
+        <FormWizard
+          title={machineEditingId ? 'Edit machine' : 'New machine'}
+          subtitle="Required fields are marked. Sections complete as you fill them in."
+          message={machineMessage || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={handleBackToList}
+          isEditing={!!machineEditingId}
+          saveLabel="Save Machine"
+        />
       ) : (
         <section className="card">
           <SectionTitle title="Machine register" subtitle={`${filteredMachines.length} machine(s) shown`} />
