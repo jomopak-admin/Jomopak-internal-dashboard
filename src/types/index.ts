@@ -25,7 +25,7 @@ export type View =
   | 'paper'
   | 'dispatch'
   | 'reports';
-export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork';
+export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts';
 export type DashboardWidget =
   | 'stats'
   | 'monthSummary'
@@ -157,6 +157,21 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'products',
     'reports',
   ],
+  accounts: [
+    'dashboard',
+    'invoices',
+    'deliveryNotes',
+    'productionSpecs',
+    'quotes',
+    'clients',
+    'pricing',
+    'jobs',
+    'products',
+    'customerStock',
+    'dispatch',
+    'calculator',
+    'reports',
+  ],
 };
 
 export function normalizeProfilePermissions(role: UserRole, permissions?: string[] | null): View[] {
@@ -238,6 +253,13 @@ export const ROLE_DEFAULT_DASHBOARD_WIDGETS: Record<UserRole, DashboardWidget[]>
     'monthSummary',
     'alerts',
     'recentJobs',
+  ],
+  accounts: [
+    'stats',
+    'monthSummary',
+    'alerts',
+    'recentJobs',
+    'recentDispatch',
   ],
 };
 

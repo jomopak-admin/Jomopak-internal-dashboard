@@ -241,6 +241,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                 <option value="production">production</option>
                 <option value="sales">sales</option>
                 <option value="artwork">artwork</option>
+                <option value="accounts">accounts</option>
               </select>
             </label>
           </div>
@@ -386,6 +387,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                       <option value="production">production</option>
                       <option value="sales">sales</option>
                       <option value="artwork">artwork</option>
+                      <option value="accounts">accounts</option>
                     </select>
                   </label>
                   <div className="permission-panel">
