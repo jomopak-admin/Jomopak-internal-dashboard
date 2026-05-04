@@ -14,8 +14,8 @@ interface AppLayoutProps {
 
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Overview', views: ['dashboard', 'reports'] },
-  { title: 'Sales', views: ['salesDesk', 'leads', 'quotes', 'clients', 'pricing', 'calculator', 'costInputs'] },
-  { title: 'Production', views: ['artwork', 'jobs', 'production', 'waste', 'paper', 'machines'] },
+  { title: 'Sales', views: ['salesDesk', 'leads', 'quotes', 'invoices', 'clients', 'pricing', 'calculator', 'costInputs'] },
+  { title: 'Production', views: ['artwork', 'productionSpecs', 'jobs', 'production', 'waste', 'paper', 'machines'] },
   { title: 'Stock', views: ['materials', 'finishedStock', 'customerStock', 'dispatch', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
   { title: 'Admin', views: ['permissions'] },
 ];
