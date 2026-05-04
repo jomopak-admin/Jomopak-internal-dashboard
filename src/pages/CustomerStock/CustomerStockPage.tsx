@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommercialFlags, isClientAtRisk, isClientOverCredit } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -67,6 +68,36 @@ export function CustomerStockPage({
         ? `${selectedClient.name} is over credit (balance ${selectedClient.currentBalance} / limit ${selectedClient.creditLimit}). Settle the account before releasing stock.`
         : null;
 
+  const clientOptions: ComboboxOption[] = useMemo(
+    () =>
+      clients.map((client) => ({
+        value: client.id,
+        label: client.name,
+        sublabel: client.companyName || client.code,
+      })),
+    [clients],
+  );
+
+  const jobOptions: ComboboxOption[] = useMemo(
+    () =>
+      jobs.map((job) => ({
+        value: job.id,
+        label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+        sublabel: job.customerName,
+      })),
+    [jobs],
+  );
+
+  const finishedGoodsOptions: ComboboxOption[] = useMemo(
+    () =>
+      finishedGoodsStock.map((item) => ({
+        value: item.id,
+        label: `${item.stockNumber} · ${item.productName}`,
+        sublabel: `${item.quantityAvailable} ${item.quantityUnit} available`,
+      })),
+    [finishedGoodsStock],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -80,8 +111,8 @@ export function CustomerStockPage({
         <>
           <div className="form-grid">
             <label><span>Release date <RequiredMarker /></span><input type="date" value={releaseForm.releaseDate} onChange={(event) => setReleaseForm({ ...releaseForm, releaseDate: event.target.value })} /></label>
-            <label><span>Client <RequiredMarker /></span><select value={releaseForm.clientId} onChange={(event) => setReleaseForm({ ...releaseForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-            <label><span>Job</span><select value={releaseForm.jobId} onChange={(event) => setReleaseForm({ ...releaseForm, jobId: event.target.value })}><option value="">Select job</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber}</option>)}</select></label>
+            <label><span>Client <RequiredMarker /></span><Combobox options={clientOptions} value={releaseForm.clientId} onChange={(value) => setReleaseForm({ ...releaseForm, clientId: value })} placeholder="Search clients…" emptyMessage="No matching clients" /></label>
+            <label><span>Job</span><Combobox options={jobOptions} value={releaseForm.jobId} onChange={(value) => setReleaseForm({ ...releaseForm, jobId: value })} placeholder="Search jobs…" emptyMessage="No matching jobs" /></label>
           </div>
           {releaseBlocked && blockingReason ? (
             <div className="commercial-warning">
@@ -102,7 +133,7 @@ export function CustomerStockPage({
       ],
       body: (
         <div className="form-grid">
-          <label><span>Finished stock batch <RequiredMarker /></span><select value={releaseForm.finishedGoodsStockId} onChange={(event) => setReleaseForm({ ...releaseForm, finishedGoodsStockId: event.target.value })}><option value="">Select stock batch</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName}</option>)}</select></label>
+          <label><span>Finished stock batch <RequiredMarker /></span><Combobox options={finishedGoodsOptions} value={releaseForm.finishedGoodsStockId} onChange={(value) => setReleaseForm({ ...releaseForm, finishedGoodsStockId: value })} placeholder="Search stock batches…" emptyMessage="No matching batches" /></label>
           <label><span>Quantity released <RequiredMarker /></span><input type="number" min="0" value={releaseForm.quantityReleased} onChange={(event) => setReleaseForm({ ...releaseForm, quantityReleased: event.target.value })} /></label>
           <label><span>Unit</span><select value={releaseForm.quantityUnit} onChange={(event) => setReleaseForm({ ...releaseForm, quantityUnit: event.target.value as CustomerStockReleaseFormState['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
         </div>

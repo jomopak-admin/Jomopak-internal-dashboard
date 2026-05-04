@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -75,6 +76,46 @@ export function QuotesPage({
     setMode('list');
   }
 
+  // ---- searchable option lists for the Combobox ----
+  const clientOptions: ComboboxOption[] = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.companyName || client.code || undefined,
+    })),
+    [clients],
+  );
+  const leadOptions: ComboboxOption[] = useMemo(
+    () => leads.map((lead) => ({
+      value: lead.id,
+      label: lead.leadNumber || `Lead ${lead.id.slice(-6)}`,
+      sublabel: lead.companyName || lead.clientName || lead.contactName || undefined,
+    })),
+    [leads],
+  );
+  const productOptions: ComboboxOption[] = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: product.name,
+      sublabel: [product.category, product.sku].filter(Boolean).join(' · ') || undefined,
+    })),
+    [products],
+  );
+  const paperRateOptions: ComboboxOption[] = useMemo(
+    () => paperTypeOptions.map((rate) => ({
+      value: rate.id,
+      label: rate.gsm ? `${rate.paperType} (${rate.gsm})` : rate.paperType,
+    })),
+    [paperTypeOptions],
+  );
+  const costProfileOptions: ComboboxOption[] = useMemo(
+    () => costProfiles.filter((profile) => profile.active).map((profile) => ({
+      value: profile.id,
+      label: profile.name,
+    })),
+    [costProfiles],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -87,8 +128,8 @@ export function QuotesPage({
       body: (
         <div className="form-grid">
           <label><span>Quote date <RequiredMarker /></span><input type="date" value={quoteForm.quoteDate} onChange={(event) => setQuoteForm({ ...quoteForm, quoteDate: event.target.value })} /></label>
-          <label><span>Client <RequiredMarker /></span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-          <label><span>Linked lead</span><select value={quoteForm.linkedLeadId} onChange={(event) => setQuoteForm({ ...quoteForm, linkedLeadId: event.target.value })}><option value="">Select lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.leadNumber} · {lead.companyName || lead.clientName || lead.contactName}</option>)}</select></label>
+          <label><span>Client <RequiredMarker /></span><Combobox options={clientOptions} value={quoteForm.clientId} onChange={(value) => setQuoteForm({ ...quoteForm, clientId: value })} placeholder="Search clients…" emptyMessage="No matching clients" /></label>
+          <label><span>Linked lead</span><Combobox options={leadOptions} value={quoteForm.linkedLeadId} onChange={(value) => setQuoteForm({ ...quoteForm, linkedLeadId: value })} placeholder="Search leads…" emptyMessage="No matching leads" /></label>
           <label><span>QuickBooks estimate #</span><input value={quoteForm.quickbooksEstimateNumber} onChange={(event) => setQuoteForm({ ...quoteForm, quickbooksEstimateNumber: event.target.value })} placeholder="Optional reference" /></label>
         </div>
       ),
@@ -103,7 +144,7 @@ export function QuotesPage({
       ],
       body: (
         <div className="form-grid">
-          <label><span>Product <RequiredMarker /></span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <label><span>Product <RequiredMarker /></span><Combobox options={productOptions} value={quoteForm.productId} onChange={(value) => setQuoteForm({ ...quoteForm, productId: value })} placeholder="Search products…" emptyMessage="No matching products" /></label>
           <label><span>Quantity <RequiredMarker /></span><input type="number" min="0" value={quoteForm.quantity} onChange={(event) => setQuoteForm({ ...quoteForm, quantity: event.target.value })} /></label>
           <label><span>Size spec</span><input value={quoteForm.sizeSpec} onChange={(event) => setQuoteForm({ ...quoteForm, sizeSpec: event.target.value })} /></label>
           <label><span>Handle type</span><select value={quoteForm.handleType} onChange={(event) => setQuoteForm({ ...quoteForm, handleType: event.target.value as QuoteEstimateFormState['handleType'] })}><option value="None">None</option><option value="Flat Handle">Flat Handle</option><option value="Rope Handle">Rope Handle</option><option value="Roll Handle">Roll Handle</option></select></label>
@@ -119,8 +160,8 @@ export function QuotesPage({
       body: (
         <div className="form-grid">
           <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
-          <label><span>Paper type</span><select value={quoteForm.paperRateId} onChange={(event) => setQuoteForm({ ...quoteForm, paperRateId: event.target.value })}><option value="">Select paper type</option>{paperTypeOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.gsm ? `${rate.paperType} (${rate.gsm})` : rate.paperType}</option>)}</select></label>
-          <label><span>Cost profile</span><select value={quoteForm.costProfileId} onChange={(event) => setQuoteForm({ ...quoteForm, costProfileId: event.target.value })}><option value="">Select cost profile</option>{costProfiles.filter((profile) => profile.active).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+          <label><span>Paper type</span><Combobox options={paperRateOptions} value={quoteForm.paperRateId} onChange={(value) => setQuoteForm({ ...quoteForm, paperRateId: value })} placeholder="Search paper types…" emptyMessage="No matching paper rates" /></label>
+          <label><span>Cost profile</span><Combobox options={costProfileOptions} value={quoteForm.costProfileId} onChange={(value) => setQuoteForm({ ...quoteForm, costProfileId: value })} placeholder="Search cost profiles…" emptyMessage="No matching profiles" /></label>
         </div>
       ),
     },

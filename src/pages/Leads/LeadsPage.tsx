@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -56,6 +57,31 @@ export function LeadsPage({
     setMode('list');
   }
 
+  const clientOptions: ComboboxOption[] = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.companyName || client.code || undefined,
+    })),
+    [clients],
+  );
+  const productOptions: ComboboxOption[] = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: product.name,
+      sublabel: [product.category, product.sku].filter(Boolean).join(' · ') || undefined,
+    })),
+    [products],
+  );
+  const quoteOptions: ComboboxOption[] = useMemo(
+    () => quotes.map((quote) => ({
+      value: quote.id,
+      label: quote.quoteNumber || `Quote ${quote.id.slice(-6)}`,
+      sublabel: quote.clientName || quote.productName || undefined,
+    })),
+    [quotes],
+  );
+
   const hasContact = !!(leadForm.contactName.trim() || leadForm.companyName.trim() || leadForm.clientId);
   const hasReachable = !!(leadForm.phone.trim() || leadForm.email.trim());
   const isQuoted = leadForm.status === 'Quoted' || leadForm.status === 'Won' || leadForm.status === 'Lost';
@@ -86,7 +112,7 @@ export function LeadsPage({
       ],
       body: (
         <div className="form-grid">
-          <label><span>Existing client</span><select value={leadForm.clientId} onChange={(event) => setLeadForm({ ...leadForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+          <label><span>Existing client</span><Combobox options={clientOptions} value={leadForm.clientId} onChange={(value) => setLeadForm({ ...leadForm, clientId: value })} placeholder="Search clients…" emptyMessage="No matching clients" /></label>
           <label><span>Company name <RequiredMarker /></span><input value={leadForm.companyName} onChange={(event) => setLeadForm({ ...leadForm, companyName: event.target.value })} placeholder="Or pick existing client above" /></label>
           <label><span>Contact name</span><input value={leadForm.contactName} onChange={(event) => setLeadForm({ ...leadForm, contactName: event.target.value })} /></label>
           <label><span>Phone / WhatsApp <RequiredMarker /></span><input value={leadForm.phone} onChange={(event) => setLeadForm({ ...leadForm, phone: event.target.value })} placeholder="Phone or email is required" /></label>
@@ -100,7 +126,7 @@ export function LeadsPage({
       subtitle: 'Product, quantity and when they need it.',
       body: (
         <div className="form-grid">
-          <label><span>Requested product</span><select value={leadForm.productId} onChange={(event) => setLeadForm({ ...leadForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <label><span>Requested product</span><Combobox options={productOptions} value={leadForm.productId} onChange={(value) => setLeadForm({ ...leadForm, productId: value })} placeholder="Search products…" emptyMessage="No matching products" /></label>
           <label><span>Requested quantity</span><input type="number" min="0" value={leadForm.requestedQuantity} onChange={(event) => setLeadForm({ ...leadForm, requestedQuantity: event.target.value })} /></label>
           <label><span>Due date</span><input type="date" value={leadForm.dueDate} onChange={(event) => setLeadForm({ ...leadForm, dueDate: event.target.value })} /></label>
         </div>
@@ -117,7 +143,7 @@ export function LeadsPage({
         <div className="form-grid">
           <label><span>Status</span><select value={leadForm.status} onChange={(event) => setLeadForm({ ...leadForm, status: event.target.value as LeadFormState['status'] })}><option value="New">New</option><option value="Qualified">Qualified</option><option value="Awaiting Info">Awaiting Info</option><option value="Quoted">Quoted</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
           <label><span>QuickBooks estimate # {isQuoted ? <RequiredMarker /> : null}</span><input value={leadForm.quickbooksEstimateNumber} onChange={(event) => setLeadForm({ ...leadForm, quickbooksEstimateNumber: event.target.value })} placeholder="Required once quoted" /></label>
-          <label><span>Linked quote</span><select value={leadForm.linkedQuoteId} onChange={(event) => setLeadForm({ ...leadForm, linkedQuoteId: event.target.value })}><option value="">Select quote</option>{quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quoteNumber} · {quote.clientName || quote.productName}</option>)}</select></label>
+          <label><span>Linked quote</span><Combobox options={quoteOptions} value={leadForm.linkedQuoteId} onChange={(value) => setLeadForm({ ...leadForm, linkedQuoteId: value })} placeholder="Search quotes…" emptyMessage="No matching quotes" /></label>
         </div>
       ),
     },

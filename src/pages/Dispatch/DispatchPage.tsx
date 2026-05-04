@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -61,6 +62,26 @@ export function DispatchPage(props: DispatchPageProps) {
     setMode('list');
   }
 
+  const jobOptions: ComboboxOption[] = useMemo(
+    () =>
+      jobs.map((job) => ({
+        value: job.id,
+        label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+        sublabel: job.customerName,
+      })),
+    [jobs],
+  );
+
+  const finishedGoodsOptions: ComboboxOption[] = useMemo(
+    () =>
+      finishedGoodsStock.map((item) => ({
+        value: item.id,
+        label: `${item.stockNumber} · ${item.productName}`,
+        sublabel: `${item.quantityAvailable} ${item.quantityUnit} available`,
+      })),
+    [finishedGoodsStock],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -73,7 +94,7 @@ export function DispatchPage(props: DispatchPageProps) {
       body: (
         <div className="form-grid">
           <label><span>Dispatch date <RequiredMarker /></span><input type="date" value={dispatchForm.dispatchDate} onChange={(event) => setDispatchForm({ ...dispatchForm, dispatchDate: event.target.value })} /></label>
-          <label><span>Job card <RequiredMarker /></span><select value={dispatchForm.jobId} onChange={(event) => setDispatchForm({ ...dispatchForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
+          <label><span>Job card <RequiredMarker /></span><Combobox options={jobOptions} value={dispatchForm.jobId} onChange={(value) => setDispatchForm({ ...dispatchForm, jobId: value })} placeholder="Search job cards…" emptyMessage="No matching job cards" /></label>
         </div>
       ),
     },
@@ -86,7 +107,7 @@ export function DispatchPage(props: DispatchPageProps) {
       ],
       body: (
         <div className="form-grid">
-          <label><span>Finished stock batch</span><select value={dispatchForm.finishedGoodsStockId} onChange={(event) => setDispatchForm({ ...dispatchForm, finishedGoodsStockId: event.target.value })}><option value="">No stock deduction</option>{finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} - {item.productName} ({formatNumber(item.quantityAvailable)} {item.quantityUnit} available)</option>)}</select></label>
+          <label><span>Finished stock batch</span><Combobox options={finishedGoodsOptions} value={dispatchForm.finishedGoodsStockId} onChange={(value) => setDispatchForm({ ...dispatchForm, finishedGoodsStockId: value })} placeholder="Search stock batches…" emptyMessage="No matching batches" /></label>
           <label><span>Quantity dispatched <RequiredMarker /></span><input type="number" min="0" value={dispatchForm.quantityDispatched} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityDispatched: event.target.value })} /></label>
           <label><span>Unit</span><select value={dispatchForm.quantityUnit} onChange={(event) => setDispatchForm({ ...dispatchForm, quantityUnit: event.target.value as DispatchRecord['quantityUnit'] })}><option value="units">units</option><option value="kg">kg</option><option value="rolls">rolls</option><option value="sheets">sheets</option></select></label>
         </div>

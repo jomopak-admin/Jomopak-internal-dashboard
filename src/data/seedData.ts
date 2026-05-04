@@ -9,6 +9,8 @@ export function buildSeedData(): AppData {
     artworkRecords: [],
     customerStockReleases: [],
     deliveryNotes: [],
+    invoices: [],
+    productionSpecs: [],
     paperRates: [],
     costProfiles: [],
     pricingTiers: [],

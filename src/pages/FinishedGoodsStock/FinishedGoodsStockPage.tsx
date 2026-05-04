@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommercialFlags } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -70,6 +71,36 @@ export function FinishedGoodsStockPage({
     overSixty: filteredStock.filter((item) => getStorageAgeBand(getDaysInStorage(item.storedDate)) === '60+').length,
   };
 
+  const productOptions: ComboboxOption[] = useMemo(
+    () =>
+      products.map((product) => ({
+        value: product.id,
+        label: product.name,
+        sublabel: product.category,
+      })),
+    [products],
+  );
+
+  const clientOptions: ComboboxOption[] = useMemo(
+    () =>
+      clients.map((client) => ({
+        value: client.id,
+        label: client.name,
+        sublabel: client.companyName || client.code,
+      })),
+    [clients],
+  );
+
+  const jobOptions: ComboboxOption[] = useMemo(
+    () =>
+      jobs.map((job) => ({
+        value: job.id,
+        label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+        sublabel: job.customerName,
+      })),
+    [jobs],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'identity',
@@ -84,10 +115,13 @@ export function FinishedGoodsStockPage({
           <label><span>Stored date <RequiredMarker /></span><input type="date" value={stockForm.storedDate} onChange={(event) => setStockForm({ ...stockForm, storedDate: event.target.value })} /></label>
           <label>
             <span>Product <RequiredMarker /></span>
-            <select value={stockForm.productId} onChange={(event) => setStockForm({ ...stockForm, productId: event.target.value })}>
-              <option value="">Select product</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-            </select>
+            <Combobox
+              options={productOptions}
+              value={stockForm.productId}
+              onChange={(value) => setStockForm({ ...stockForm, productId: value })}
+              placeholder="Search products…"
+              emptyMessage="No matching products"
+            />
           </label>
           <label>
             <span>Barcode</span>
@@ -104,17 +138,23 @@ export function FinishedGoodsStockPage({
         <div className="form-grid">
           <label>
             <span>Client</span>
-            <select value={stockForm.clientId} onChange={(event) => setStockForm({ ...stockForm, clientId: event.target.value })}>
-              <option value="">No linked client</option>
-              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-            </select>
+            <Combobox
+              options={clientOptions}
+              value={stockForm.clientId}
+              onChange={(value) => setStockForm({ ...stockForm, clientId: value })}
+              placeholder="Search clients…"
+              emptyMessage="No matching clients"
+            />
           </label>
           <label>
             <span>Linked job</span>
-            <select value={stockForm.jobId} onChange={(event) => setStockForm({ ...stockForm, jobId: event.target.value })}>
-              <option value="">No linked job</option>
-              {jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} · {job.customerName}</option>)}
-            </select>
+            <Combobox
+              options={jobOptions}
+              value={stockForm.jobId}
+              onChange={(value) => setStockForm({ ...stockForm, jobId: value })}
+              placeholder="Search job cards…"
+              emptyMessage="No matching job cards"
+            />
           </label>
         </div>
       ),

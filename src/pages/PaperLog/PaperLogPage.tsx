@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -63,6 +64,26 @@ export function PaperLogPage(props: PaperLogPageProps) {
     setMode('list');
   }
 
+  const jobOptions: ComboboxOption[] = useMemo(
+    () =>
+      jobs.map((job) => ({
+        value: job.id,
+        label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+        sublabel: job.customerName,
+      })),
+    [jobs],
+  );
+
+  const materialReceiptOptions: ComboboxOption[] = useMemo(
+    () =>
+      materialReceipts.map((receipt) => ({
+        value: receipt.id,
+        label: receipt.internalRollCode,
+        sublabel: receipt.receiptNumber,
+      })),
+    [materialReceipts],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -78,29 +99,32 @@ export function PaperLogPage(props: PaperLogPageProps) {
             <label><span>Log date <RequiredMarker /></span><input type="date" value={paperForm.logDate} onChange={(event) => setPaperForm({ ...paperForm, logDate: event.target.value })} /></label>
             <label>
               <span>Linked job <RequiredMarker /></span>
-              <select
+              <Combobox
+                options={jobOptions}
                 value={paperForm.jobId}
-                onChange={(event) => {
-                  const nextJob = jobs.find((job) => job.id === event.target.value);
+                onChange={(value) => {
+                  const nextJob = jobs.find((job) => job.id === value);
                   setPaperForm({
                     ...paperForm,
-                    jobId: event.target.value,
+                    jobId: value,
                     paperType: paperForm.paperType || nextJob?.paperType || '',
                     gsm: paperForm.gsm || nextJob?.gsm || '',
                     fscRelated: nextJob?.fscRelated ?? paperForm.fscRelated,
                   });
                 }}
-              >
-                <option value="">Select job card</option>
-                {jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}
-              </select>
+                placeholder="Search job cards…"
+                emptyMessage="No matching job cards"
+              />
             </label>
             <label>
               <span>Source receipt</span>
-              <select value={paperForm.materialReceiptId} onChange={(event) => setPaperForm({ ...paperForm, materialReceiptId: event.target.value })}>
-                <option value="">Select receipt</option>
-                {materialReceipts.map((receipt) => <option key={receipt.id} value={receipt.id}>{receipt.internalRollCode} - {receipt.receiptNumber}</option>)}
-              </select>
+              <Combobox
+                options={materialReceiptOptions}
+                value={paperForm.materialReceiptId}
+                onChange={(value) => setPaperForm({ ...paperForm, materialReceiptId: value })}
+                placeholder="Search receipts…"
+                emptyMessage="No matching receipts"
+              />
             </label>
           </div>
           {selectedPaperJob ? (

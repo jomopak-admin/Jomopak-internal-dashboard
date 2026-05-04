@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -69,6 +70,18 @@ export function ArtworkPage({
     setMode('list');
   }
 
+  // Searchable list of jobs for the Combobox. Sublabel surfaces the
+  // customer + product so users can find a job by client name or product
+  // type, not just job number.
+  const jobOptions: ComboboxOption[] = useMemo(
+    () => jobs.map((job) => ({
+      value: job.id,
+      label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+      sublabel: [job.customerName, job.productName].filter(Boolean).join(' · '),
+    })),
+    [jobs],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'job',
@@ -79,7 +92,16 @@ export function ArtworkPage({
       ],
       body: (
         <div className="form-grid">
-          <label><span>Job card <RequiredMarker /></span><select value={artworkForm.jobId} onChange={(event) => setArtworkForm({ ...artworkForm, jobId: event.target.value })}><option value="">Select job card</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
+          <label>
+            <span>Job card <RequiredMarker /></span>
+            <Combobox
+              options={jobOptions}
+              value={artworkForm.jobId}
+              onChange={(value) => setArtworkForm({ ...artworkForm, jobId: value })}
+              placeholder="Search by job number, customer, or product…"
+              emptyMessage="No matching jobs"
+            />
+          </label>
           <label><span>Stage</span><select value={artworkForm.stage} onChange={(event) => setArtworkForm({ ...artworkForm, stage: event.target.value as ArtworkFormState['stage'] })}><option value="Awaiting Artwork">Awaiting Artwork</option><option value="Artwork Received">Artwork Received</option><option value="Proof Sent">Proof Sent</option><option value="Approved">Approved</option><option value="Changes Requested">Changes Requested</option></select></label>
         </div>
       ),

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlagBadge, StatusBadge } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
@@ -176,6 +177,32 @@ export function JobCardsPage(props: JobCardsPageProps) {
         .sort((a, b) => (b.jobDate || '').localeCompare(a.jobDate || ''))[0]
     : null;
 
+  // Searchable option lists for the comboboxes.
+  const clientOptions: ComboboxOption[] = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.companyName || client.code || undefined,
+    })),
+    [clients],
+  );
+  const productOptions: ComboboxOption[] = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: product.name,
+      sublabel: [product.category, product.sku].filter(Boolean).join(' · ') || undefined,
+    })),
+    [products],
+  );
+  const stockOptions: ComboboxOption[] = useMemo(
+    () => finishedGoodsStock.map((item) => ({
+      value: item.id,
+      label: `${item.stockNumber} · ${item.productName}`,
+      sublabel: `${formatNumber(item.quantityAvailable)} ${item.quantityUnit} available`,
+    })),
+    [finishedGoodsStock],
+  );
+
   // ---- required-field gating ----
   // Keep the bar low so capture isn't slowed down. The job number is generated
   // on save, so the truly indispensable fields are: when, who for, what, how
@@ -240,10 +267,13 @@ export function JobCardsPage(props: JobCardsPageProps) {
         <div className="form-grid">
           <label>
             <span>Client<RequiredMarker /></span>
-            <select value={jobForm.clientId} onChange={(event) => setJobForm({ ...jobForm, clientId: event.target.value })}>
-              <option value="">Select client</option>
-              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-            </select>
+            <Combobox
+              options={clientOptions}
+              value={jobForm.clientId}
+              onChange={(value) => setJobForm({ ...jobForm, clientId: value })}
+              placeholder="Search clients…"
+              emptyMessage="No matching clients"
+            />
           </label>
           <label><span>Pricing tier</span><select value={jobForm.pricingTierId} onChange={(event) => setJobForm({ ...jobForm, pricingTierId: event.target.value })}><option value="">Select pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
           <label>
@@ -269,10 +299,13 @@ export function JobCardsPage(props: JobCardsPageProps) {
         <div className="form-grid">
           <label>
             <span>Product<RequiredMarker /></span>
-            <select value={jobForm.productId} onChange={(event) => setJobForm({ ...jobForm, productId: event.target.value })}>
-              <option value="">Select product</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-            </select>
+            <Combobox
+              options={productOptions}
+              value={jobForm.productId}
+              onChange={(value) => setJobForm({ ...jobForm, productId: value })}
+              placeholder="Search products…"
+              emptyMessage="No matching products"
+            />
           </label>
           <label><span>Product / bag type</span><input value={jobForm.productName} onChange={(event) => setJobForm({ ...jobForm, productName: event.target.value })} placeholder="Auto-fills from product" /></label>
           <label><span>Product category</span><select value={jobForm.productCategory} onChange={(event) => setJobForm({ ...jobForm, productCategory: event.target.value as JobFormState['productCategory'] })}><option>Paper Bags</option><option>Paper Cups</option><option>Food Boxes</option><option>Wet Wipes</option><option>Other Packaging</option></select></label>
@@ -410,10 +443,13 @@ export function JobCardsPage(props: JobCardsPageProps) {
           <label className="checkbox-row"><input type="checkbox" checked={jobForm.reserveFromStock} onChange={(event) => setJobForm({ ...jobForm, reserveFromStock: event.target.checked })} />Reserve from finished stock</label>
           <label>
             <span>Stock batch<RequiredMarker /></span>
-            <select value={jobForm.reservedFinishedGoodsStockId} onChange={(event) => setJobForm({ ...jobForm, reservedFinishedGoodsStockId: event.target.value })}>
-              <option value="">Select stock batch</option>
-              {finishedGoodsStock.map((item) => <option key={item.id} value={item.id}>{item.stockNumber} · {item.productName} ({formatNumber(item.quantityAvailable)} {item.quantityUnit} available)</option>)}
-            </select>
+            <Combobox
+              options={stockOptions}
+              value={jobForm.reservedFinishedGoodsStockId}
+              onChange={(value) => setJobForm({ ...jobForm, reservedFinishedGoodsStockId: value })}
+              placeholder="Search stock batches…"
+              emptyMessage="No matching stock"
+            />
           </label>
           <label>
             <span>Reserved quantity<RequiredMarker /></span>
@@ -485,38 +521,34 @@ export function JobCardsPage(props: JobCardsPageProps) {
             <div className="form-grid">
               <label>
                 <span>Client<RequiredMarker /></span>
-                <select
+                <Combobox
+                  options={clientOptions}
                   value={jobForm.clientId}
-                  onChange={(event) => handleQuickAddClientChange(event.target.value)}
+                  onChange={(value) => handleQuickAddClientChange(value)}
+                  placeholder="Search clients…"
+                  emptyMessage="No matching clients"
                   autoFocus
-                >
-                  <option value="">Select client</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>{client.name}</option>
-                  ))}
-                </select>
+                />
               </label>
               <label>
                 <span>Product<RequiredMarker /></span>
-                <select
+                <Combobox
+                  options={productOptions}
                   value={jobForm.productId}
-                  onChange={(event) => {
-                    const product = products.find((entry) => entry.id === event.target.value);
+                  onChange={(value) => {
+                    const product = products.find((entry) => entry.id === value);
                     setJobForm({
                       ...jobForm,
-                      productId: event.target.value,
+                      productId: value,
                       productName: product?.name ?? jobForm.productName,
                       productCategory: product?.category ?? jobForm.productCategory,
                       paperType: product?.defaultPaperType || jobForm.paperType,
                       gsm: product?.defaultGsm || jobForm.gsm,
                     });
                   }}
-                >
-                  <option value="">Select product</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>{product.name}</option>
-                  ))}
-                </select>
+                  placeholder="Search products…"
+                  emptyMessage="No matching products"
+                />
               </label>
               <label>
                 <span>Quantity planned<RequiredMarker /></span>

@@ -6,6 +6,8 @@ import { CostInputsPage } from './pages/CostInputs/CostInputsPage';
 import { ClientsPage } from './pages/Clients/ClientsPage';
 import { CustomerStockPage } from './pages/CustomerStock/CustomerStockPage';
 import { DeliveryNotesPage } from './pages/DeliveryNotes/DeliveryNotesPage';
+import { InvoicesPage } from './pages/Invoices/InvoicesPage';
+import { ProductionSpecsPage } from './pages/ProductionSpecs/ProductionSpecsPage';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { useAuth } from './hooks/useAuth';
 import { useProfiles } from './hooks/useProfiles';
@@ -45,6 +47,12 @@ import {
   DeliveryNote,
   DeliveryNoteFilters,
   DeliveryNoteFormState,
+  Invoice,
+  InvoiceFilters,
+  InvoiceFormState,
+  ProductionSpec,
+  ProductionSpecFilters,
+  ProductionSpecFormState,
   DispatchFilters,
   DispatchFormState,
   DispatchRecord,
@@ -135,6 +143,8 @@ const VIEW_ORDER: View[] = [
   'artwork',
   'customerStock',
   'deliveryNotes',
+  'invoices',
+  'productionSpecs',
   'jobs',
   'products',
   'clients',
@@ -532,6 +542,65 @@ const createInitialDeliveryNoteForm = (): DeliveryNoteFormState => ({
   clientVisible: true,
   lineItems: [],
   notes: '',
+  parentInvoiceId: '',
+  receiptMode: 'Pending',
+  signedByName: '',
+  signedByDate: '',
+  signedByContactInfo: '',
+  collectedByName: '',
+  collectedByDate: '',
+  collectedByIdNumber: '',
+});
+
+const createInitialInvoiceForm = (): InvoiceFormState => ({
+  invoiceDate: getToday(),
+  dueDate: '',
+  clientId: '',
+  jobId: '',
+  quoteId: '',
+  productionSpecId: '',
+  customerReference: '',
+  termsType: '50% Deposit',
+  termsText: '50% deposit, balance on collection / delivery.',
+  notes: '',
+  footerNotes: '',
+  status: 'Draft',
+  currency: 'ZAR',
+  lineItems: [],
+  payments: [],
+  stockHoldingApplies: false,
+  stockHoldingStartDate: getToday(),
+  stockHoldingMaxDays: '90',
+  clientVisible: true,
+});
+
+const createInitialProductionSpecForm = (): ProductionSpecFormState => ({
+  specDate: getToday(),
+  status: 'Draft',
+  clientId: '',
+  productId: '',
+  jobId: '',
+  sizeWidthMm: '',
+  sizeHeightMm: '',
+  sizeGussetMm: '',
+  paperGsm: '',
+  paperType: '',
+  handleType: 'None',
+  finishingNotes: '',
+  printMethod: 'Plain',
+  printColours: '0',
+  pantoneReferences: '',
+  artworkReference: '',
+  printPositionNotes: '',
+  quantityOrdered: '',
+  quantityUnit: 'units',
+  leadTimeDays: '',
+  packingFormat: 'Boxes',
+  packingNotes: '',
+  approvedBy: '',
+  approvedDate: '',
+  notes: '',
+  clientVisible: true,
 });
 
 const createInitialPricingTierForm = (): PricingTierFormState => ({
@@ -740,6 +809,14 @@ function App() {
   const [deliveryNoteEditingId, setDeliveryNoteEditingId] = useState<string | null>(null);
   const [deliveryNoteMessage, setDeliveryNoteMessage] = useState('');
   const [deliveryNoteFilters, setDeliveryNoteFilters] = useState<DeliveryNoteFilters>({ search: '', month: '', client: '', status: '', visibility: 'all' });
+  const [invoiceForm, setInvoiceForm] = useState(createInitialInvoiceForm);
+  const [invoiceEditingId, setInvoiceEditingId] = useState<string | null>(null);
+  const [invoiceMessage, setInvoiceMessage] = useState('');
+  const [invoiceFilters, setInvoiceFilters] = useState<InvoiceFilters>({ search: '', month: '', client: '', status: '', stockHolding: '' });
+  const [productionSpecForm, setProductionSpecForm] = useState(createInitialProductionSpecForm);
+  const [productionSpecEditingId, setProductionSpecEditingId] = useState<string | null>(null);
+  const [productionSpecMessage, setProductionSpecMessage] = useState('');
+  const [productionSpecFilters, setProductionSpecFilters] = useState<ProductionSpecFilters>({ search: '', client: '', status: '', product: '' });
 
   const [reportFilters, setReportFilters] = useState<ReportFilters>({
     month: currentMonth,
@@ -1012,6 +1089,24 @@ function App() {
           { label: 'Releases (month)', value: monthReleases.length },
         ]);
       }
+      case 'invoices': {
+        const total = data.invoices.length;
+        const outstanding = data.invoices.reduce((acc, inv) => acc + (inv.amountOutstanding || 0), 0);
+        const stockHolding = data.invoices.filter((inv) => inv.stockHoldingApplies && inv.stockHoldingStatus === 'Active').length;
+        return renderChips([
+          { label: 'Invoices', value: total },
+          { label: 'Outstanding', value: outstanding > 0 ? `R ${outstanding.toFixed(0)}` : '0' },
+          { label: 'Active stock-holding', value: stockHolding, tone: stockHolding > 0 ? 'warn' : undefined },
+        ]);
+      }
+      case 'productionSpecs': {
+        const total = data.productionSpecs.length;
+        const inProduction = data.productionSpecs.filter((s) => s.status === 'In Production').length;
+        return renderChips([
+          { label: 'Specs', value: total },
+          { label: 'In production', value: inProduction },
+        ]);
+      }
       default:
         return undefined;
     }
@@ -1205,6 +1300,25 @@ function App() {
     const matchesVisibility = deliveryNoteFilters.visibility === 'all' || (deliveryNoteFilters.visibility === 'client' ? note.clientVisible : !note.clientVisible);
     return matchesSalesOwner && matchesSearch && matchesMonth && matchesClient && matchesStatus && matchesVisibility;
   }), [currentSalesOwner, data.deliveryNotes, deliveryNoteFilters, isSalesUser, jobsById]);
+
+  const filteredInvoices = useMemo(() => data.invoices.filter((invoice) => {
+    const matchesSearch = !invoiceFilters.search || [invoice.invoiceNumber, invoice.clientName, invoice.clientCompanyName, invoice.customerReference, invoice.jobNumber].some((value) => matchesText(value, invoiceFilters.search));
+    const matchesMonth = !invoiceFilters.month || getMonthKey(invoice.invoiceDate) === invoiceFilters.month;
+    const matchesClient = !invoiceFilters.client || matchesText(invoice.clientName, invoiceFilters.client) || matchesText(invoice.clientCompanyName, invoiceFilters.client);
+    const matchesStatus = !invoiceFilters.status || invoice.status === invoiceFilters.status;
+    const matchesStockHolding = !invoiceFilters.stockHolding
+      || (invoiceFilters.stockHolding === 'active' && invoice.stockHoldingApplies)
+      || (invoiceFilters.stockHolding === 'standard' && !invoice.stockHoldingApplies);
+    return matchesSearch && matchesMonth && matchesClient && matchesStatus && matchesStockHolding;
+  }), [data.invoices, invoiceFilters]);
+
+  const filteredProductionSpecs = useMemo(() => data.productionSpecs.filter((spec) => {
+    const matchesSearch = !productionSpecFilters.search || [spec.specNumber, spec.clientName, spec.productName, spec.jobNumber, spec.artworkReference].some((value) => matchesText(value, productionSpecFilters.search));
+    const matchesClient = !productionSpecFilters.client || matchesText(spec.clientName, productionSpecFilters.client);
+    const matchesProduct = !productionSpecFilters.product || matchesText(spec.productName, productionSpecFilters.product);
+    const matchesStatus = !productionSpecFilters.status || spec.status === productionSpecFilters.status;
+    return matchesSearch && matchesClient && matchesProduct && matchesStatus;
+  }), [data.productionSpecs, productionSpecFilters]);
 
   const reportJobs = useMemo(() => data.jobs.filter((job) => {
     const matchesMonth = !reportFilters.month || getMonthKey(job.jobDate) === reportFilters.month;
@@ -1727,6 +1841,8 @@ function App() {
   function resetArtworkEditor() { setArtworkForm(createInitialArtworkForm()); setArtworkEditingId(null); setArtworkMessage(''); }
   function resetCustomerStockReleaseEditor() { setCustomerStockReleaseForm(createInitialCustomerStockReleaseForm()); setCustomerStockReleaseEditingId(null); setCustomerStockReleaseMessage(''); }
   function resetDeliveryNoteEditor() { setDeliveryNoteForm(createInitialDeliveryNoteForm()); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
+  function resetInvoiceEditor() { setInvoiceForm(createInitialInvoiceForm()); setInvoiceEditingId(null); setInvoiceMessage(''); }
+  function resetProductionSpecEditor() { setProductionSpecForm(createInitialProductionSpecForm()); setProductionSpecEditingId(null); setProductionSpecMessage(''); }
   function resetPaperRateEditor() { setPaperRateForm(createInitialPaperRateForm()); setPaperRateEditingId(null); setPaperRateMessage(''); }
   function resetCostProfileEditor() { setCostProfileForm(createInitialCostProfileForm()); setCostProfileEditingId(null); setCostProfileMessage(''); }
   function resetStockEditor() { setStockForm(createInitialFinishedStockForm()); setStockEditingId(null); setStockMessage(''); }
@@ -2263,6 +2379,17 @@ function App() {
       clientVisible: deliveryNoteForm.clientVisible,
       lineItems: deliveryNoteForm.lineItems,
       notes: deliveryNoteForm.notes,
+      parentInvoiceId: deliveryNoteForm.parentInvoiceId,
+      parentInvoiceNumber: deliveryNoteForm.parentInvoiceId
+        ? (data.invoices.find((inv) => inv.id === deliveryNoteForm.parentInvoiceId)?.invoiceNumber ?? '')
+        : '',
+      receiptMode: deliveryNoteForm.receiptMode,
+      signedByName: deliveryNoteForm.signedByName,
+      signedByDate: deliveryNoteForm.signedByDate,
+      signedByContactInfo: deliveryNoteForm.signedByContactInfo,
+      collectedByName: deliveryNoteForm.collectedByName,
+      collectedByDate: deliveryNoteForm.collectedByDate,
+      collectedByIdNumber: deliveryNoteForm.collectedByIdNumber,
     };
 
     if (deliveryNoteEditingId) {
@@ -2284,6 +2411,196 @@ function App() {
       }));
     }
     resetDeliveryNoteEditor();
+  }
+
+  function handleSaveInvoice() {
+    if (!invoiceForm.invoiceDate || !invoiceForm.clientId) {
+      setInvoiceMessage('Invoice date and client are required.');
+      return;
+    }
+    const usableLines = invoiceForm.lineItems.filter(
+      (line) => Number(line.quantity || 0) > 0 && Number(line.unitPriceExclVat || 0) > 0,
+    );
+    if (!usableLines.length) {
+      setInvoiceMessage('Add at least one line with quantity and unit price.');
+      return;
+    }
+    const client = clientsById.get(invoiceForm.clientId);
+    if (!client) {
+      setInvoiceMessage('Select a valid client before saving the invoice.');
+      return;
+    }
+    const job = invoiceForm.jobId ? jobsById.get(invoiceForm.jobId) : undefined;
+    const quote = invoiceForm.quoteId ? quotesById.get(invoiceForm.quoteId) : undefined;
+    const spec = invoiceForm.productionSpecId ? data.productionSpecs.find((s) => s.id === invoiceForm.productionSpecId) : undefined;
+
+    const lineItems = invoiceForm.lineItems.map((line) => {
+      const qty = Number(line.quantity || 0);
+      const price = Number(line.unitPriceExclVat || 0);
+      const vatPct = Number(line.vatRatePercent || 0);
+      const lineExcl = qty * price;
+      const lineIncl = lineExcl * (1 + vatPct / 100);
+      return {
+        id: line.id,
+        productId: line.productId,
+        productName: line.productName,
+        description: line.description,
+        quantity: qty,
+        quantityUnit: line.quantityUnit,
+        unitPriceExclVat: price,
+        vatRatePercent: vatPct,
+        lineTotalExclVat: lineExcl,
+        lineTotalInclVat: lineIncl,
+        quantityDeliveredToDate: 0,
+      };
+    });
+    const subtotalExclVat = lineItems.reduce((acc, l) => acc + l.lineTotalExclVat, 0);
+    const totalInclVat = lineItems.reduce((acc, l) => acc + l.lineTotalInclVat, 0);
+    const vatTotal = totalInclVat - subtotalExclVat;
+    const payments = invoiceForm.payments.map((pay) => ({
+      id: pay.id,
+      paymentDate: pay.paymentDate,
+      amount: Number(pay.amount || 0),
+      method: pay.method,
+      reference: pay.reference,
+      notes: pay.notes,
+    }));
+    const amountPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+    const amountOutstanding = Math.max(0, totalInclVat - amountPaid);
+
+    const billingAddress = [
+      client.billingAddressLine1,
+      client.billingAddressLine2,
+      [client.billingCity, client.billingState, client.billingPostalCode].filter(Boolean).join(', '),
+      client.billingCountry,
+    ].filter(Boolean).join('\n');
+
+    const payload = {
+      invoiceDate: invoiceForm.invoiceDate,
+      dueDate: invoiceForm.dueDate,
+      clientId: client.id,
+      clientName: client.name,
+      clientCompanyName: client.companyName,
+      clientVatNumber: client.vatNumber,
+      clientBillingAddress: billingAddress,
+      clientContactName: client.contactName,
+      clientContactEmail: client.contactEmail,
+      clientContactPhone: client.phoneNumber || client.mobileNumber,
+      jobId: job?.id ?? '',
+      jobNumber: job?.jobNumber ?? '',
+      quoteId: quote?.id ?? '',
+      quoteNumber: quote?.quoteNumber ?? '',
+      productionSpecId: spec?.id ?? '',
+      productionSpecNumber: spec?.specNumber ?? '',
+      customerReference: invoiceForm.customerReference,
+      termsType: invoiceForm.termsType,
+      termsText: invoiceForm.termsText,
+      notes: invoiceForm.notes,
+      footerNotes: invoiceForm.footerNotes,
+      status: invoiceForm.status,
+      currency: invoiceForm.currency,
+      lineItems,
+      subtotalExclVat,
+      vatTotal,
+      totalInclVat,
+      payments,
+      amountPaid,
+      amountOutstanding,
+      stockHoldingApplies: invoiceForm.stockHoldingApplies,
+      stockHoldingStatus: invoiceForm.stockHoldingApplies
+        ? (amountOutstanding > 0 ? 'Active' : (lineItems.every((l) => l.quantityDeliveredToDate >= l.quantity) ? 'Fully Released' : 'Active'))
+        : 'Not Applicable',
+      stockHoldingStartDate: invoiceForm.stockHoldingStartDate,
+      stockHoldingMaxDays: Number(invoiceForm.stockHoldingMaxDays || 0),
+      deliveryNoteIds: [] as string[],
+      clientVisible: invoiceForm.clientVisible,
+    } as const;
+
+    if (invoiceEditingId) {
+      setData((current) => ({
+        ...current,
+        invoices: current.invoices.map((inv) => inv.id === invoiceEditingId ? { ...inv, ...payload } : inv),
+      }));
+    } else {
+      const invoiceNumber = generateCode('INV', data.invoices.map((inv) => inv.invoiceNumber), invoiceForm.invoiceDate);
+      const newInvoice: Invoice = {
+        id: invoiceNumber,
+        invoiceNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      setData((current) => ({
+        ...current,
+        invoices: [newInvoice, ...current.invoices],
+      }));
+    }
+    resetInvoiceEditor();
+  }
+
+  function handleSaveProductionSpec() {
+    if (!productionSpecForm.clientId || !productionSpecForm.productId) {
+      setProductionSpecMessage('Client and product are required.');
+      return;
+    }
+    const client = clientsById.get(productionSpecForm.clientId);
+    const product = productsById.get(productionSpecForm.productId);
+    if (!client || !product) {
+      setProductionSpecMessage('Select a valid client and product.');
+      return;
+    }
+    const job = productionSpecForm.jobId ? jobsById.get(productionSpecForm.jobId) : undefined;
+    const payload = {
+      specDate: productionSpecForm.specDate,
+      status: productionSpecForm.status,
+      clientId: client.id,
+      clientName: client.name,
+      clientCompanyName: client.companyName,
+      productId: product.id,
+      productName: product.name,
+      jobId: job?.id ?? '',
+      jobNumber: job?.jobNumber ?? '',
+      sizeWidthMm: Number(productionSpecForm.sizeWidthMm || 0),
+      sizeHeightMm: Number(productionSpecForm.sizeHeightMm || 0),
+      sizeGussetMm: Number(productionSpecForm.sizeGussetMm || 0),
+      paperGsm: Number(productionSpecForm.paperGsm || 0),
+      paperType: productionSpecForm.paperType,
+      handleType: productionSpecForm.handleType,
+      finishingNotes: productionSpecForm.finishingNotes,
+      printMethod: productionSpecForm.printMethod,
+      printColours: Number(productionSpecForm.printColours || 0),
+      pantoneReferences: productionSpecForm.pantoneReferences,
+      artworkReference: productionSpecForm.artworkReference,
+      printPositionNotes: productionSpecForm.printPositionNotes,
+      quantityOrdered: Number(productionSpecForm.quantityOrdered || 0),
+      quantityUnit: productionSpecForm.quantityUnit,
+      leadTimeDays: Number(productionSpecForm.leadTimeDays || 0),
+      packingFormat: productionSpecForm.packingFormat,
+      packingNotes: productionSpecForm.packingNotes,
+      approvedBy: productionSpecForm.approvedBy,
+      approvedDate: productionSpecForm.approvedDate,
+      notes: productionSpecForm.notes,
+      clientVisible: productionSpecForm.clientVisible,
+    };
+
+    if (productionSpecEditingId) {
+      setData((current) => ({
+        ...current,
+        productionSpecs: current.productionSpecs.map((s) => s.id === productionSpecEditingId ? { ...s, ...payload } : s),
+      }));
+    } else {
+      const specNumber = generateCode('SPEC', data.productionSpecs.map((s) => s.specNumber), productionSpecForm.specDate);
+      const newSpec: ProductionSpec = {
+        id: specNumber,
+        specNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      setData((current) => ({
+        ...current,
+        productionSpecs: [newSpec, ...current.productionSpecs],
+      }));
+    }
+    resetProductionSpecEditor();
   }
 
   function handleSaveJob() {
@@ -4301,8 +4618,91 @@ function App() {
       clientVisible: note.clientVisible,
       lineItems: note.lineItems,
       notes: note.notes,
+      parentInvoiceId: note.parentInvoiceId || '',
+      receiptMode: note.receiptMode || 'Pending',
+      signedByName: note.signedByName || '',
+      signedByDate: note.signedByDate || '',
+      signedByContactInfo: note.signedByContactInfo || '',
+      collectedByName: note.collectedByName || '',
+      collectedByDate: note.collectedByDate || '',
+      collectedByIdNumber: note.collectedByIdNumber || '',
     });
     setView('deliveryNotes');
+  }
+
+  function editInvoice(invoice: Invoice) {
+    setInvoiceEditingId(invoice.id);
+    setInvoiceForm({
+      invoiceDate: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
+      clientId: invoice.clientId,
+      jobId: invoice.jobId,
+      quoteId: invoice.quoteId,
+      productionSpecId: invoice.productionSpecId,
+      customerReference: invoice.customerReference,
+      termsType: invoice.termsType,
+      termsText: invoice.termsText,
+      notes: invoice.notes,
+      footerNotes: invoice.footerNotes,
+      status: invoice.status,
+      currency: invoice.currency,
+      lineItems: invoice.lineItems.map((line) => ({
+        id: line.id,
+        productId: line.productId,
+        productName: line.productName,
+        description: line.description,
+        quantity: String(line.quantity ?? ''),
+        quantityUnit: line.quantityUnit,
+        unitPriceExclVat: String(line.unitPriceExclVat ?? ''),
+        vatRatePercent: String(line.vatRatePercent ?? ''),
+      })),
+      payments: invoice.payments.map((pay) => ({
+        id: pay.id,
+        paymentDate: pay.paymentDate,
+        amount: String(pay.amount ?? ''),
+        method: pay.method,
+        reference: pay.reference,
+        notes: pay.notes,
+      })),
+      stockHoldingApplies: invoice.stockHoldingApplies,
+      stockHoldingStartDate: invoice.stockHoldingStartDate,
+      stockHoldingMaxDays: String(invoice.stockHoldingMaxDays ?? ''),
+      clientVisible: invoice.clientVisible,
+    });
+    setView('invoices');
+  }
+
+  function editProductionSpec(spec: ProductionSpec) {
+    setProductionSpecEditingId(spec.id);
+    setProductionSpecForm({
+      specDate: spec.specDate,
+      status: spec.status,
+      clientId: spec.clientId,
+      productId: spec.productId,
+      jobId: spec.jobId,
+      sizeWidthMm: String(spec.sizeWidthMm ?? ''),
+      sizeHeightMm: String(spec.sizeHeightMm ?? ''),
+      sizeGussetMm: String(spec.sizeGussetMm ?? ''),
+      paperGsm: String(spec.paperGsm ?? ''),
+      paperType: spec.paperType,
+      handleType: spec.handleType,
+      finishingNotes: spec.finishingNotes,
+      printMethod: spec.printMethod,
+      printColours: String(spec.printColours ?? ''),
+      pantoneReferences: spec.pantoneReferences,
+      artworkReference: spec.artworkReference,
+      printPositionNotes: spec.printPositionNotes,
+      quantityOrdered: String(spec.quantityOrdered ?? ''),
+      quantityUnit: spec.quantityUnit,
+      leadTimeDays: String(spec.leadTimeDays ?? ''),
+      packingFormat: spec.packingFormat,
+      packingNotes: spec.packingNotes,
+      approvedBy: spec.approvedBy,
+      approvedDate: spec.approvedDate,
+      notes: spec.notes,
+      clientVisible: spec.clientVisible,
+    });
+    setView('productionSpecs');
   }
 
   function exportReports() {
@@ -4578,6 +4978,46 @@ function App() {
           setDeliveryNoteFilters={setDeliveryNoteFilters}
           filteredDeliveryNotes={filteredDeliveryNotes}
           onEdit={editDeliveryNote}
+        />
+      )}
+
+      {view === 'invoices' && (
+        <InvoicesPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          jobs={data.jobs}
+          quotes={data.quoteEstimates}
+          productionSpecs={data.productionSpecs}
+          products={data.products}
+          deliveryNotes={data.deliveryNotes}
+          invoiceForm={invoiceForm}
+          setInvoiceForm={setInvoiceForm}
+          invoiceEditingId={invoiceEditingId}
+          invoiceMessage={invoiceMessage}
+          onSave={handleSaveInvoice}
+          onReset={resetInvoiceEditor}
+          invoiceFilters={invoiceFilters}
+          setInvoiceFilters={setInvoiceFilters}
+          filteredInvoices={filteredInvoices}
+          onEdit={editInvoice}
+        />
+      )}
+
+      {view === 'productionSpecs' && (
+        <ProductionSpecsPage
+          clients={data.clients}
+          products={data.products}
+          jobs={data.jobs}
+          productionSpecForm={productionSpecForm}
+          setProductionSpecForm={setProductionSpecForm}
+          productionSpecEditingId={productionSpecEditingId}
+          productionSpecMessage={productionSpecMessage}
+          onSave={handleSaveProductionSpec}
+          onReset={resetProductionSpecEditor}
+          productionSpecFilters={productionSpecFilters}
+          setProductionSpecFilters={setProductionSpecFilters}
+          filteredProductionSpecs={filteredProductionSpecs}
+          onEdit={editProductionSpec}
         />
       )}
 

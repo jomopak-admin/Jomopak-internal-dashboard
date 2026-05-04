@@ -265,8 +265,18 @@ function mapDeliveryNote(row: any): DeliveryNote {
       quantityUnit: item.quantityUnit ?? item.quantity_unit ?? 'units',
       dispatchRecordId: item.dispatchRecordId ?? item.dispatch_record_id ?? '',
       customerStockReleaseId: item.customerStockReleaseId ?? item.customer_stock_release_id ?? '',
+      invoiceLineItemId: item.invoiceLineItemId ?? item.invoice_line_item_id ?? undefined,
     })) : [],
     notes: row.notes ?? '',
+    parentInvoiceId: row.parent_invoice_id ?? '',
+    parentInvoiceNumber: row.parent_invoice_number ?? '',
+    receiptMode: row.receipt_mode ?? 'Pending',
+    signedByName: row.signed_by_name ?? '',
+    signedByDate: row.signed_by_date ?? '',
+    signedByContactInfo: row.signed_by_contact_info ?? '',
+    collectedByName: row.collected_by_name ?? '',
+    collectedByDate: row.collected_by_date ?? '',
+    collectedByIdNumber: row.collected_by_id_number ?? '',
   };
 }
 
@@ -827,6 +837,11 @@ export async function fetchAppData(): Promise<AppData> {
     artworkRecords: artworkRecords.map(mapArtworkRecord),
     customerStockReleases: customerStockReleases.map(mapCustomerStockRelease),
     deliveryNotes: deliveryNotes.map(mapDeliveryNote),
+    // Invoices + Production Specs are local-only for now (no DB table yet).
+    // They live in AppData state and persist via localStorage; round-trip to
+    // Supabase will be added once the corresponding tables exist.
+    invoices: [],
+    productionSpecs: [],
     paperRates: paperRates.map(mapPaperRate),
     costProfiles: costProfiles.map(mapCostProfile),
     pricingTiers: pricingTiers.map(mapPricingTier),

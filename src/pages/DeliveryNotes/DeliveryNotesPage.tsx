@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -87,6 +88,39 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
     setMode('list');
   }
 
+  const clientOptions: ComboboxOption[] = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.companyName || client.code || undefined,
+    })),
+    [clients],
+  );
+  const jobOptions: ComboboxOption[] = useMemo(
+    () => jobs.map((job) => ({
+      value: job.id,
+      label: job.jobNumber || `Job ${job.id.slice(-6)}`,
+      sublabel: [job.customerName, job.productName].filter(Boolean).join(' · '),
+    })),
+    [jobs],
+  );
+  const dispatchOptions: ComboboxOption[] = useMemo(
+    () => visibleDispatches.map((record) => ({
+      value: record.id,
+      label: record.dispatchNumber || `Dispatch ${record.id.slice(-6)}`,
+      sublabel: `${record.customerName} · ${formatNumber(record.quantityDispatched)} ${record.quantityUnit}`,
+    })),
+    [visibleDispatches],
+  );
+  const releaseOptions: ComboboxOption[] = useMemo(
+    () => visibleReleases.map((release) => ({
+      value: release.id,
+      label: release.releaseNumber || `Release ${release.id.slice(-6)}`,
+      sublabel: `${release.clientName} · ${formatNumber(release.quantityReleased)} ${release.quantityUnit}`,
+    })),
+    [visibleReleases],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -99,8 +133,8 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
       body: (
         <div className="form-grid">
           <label><span>Note date <RequiredMarker /></span><input type="date" value={deliveryNoteForm.noteDate} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, noteDate: event.target.value })} /></label>
-          <label><span>Client <RequiredMarker /></span><select value={deliveryNoteForm.clientId} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-          <label><span>Job</span><select value={deliveryNoteForm.jobId} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, jobId: event.target.value })}><option value="">Select job</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.jobNumber} - {job.customerName}</option>)}</select></label>
+          <label><span>Client <RequiredMarker /></span><Combobox options={clientOptions} value={deliveryNoteForm.clientId} onChange={(value) => setDeliveryNoteForm({ ...deliveryNoteForm, clientId: value })} placeholder="Search clients…" emptyMessage="No matching clients" /></label>
+          <label><span>Job</span><Combobox options={jobOptions} value={deliveryNoteForm.jobId} onChange={(value) => setDeliveryNoteForm({ ...deliveryNoteForm, jobId: value })} placeholder="Search jobs…" emptyMessage="No matching jobs" /></label>
           <label><span>Delivery method</span><select value={deliveryNoteForm.deliveryMethod} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, deliveryMethod: event.target.value as DeliveryNoteFormState['deliveryMethod'] })}><option value="Delivery">Delivery</option><option value="Collection">Collection</option><option value="Courier">Courier</option></select></label>
           <label><span>Delivery reference</span><input value={deliveryNoteForm.deliveryReference} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, deliveryReference: event.target.value })} /></label>
           <label><span>Status</span><select value={deliveryNoteForm.status} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, status: event.target.value as DeliveryNoteFormState['status'] })}><option value="Draft">Draft</option><option value="Issued">Issued</option><option value="Delivered">Delivered</option><option value="Collected">Collected</option></select></label>
@@ -158,18 +192,12 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
           <div className="delivery-line-toolbar">
             <label>
               <span>Add from dispatch</span>
-              <select value={deliveryNoteForm.dispatchRecordId} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, dispatchRecordId: event.target.value })}>
-                <option value="">Select dispatch</option>
-                {visibleDispatches.map((record) => <option key={record.id} value={record.id}>{record.dispatchNumber} - {record.customerName} - {formatNumber(record.quantityDispatched)} {record.quantityUnit}</option>)}
-              </select>
+              <Combobox options={dispatchOptions} value={deliveryNoteForm.dispatchRecordId} onChange={(value) => setDeliveryNoteForm({ ...deliveryNoteForm, dispatchRecordId: value })} placeholder="Search dispatches…" emptyMessage="No matching dispatches" />
             </label>
             <button className="secondary-button" type="button" onClick={() => onAddDispatchLine(deliveryNoteForm.dispatchRecordId)}>Add Dispatch Line</button>
             <label>
               <span>Add from stock release</span>
-              <select value={deliveryNoteForm.customerStockReleaseId} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, customerStockReleaseId: event.target.value })}>
-                <option value="">Select stock release</option>
-                {visibleReleases.map((release) => <option key={release.id} value={release.id}>{release.releaseNumber} - {release.clientName} - {formatNumber(release.quantityReleased)} {release.quantityUnit}</option>)}
-              </select>
+              <Combobox options={releaseOptions} value={deliveryNoteForm.customerStockReleaseId} onChange={(value) => setDeliveryNoteForm({ ...deliveryNoteForm, customerStockReleaseId: value })} placeholder="Search releases…" emptyMessage="No matching releases" />
             </label>
             <button className="secondary-button" type="button" onClick={() => onAddReleaseLine(deliveryNoteForm.customerStockReleaseId)}>Add Release Line</button>
           </div>

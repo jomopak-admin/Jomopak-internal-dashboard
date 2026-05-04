@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -72,6 +73,26 @@ export function ProductionLogsPage(props: ProductionLogsPageProps) {
     setMode('list');
   }
 
+  const machineOptions: ComboboxOption[] = useMemo(
+    () =>
+      machines.filter((machine) => machine.active).map((machine) => ({
+        value: machine.id,
+        label: machine.name,
+        sublabel: machine.code || undefined,
+      })),
+    [machines],
+  );
+
+  const sourceMaterialOptions: ComboboxOption[] = useMemo(
+    () =>
+      materialReceipts.map((receipt) => ({
+        value: receipt.id,
+        label: receipt.internalRollCode,
+        sublabel: receipt.supplierName,
+      })),
+    [materialReceipts],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -111,22 +132,20 @@ export function ProductionLogsPage(props: ProductionLogsPageProps) {
         <div className="form-grid">
           <label>
             <span>Machine</span>
-            <select
+            <Combobox
+              options={machineOptions}
               value={productionForm.machineId}
-              onChange={(event) => {
-                const machine = machines.find((item) => item.id === event.target.value);
+              onChange={(value) => {
+                const machine = machines.find((item) => item.id === value);
                 setProductionForm({
                   ...productionForm,
                   machineId: machine?.id ?? '',
                   machine: machine?.name ?? productionForm.machine,
                 });
               }}
-            >
-              <option value="">Select machine</option>
-              {machines.filter((machine) => machine.active).map((machine) => (
-                <option key={machine.id} value={machine.id}>{machine.name}</option>
-              ))}
-            </select>
+              placeholder="Search machines…"
+              emptyMessage="No matching machines"
+            />
           </label>
           <label>
             <span>Operator</span>
@@ -134,10 +153,13 @@ export function ProductionLogsPage(props: ProductionLogsPageProps) {
           </label>
           <label>
             <span>Source material</span>
-            <select value={productionForm.sourceMaterialId} onChange={(event) => setProductionForm({ ...productionForm, sourceMaterialId: event.target.value })}>
-              <option value="">Select material receipt</option>
-              {materialReceipts.map((receipt) => <option key={receipt.id} value={receipt.id}>{receipt.internalRollCode} - {receipt.supplierName}</option>)}
-            </select>
+            <Combobox
+              options={sourceMaterialOptions}
+              value={productionForm.sourceMaterialId}
+              onChange={(value) => setProductionForm({ ...productionForm, sourceMaterialId: value })}
+              placeholder="Search material receipts…"
+              emptyMessage="No matching receipts"
+            />
           </label>
           <label>
             <span>Setup time (min)</span>

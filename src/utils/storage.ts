@@ -343,6 +343,7 @@ function normalizeDeliveryNoteLineItem(raw: any, index: number): DeliveryNoteLin
     quantityUnit: raw.quantityUnit ?? raw.quantity_unit ?? 'units',
     dispatchRecordId: raw.dispatchRecordId ?? raw.dispatch_record_id ?? '',
     customerStockReleaseId: raw.customerStockReleaseId ?? raw.customer_stock_release_id ?? '',
+    invoiceLineItemId: raw.invoiceLineItemId ?? raw.invoice_line_item_id ?? undefined,
   };
 }
 
@@ -379,6 +380,15 @@ function normalizeDeliveryNote(raw: any): DeliveryNote {
       ? (raw.lineItems ?? raw.line_items).map((item: any, index: number) => normalizeDeliveryNoteLineItem(item, index))
       : [],
     notes: raw.notes ?? '',
+    parentInvoiceId: raw.parentInvoiceId ?? raw.parent_invoice_id ?? '',
+    parentInvoiceNumber: raw.parentInvoiceNumber ?? raw.parent_invoice_number ?? '',
+    receiptMode: raw.receiptMode ?? raw.receipt_mode ?? 'Pending',
+    signedByName: raw.signedByName ?? raw.signed_by_name ?? '',
+    signedByDate: raw.signedByDate ?? raw.signed_by_date ?? '',
+    signedByContactInfo: raw.signedByContactInfo ?? raw.signed_by_contact_info ?? '',
+    collectedByName: raw.collectedByName ?? raw.collected_by_name ?? '',
+    collectedByDate: raw.collectedByDate ?? raw.collected_by_date ?? '',
+    collectedByIdNumber: raw.collectedByIdNumber ?? raw.collected_by_id_number ?? '',
   };
 }
 
@@ -657,6 +667,12 @@ export function loadAppData(): AppData {
       artworkRecords: (parsed.artworkRecords ?? []).map(normalizeArtwork),
       customerStockReleases: (parsed.customerStockReleases ?? []).map(normalizeCustomerStockRelease),
       deliveryNotes: (parsed.deliveryNotes ?? []).map(normalizeDeliveryNote),
+      // Invoices + Production Specs are local-only for now — pass through
+      // whatever's in localStorage. Keep as `any` cast: there's no normalizer
+      // because the field set is fixed in the editor and we never accept
+      // half-shaped legacy data here.
+      invoices: (parsed.invoices ?? []) as AppData['invoices'],
+      productionSpecs: (parsed.productionSpecs ?? []) as AppData['productionSpecs'],
       paperRates: (parsed.paperRates ?? []).map(normalizePaperRate),
       costProfiles: parsed.costProfiles ?? [],
       pricingTiers: parsed.pricingTiers ?? [],

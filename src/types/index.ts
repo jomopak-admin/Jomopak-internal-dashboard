@@ -10,6 +10,8 @@ export type View =
   | 'artwork'
   | 'customerStock'
   | 'deliveryNotes'
+  | 'invoices'
+  | 'productionSpecs'
   | 'machines'
   | 'jobs'
   | 'products'
@@ -52,6 +54,8 @@ export const VIEW_LABELS: Record<View, string> = {
   artwork: 'Artwork',
   customerStock: 'Customer Stock',
   deliveryNotes: 'Delivery Notes',
+  invoices: 'Invoices',
+  productionSpecs: 'Production Specs',
   machines: 'Machines',
   jobs: 'Job Cards',
   products: 'Products',
@@ -80,6 +84,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'artwork',
     'customerStock',
     'deliveryNotes',
+    'invoices',
+    'productionSpecs',
     'machines',
     'jobs',
     'products',
@@ -103,6 +109,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'artwork',
     'customerStock',
     'deliveryNotes',
+    'invoices',
+    'productionSpecs',
     'machines',
     'jobs',
     'products',
@@ -133,6 +141,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'artwork',
     'deliveryNotes',
+    'invoices',
+    'productionSpecs',
     'jobs',
     'products',
     'reports',
@@ -141,6 +151,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dashboard',
     'artwork',
     'deliveryNotes',
+    'productionSpecs',
     'quotes',
     'jobs',
     'products',
@@ -296,6 +307,11 @@ export type InventoryMovementType = 'Received' | 'Issued to Job' | 'Transferred'
 export type PaymentMethod = 'EFT' | 'Cash' | 'Card' | 'Credit Terms' | 'Other';
 export type StorageFeeType = 'None' | 'Per Month' | 'Per Pallet' | 'Per Unit';
 export type DeliveryChargePolicy = 'Charge Every Release' | 'Client Collection' | 'Charge By Zone' | 'Included By Agreement';
+export type InvoiceStatus = 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Cancelled';
+export type InvoiceTermsType = 'Full Payment Up Front' | '50% Deposit' | 'Net 7' | 'Net 14' | 'Net 30' | 'Net 60' | 'On Delivery';
+export type StockHoldingStatus = 'Not Applicable' | 'Active' | 'Fully Released' | 'Expired';
+export type DeliveryReceiptMode = 'Signed' | 'Collected' | 'Pending';
+export type ProductionSpecStatus = 'Draft' | 'Approved' | 'In Production' | 'Completed' | 'Archived';
 
 export interface SupplierContact {
   id: string;
@@ -471,6 +487,8 @@ export interface DeliveryNoteLineItem {
   quantityUnit: QuantityUnit;
   dispatchRecordId: string;
   customerStockReleaseId: string;
+  /** Optional link back to the invoice line this delivery is fulfilling. */
+  invoiceLineItemId?: string;
 }
 
 export interface PaperRate {
@@ -899,6 +917,130 @@ export interface DeliveryNote {
   clientVisible: boolean;
   lineItems: DeliveryNoteLineItem[];
   notes: string;
+  /** Stock-holding link: the paid invoice this partial delivery draws against. */
+  parentInvoiceId: string;
+  parentInvoiceNumber: string;
+  /** Signature / collection capture for proof-of-delivery. */
+  receiptMode: DeliveryReceiptMode;
+  signedByName: string;
+  signedByDate: string;
+  signedByContactInfo: string;
+  collectedByName: string;
+  collectedByDate: string;
+  collectedByIdNumber: string;
+}
+
+export interface InvoiceLineItem {
+  id: string;
+  productId: string;
+  productName: string;
+  description: string;
+  quantity: number;
+  quantityUnit: QuantityUnit;
+  unitPriceExclVat: number;
+  vatRatePercent: number;
+  lineTotalExclVat: number;
+  lineTotalInclVat: number;
+  /** Total physically delivered against this line so far (sum across delivery notes). */
+  quantityDeliveredToDate: number;
+}
+
+export interface InvoicePayment {
+  id: string;
+  paymentDate: string;
+  amount: number;
+  method: PaymentMethod;
+  reference: string;
+  notes: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  createdAt: string;
+  invoiceDate: string;
+  dueDate: string;
+  clientId: string;
+  clientName: string;
+  clientCompanyName: string;
+  clientVatNumber: string;
+  clientBillingAddress: string;
+  clientContactName: string;
+  clientContactEmail: string;
+  clientContactPhone: string;
+  /** Optional link to upstream documents. */
+  jobId: string;
+  jobNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  productionSpecId: string;
+  productionSpecNumber: string;
+  /** Job/order reference printed on the invoice (PO number etc.). */
+  customerReference: string;
+  termsType: InvoiceTermsType;
+  termsText: string;
+  notes: string;
+  footerNotes: string;
+  status: InvoiceStatus;
+  currency: CurrencyCode;
+  lineItems: InvoiceLineItem[];
+  /** Computed totals (snapshotted at save). */
+  subtotalExclVat: number;
+  vatTotal: number;
+  totalInclVat: number;
+  /** Payments captured against the invoice. */
+  payments: InvoicePayment[];
+  amountPaid: number;
+  amountOutstanding: number;
+  /** Stock-holding metadata — invoice is paid in full but stock is released over time. */
+  stockHoldingApplies: boolean;
+  stockHoldingStatus: StockHoldingStatus;
+  stockHoldingStartDate: string;
+  /** Days from start until storage agreement expires. 0 = no limit. */
+  stockHoldingMaxDays: number;
+  /** Linked delivery note IDs that have drawn from this invoice. */
+  deliveryNoteIds: string[];
+  clientVisible: boolean;
+}
+
+export interface ProductionSpec {
+  id: string;
+  specNumber: string;
+  createdAt: string;
+  specDate: string;
+  status: ProductionSpecStatus;
+  clientId: string;
+  clientName: string;
+  clientCompanyName: string;
+  productId: string;
+  productName: string;
+  jobId: string;
+  jobNumber: string;
+  /** Physical specs. */
+  sizeWidthMm: number;
+  sizeHeightMm: number;
+  sizeGussetMm: number;
+  paperGsm: number;
+  paperType: string;
+  handleType: HandleType;
+  finishingNotes: string;
+  /** Print specs. */
+  printMethod: PrintMethod;
+  printColours: number;
+  pantoneReferences: string;
+  artworkReference: string;
+  printPositionNotes: string;
+  /** Order specs. */
+  quantityOrdered: number;
+  quantityUnit: QuantityUnit;
+  leadTimeDays: number;
+  packingFormat: SupplyFormat;
+  packingNotes: string;
+  /** Approval / sign-off. */
+  approvedBy: string;
+  approvedDate: string;
+  notes: string;
+  clientVisible: boolean;
 }
 
 export interface StockChangeLog {
@@ -966,6 +1108,8 @@ export interface AppData {
   artworkRecords: ArtworkRecord[];
   customerStockReleases: CustomerStockRelease[];
   deliveryNotes: DeliveryNote[];
+  invoices: Invoice[];
+  productionSpecs: ProductionSpec[];
   paperRates: PaperRate[];
   costProfiles: CostProfile[];
   pricingTiers: PricingTier[];
@@ -1132,6 +1276,14 @@ export interface DeliveryNoteFormState {
   clientVisible: boolean;
   lineItems: DeliveryNoteLineItem[];
   notes: string;
+  parentInvoiceId: string;
+  receiptMode: DeliveryReceiptMode;
+  signedByName: string;
+  signedByDate: string;
+  signedByContactInfo: string;
+  collectedByName: string;
+  collectedByDate: string;
+  collectedByIdNumber: string;
 }
 
 export interface PricingTierFormState {
@@ -1488,6 +1640,78 @@ export interface DispatchFormState {
   fscRelated: boolean;
 }
 
+/** Editor shape — kept as strings so number fields can be empty while typing. */
+export interface InvoiceLineItemFormState {
+  id: string;
+  productId: string;
+  productName: string;
+  description: string;
+  quantity: string;
+  quantityUnit: QuantityUnit;
+  unitPriceExclVat: string;
+  vatRatePercent: string;
+}
+
+export interface InvoicePaymentFormState {
+  id: string;
+  paymentDate: string;
+  amount: string;
+  method: PaymentMethod;
+  reference: string;
+  notes: string;
+}
+
+export interface InvoiceFormState {
+  invoiceDate: string;
+  dueDate: string;
+  clientId: string;
+  jobId: string;
+  quoteId: string;
+  productionSpecId: string;
+  customerReference: string;
+  termsType: InvoiceTermsType;
+  termsText: string;
+  notes: string;
+  footerNotes: string;
+  status: InvoiceStatus;
+  currency: CurrencyCode;
+  lineItems: InvoiceLineItemFormState[];
+  payments: InvoicePaymentFormState[];
+  stockHoldingApplies: boolean;
+  stockHoldingStartDate: string;
+  stockHoldingMaxDays: string;
+  clientVisible: boolean;
+}
+
+export interface ProductionSpecFormState {
+  specDate: string;
+  status: ProductionSpecStatus;
+  clientId: string;
+  productId: string;
+  jobId: string;
+  sizeWidthMm: string;
+  sizeHeightMm: string;
+  sizeGussetMm: string;
+  paperGsm: string;
+  paperType: string;
+  handleType: HandleType;
+  finishingNotes: string;
+  printMethod: PrintMethod;
+  printColours: string;
+  pantoneReferences: string;
+  artworkReference: string;
+  printPositionNotes: string;
+  quantityOrdered: string;
+  quantityUnit: QuantityUnit;
+  leadTimeDays: string;
+  packingFormat: SupplyFormat;
+  packingNotes: string;
+  approvedBy: string;
+  approvedDate: string;
+  notes: string;
+  clientVisible: boolean;
+}
+
 export interface JobFilters { search: string; month: string; status: string; customer: string; fsc: string; }
 export interface PaperRateFilters { search: string; active: string; }
 export interface SupplierFilters { search: string; supplierType: string; active: string; }
@@ -1497,6 +1721,8 @@ export interface QuoteEstimateFilters { search: string; month: string; status: s
 export interface ArtworkFilters { search: string; stage: string; client: string; }
 export interface CustomerStockReleaseFilters { search: string; month: string; client: string; }
 export interface DeliveryNoteFilters { search: string; month: string; client: string; status: string; visibility: string; }
+export interface InvoiceFilters { search: string; month: string; client: string; status: string; stockHolding: string; }
+export interface ProductionSpecFilters { search: string; client: string; status: string; product: string; }
 export interface CostProfileFilters { search: string; active: string; }
 export interface FinishedGoodsStockFilters { search: string; client: string; status: string; product: string; }
 export interface SparePartFilters { search: string; category: string; lowStock: string; supplier: string; }

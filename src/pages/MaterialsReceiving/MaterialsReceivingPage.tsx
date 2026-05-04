@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagBadge } from '../../components/Badge';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -121,6 +122,16 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     };
   }, [inventoryScannedItem]);
 
+  const supplierOptions: ComboboxOption[] = useMemo(
+    () =>
+      suppliers.filter((supplier) => supplier.active).map((supplier) => ({
+        value: supplier.id,
+        label: supplier.name,
+        sublabel: supplier.supplierType,
+      })),
+    [suppliers],
+  );
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -138,22 +149,20 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
           </label>
           <label>
             <span>Supplier <RequiredMarker /></span>
-            <select
+            <Combobox
+              options={supplierOptions}
               value={materialForm.supplierId}
-              onChange={(event) => {
-                const supplier = suppliers.find((item) => item.id === event.target.value);
+              onChange={(value) => {
+                const supplier = suppliers.find((item) => item.id === value);
                 setMaterialForm({
                   ...materialForm,
                   supplierId: supplier?.id ?? '',
                   supplierName: supplier?.name ?? materialForm.supplierName,
                 });
               }}
-            >
-              <option value="">Select supplier</option>
-              {suppliers.filter((supplier) => supplier.active).map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-              ))}
-            </select>
+              placeholder="Search suppliers…"
+              emptyMessage="No matching suppliers"
+            />
           </label>
           <label>
             <span>Supplier batch number</span>
