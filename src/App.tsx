@@ -4965,6 +4965,8 @@ function App() {
           jobs={data.jobs}
           dispatchRecords={data.dispatchRecords}
           customerStockReleases={data.customerStockReleases}
+          invoices={data.invoices}
+          allDeliveryNotes={data.deliveryNotes}
           deliveryNoteForm={deliveryNoteForm}
           setDeliveryNoteForm={setDeliveryNoteForm}
           deliveryNoteEditingId={deliveryNoteEditingId}
@@ -5076,6 +5078,9 @@ function App() {
       {view === 'clients' && (
         <ClientsPage
           pricingTiers={data.pricingTiers}
+          invoices={data.invoices}
+          deliveryNotes={data.deliveryNotes}
+          dispatchRecords={data.dispatchRecords}
           clientForm={clientForm}
           setClientForm={setClientForm}
           clientEditingId={clientEditingId}

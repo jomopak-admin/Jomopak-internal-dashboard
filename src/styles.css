@@ -2262,13 +2262,17 @@ th {
   padding: 1rem;
   border: 1px solid var(--border-subtle, #e2e8f0);
 }
-.stock-holding-stat .stat-label {
+.stock-holding-stat .stat-label,
+.stock-holding-stat > span {
+  display: block;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted, #64748b);
 }
-.stock-holding-stat .stat-value {
+.stock-holding-stat .stat-value,
+.stock-holding-stat > strong {
+  display: block;
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--text-strong, #0f172a);
@@ -2281,4 +2285,65 @@ th {
   border-radius: 6px;
   font-size: 0.9rem;
   margin-top: 0.6rem;
+}
+
+/* Client profile stock-holding overview */
+.client-stock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.client-stock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.client-stock-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.client-stock-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.client-stock-trend-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #64748b);
+}
+.client-stock-trend-bars {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.4rem;
+  align-items: end;
+  height: 80px;
+}
+.client-stock-trend-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  height: 100%;
+}
+.client-stock-trend-bar-fill {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  background: var(--brand-primary, #f59e0b);
+  border-radius: 4px 4px 0 0;
+  transition: height 200ms ease;
+}
+.client-stock-trend-bar-label {
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
 }

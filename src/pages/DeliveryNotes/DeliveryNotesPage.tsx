@@ -10,9 +10,11 @@ import {
   DeliveryNoteFilters,
   DeliveryNoteFormState,
   DispatchRecord,
+  Invoice,
   JobCard,
 } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
+import { summariseInvoiceStockHolding } from '../../utils/stockHolding';
 
 interface DeliveryNotesPageProps {
   monthOptions: string[];
@@ -20,6 +22,8 @@ interface DeliveryNotesPageProps {
   jobs: JobCard[];
   dispatchRecords: DispatchRecord[];
   customerStockReleases: CustomerStockRelease[];
+  invoices: Invoice[];
+  allDeliveryNotes: DeliveryNote[];
   deliveryNoteForm: DeliveryNoteFormState;
   setDeliveryNoteForm: (value: DeliveryNoteFormState) => void;
   deliveryNoteEditingId: string | null;
@@ -42,6 +46,8 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
     jobs,
     dispatchRecords,
     customerStockReleases,
+    invoices,
+    allDeliveryNotes,
     deliveryNoteForm,
     setDeliveryNoteForm,
     deliveryNoteEditingId,
@@ -119,6 +125,37 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
       sublabel: `${release.clientName} · ${formatNumber(release.quantityReleased)} ${release.quantityUnit}`,
     })),
     [visibleReleases],
+  );
+
+  const stockHoldingInvoices = useMemo(
+    () => invoices.filter(
+      (inv) => inv.stockHoldingApplies
+        && (inv.stockHoldingStatus === 'Active' || inv.stockHoldingStatus === 'Not Applicable')
+        && (!deliveryNoteForm.clientId || inv.clientId === deliveryNoteForm.clientId),
+    ),
+    [invoices, deliveryNoteForm.clientId],
+  );
+
+  const invoiceOptions: ComboboxOption[] = useMemo(
+    () => stockHoldingInvoices.map((inv) => {
+      const summary = summariseInvoiceStockHolding(inv, allDeliveryNotes);
+      return {
+        value: inv.id,
+        label: inv.invoiceNumber,
+        sublabel: `${inv.clientName} · ${formatNumber(summary.totalRemainingQuantity)} remaining`,
+      };
+    }),
+    [stockHoldingInvoices, allDeliveryNotes],
+  );
+
+  const linkedInvoice = useMemo(
+    () => invoices.find((inv) => inv.id === deliveryNoteForm.parentInvoiceId) ?? null,
+    [invoices, deliveryNoteForm.parentInvoiceId],
+  );
+
+  const linkedInvoiceSummary = useMemo(
+    () => (linkedInvoice ? summariseInvoiceStockHolding(linkedInvoice, allDeliveryNotes) : null),
+    [linkedInvoice, allDeliveryNotes],
   );
 
   const sections: FormWizardSection[] = [
@@ -232,6 +269,48 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
           ) : (
             <EmptyState title="No stock lines added yet" body="Add at least one dispatch or customer stock release line to create a usable delivery note." />
           )}
+        </div>
+      ),
+    },
+    {
+      key: 'stock-holding-link',
+      title: 'Stock-holding link',
+      subtitle: 'If this delivery draws against a paid-in-advance invoice, link it here so remaining stock stays in sync.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Parent invoice (stock-holding)</span><Combobox options={invoiceOptions} value={deliveryNoteForm.parentInvoiceId} onChange={(value) => setDeliveryNoteForm({ ...deliveryNoteForm, parentInvoiceId: value })} placeholder="Search stock-holding invoices…" emptyMessage="No active stock-holding invoices for this client" /></label>
+          {linkedInvoice && linkedInvoiceSummary ? (
+            <div className="full-span stock-holding-panel" style={{ marginTop: 0 }}>
+              <div className="stock-holding-stat"><span>Invoiced</span><strong>{formatNumber(linkedInvoiceSummary.totalInvoicedQuantity)}</strong></div>
+              <div className="stock-holding-stat"><span>Already delivered</span><strong>{formatNumber(linkedInvoiceSummary.totalDeliveredQuantity)}</strong></div>
+              <div className="stock-holding-stat"><span>Remaining</span><strong>{formatNumber(linkedInvoiceSummary.totalRemainingQuantity)}</strong></div>
+              <div className="stock-holding-stat"><span>Storage</span><strong>{linkedInvoice.stockHoldingMaxDays > 0 ? `${linkedInvoiceSummary.daysUntilStorageExpiry} day${linkedInvoiceSummary.daysUntilStorageExpiry === 1 ? '' : 's'} left` : 'No limit'}</strong></div>
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'receipt',
+      title: 'Proof of receipt',
+      subtitle: 'Capture exactly who signed for or collected the goods. This is what protects you if the client disputes a partial release later.',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Receipt mode</span><select value={deliveryNoteForm.receiptMode} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, receiptMode: event.target.value as DeliveryNoteFormState['receiptMode'] })}><option value="Pending">Pending</option><option value="Signed">Signed for at delivery</option><option value="Collected">Collected from us</option></select></label>
+          {deliveryNoteForm.receiptMode === 'Signed' ? (
+            <>
+              <label><span>Signed by (name)</span><input value={deliveryNoteForm.signedByName} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, signedByName: event.target.value })} placeholder="Full name on the slip" /></label>
+              <label><span>Signed on</span><input type="date" value={deliveryNoteForm.signedByDate} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, signedByDate: event.target.value })} /></label>
+              <label className="full-span"><span>Signer contact / role</span><input value={deliveryNoteForm.signedByContactInfo} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, signedByContactInfo: event.target.value })} placeholder="Phone, email, or position at client" /></label>
+            </>
+          ) : null}
+          {deliveryNoteForm.receiptMode === 'Collected' ? (
+            <>
+              <label><span>Collected by (name)</span><input value={deliveryNoteForm.collectedByName} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, collectedByName: event.target.value })} placeholder="Full name of person collecting" /></label>
+              <label><span>Collected on</span><input type="date" value={deliveryNoteForm.collectedByDate} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, collectedByDate: event.target.value })} /></label>
+              <label className="full-span"><span>ID / reference number</span><input value={deliveryNoteForm.collectedByIdNumber} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, collectedByIdNumber: event.target.value })} placeholder="ID, driver's licence, or company reference" /></label>
+            </>
+          ) : null}
         </div>
       ),
     },

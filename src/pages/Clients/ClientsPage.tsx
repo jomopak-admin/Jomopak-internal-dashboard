@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommercialFlags, isClientOverCredit } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, ClientFilters, ClientFormState, PricingTier } from '../../types';
+import { Client, ClientFilters, ClientFormState, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
+import { formatNumber } from '../../utils/calculations';
+import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
 
 interface ClientsPageProps {
   pricingTiers: PricingTier[];
+  invoices: Invoice[];
+  deliveryNotes: DeliveryNote[];
+  dispatchRecords: DispatchRecord[];
   clientForm: ClientFormState;
   setClientForm: (value: ClientFormState) => void;
   clientEditingId: string | null;
@@ -22,6 +27,9 @@ interface ClientsPageProps {
 
 export function ClientsPage({
   pricingTiers,
+  invoices,
+  deliveryNotes,
+  dispatchRecords,
   clientForm,
   setClientForm,
   clientEditingId,
@@ -69,6 +77,29 @@ export function ClientsPage({
   // Convenience for the small set of fields that must be present before saving.
   // We deliberately keep the bar low — name + a way to contact them — so the
   // wizard isn't fighting people who just want to register a client quickly.
+  // Roll up stock-holding state for every visible client so the register can
+  // show "X clients with stock in our warehouse" and we can render a per-client
+  // panel underneath. Cheap enough to recompute since these arrays are bounded
+  // to clients/invoices/delivery notes already loaded into memory.
+  const stockHoldingOverviews = useMemo(() => {
+    return filteredClients
+      .map((client) => ({
+        client,
+        overview: summariseClientStockHolding(client.id, invoices, deliveryNotes, dispatchRecords),
+      }))
+      .filter(({ overview }) => overview.invoices.length > 0 || overview.totalRemainingQuantity > 0);
+  }, [filteredClients, invoices, deliveryNotes, dispatchRecords]);
+
+  const trendMax = useMemo(() => {
+    let max = 0;
+    for (const { overview } of stockHoldingOverviews) {
+      for (const point of overview.trend) {
+        if (point.totalReleased > max) max = point.totalReleased;
+      }
+    }
+    return max;
+  }, [stockHoldingOverviews]);
+
   const profileMissing: string[] = [];
   if (!clientForm.name.trim()) profileMissing.push('Customer display name');
   if (!clientForm.contactEmail.trim() && !clientForm.phoneNumber.trim()) {
@@ -319,8 +350,70 @@ export function ClientsPage({
           onCancel={handleBackToList}
         />
       ) : (
-        <section className="card">
-          <SectionTitle title="Client register" subtitle={`${filteredClients.length} record(s) shown`} />
+        <>
+          {stockHoldingOverviews.length ? (
+            <section className="card">
+              <SectionTitle
+                title="Stock-holding clients"
+                subtitle={`${stockHoldingOverviews.length} client${stockHoldingOverviews.length === 1 ? '' : 's'} with paid stock still in your warehouse`}
+              />
+              <div className="client-stock-grid">
+                {stockHoldingOverviews.map(({ client, overview }) => {
+                  // Use the soonest expiry across the client's open invoices to
+                  // surface the most pressing storage deadline.
+                  const earliestExpiringInvoice = overview.invoices
+                    .filter((inv) => inv.estimatedDaysOfStockLeft !== null)
+                    .reduce<typeof overview.invoices[number] | null>((acc, inv) => {
+                      if (!acc) return inv;
+                      const a = inv.estimatedDaysOfStockLeft ?? Infinity;
+                      const b = acc.estimatedDaysOfStockLeft ?? Infinity;
+                      return a < b ? inv : acc;
+                    }, null);
+                  const anyWillExpire = overview.invoices.some((inv) => inv.willExpireBeforeDrawn);
+                  return (
+                    <article key={client.id} className="client-stock-card">
+                      <header className="client-stock-card-head">
+                        <div>
+                          <strong>{client.name}</strong>
+                          <div className="table-subtext">{client.companyName || client.code || 'No company set'}</div>
+                        </div>
+                        <button className="table-button" type="button" onClick={() => handleStartEdit(client)}>Edit profile</button>
+                      </header>
+                      <div className="stock-holding-panel">
+                        <div className="stock-holding-stat"><span>In warehouse</span><strong>{formatNumber(overview.totalRemainingQuantity)}</strong></div>
+                        <div className="stock-holding-stat"><span>Released</span><strong>{formatNumber(overview.totalDeliveredQuantity)}</strong></div>
+                        <div className="stock-holding-stat"><span>Weekly avg</span><strong>{formatNumber(Math.round(overview.weeklyAverageReleased))}</strong></div>
+                        <div className="stock-holding-stat"><span>Monthly avg</span><strong>{formatNumber(Math.round(overview.monthlyAverageReleased))}</strong></div>
+                        <div className="stock-holding-stat"><span>Days of stock left</span><strong>{formatDaysFriendly(earliestExpiringInvoice?.estimatedDaysOfStockLeft ?? null)}</strong></div>
+                        <div className="stock-holding-stat"><span>Open invoices</span><strong>{overview.invoices.length}</strong></div>
+                      </div>
+                      {anyWillExpire ? (
+                        <div className="stock-holding-warning">
+                          At the current draw rate, at least one storage agreement will expire before the stock is collected.
+                        </div>
+                      ) : null}
+                      <div className="client-stock-trend">
+                        <div className="client-stock-trend-label">Last 6 months</div>
+                        <div className="client-stock-trend-bars">
+                          {overview.trend.map((point) => {
+                            const heightPct = trendMax > 0 ? Math.max(4, Math.round((point.totalReleased / trendMax) * 100)) : 4;
+                            return (
+                              <div key={point.monthKey} className="client-stock-trend-bar" title={`${point.monthKey}: ${formatNumber(point.totalReleased)}`}>
+                                <span className="client-stock-trend-bar-fill" style={{ height: `${heightPct}%` }} />
+                                <span className="client-stock-trend-bar-label">{point.monthKey.slice(5)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+          <section className="card">
+            <SectionTitle title="Client register" subtitle={`${filteredClients.length} record(s) shown`} />
           <div className="filters-grid">
             <label><span>Search</span><input value={clientFilters.search} onChange={(event) => setClientFilters({ ...clientFilters, search: event.target.value })} /></label>
             <label><span>Client type</span><select value={clientFilters.clientType} onChange={(event) => setClientFilters({ ...clientFilters, clientType: event.target.value })}><option value="">All</option><option>Wholesale</option><option>Retail</option><option>Ecommerce</option><option>Custom</option></select></label>
@@ -333,8 +426,9 @@ export function ClientsPage({
                 <tbody>{filteredClients.map((client) => <tr key={client.id}><td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td><td>{client.pricingTierName || 'Not set'}</td><td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td><td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td><td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td><td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td><td><button className="table-button" onClick={() => handleStartEdit(client)}>Edit</button></td></tr>)}</tbody>
               </table>
             </div>
-          ) : <EmptyState title="No clients yet" body="Add clients so pricing and jobs can follow real commercial profiles." />}
-        </section>
+            ) : <EmptyState title="No clients yet" body="Add clients so pricing and jobs can follow real commercial profiles." />}
+          </section>
+        </>
       )}
     </>
   );
