@@ -112,10 +112,12 @@ p {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  /* Stop any over-wide child (a long table, a wide grid) from pushing the
-     whole page wider than the screen, which clips the right-hand cards. */
-  max-width: 100vw;
-  overflow-x: hidden;
+  /* width:100% (NOT 100vw — 100vw includes the scrollbar and causes a
+     ~15px horizontal overflow that clips the right edge). overflow-x:clip
+     is a final safety net so nothing can ever bleed off-screen. */
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .login-shell {
