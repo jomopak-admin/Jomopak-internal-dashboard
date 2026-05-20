@@ -4,7 +4,7 @@ import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, JobCard, Product, StockChangeLog } from '../../types';
+import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, Product, StockChangeLog } from '../../types';
 import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
 
 interface FinishedGoodsStockPageProps {
@@ -23,6 +23,10 @@ interface FinishedGoodsStockPageProps {
   stockChangeLogs: StockChangeLog[];
   onEdit: (item: FinishedGoodsStock) => void;
   onDelete: () => void;
+  /** Phase 2 food-safety hold/release. Move a batch between statuses. */
+  onFoodSafetyHoldChange?: (stockId: string, nextStatus: FoodSafetyHoldStatus, reason?: string) => void;
+  /** True when the active user has a release-permitted role (admin/ops). */
+  canReleaseFoodSafetyBatches?: boolean;
 }
 
 export function FinishedGoodsStockPage({
@@ -41,6 +45,8 @@ export function FinishedGoodsStockPage({
   stockChangeLogs,
   onEdit,
   onDelete,
+  onFoodSafetyHoldChange,
+  canReleaseFoodSafetyBatches = false,
 }: FinishedGoodsStockPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -279,6 +285,7 @@ export function FinishedGoodsStockPage({
                       <th>Changed by</th>
                       <th>Location</th>
                       <th>Stored</th>
+                      <th>Food-safety status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -306,7 +313,28 @@ export function FinishedGoodsStockPage({
                           <td>{item.storageLocation || 'Not set'}</td>
                           <td>{formatDate(item.storedDate)}</td>
                           <td>
-                            <button className="table-button" aria-label={`Edit ${item.stockNumber}`} onClick={() => handleStartEdit(item)}>✎</button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <span className={`badge ${item.foodSafetyHoldStatus === 'Released' || item.foodSafetyHoldStatus === 'Dispatched' ? 'badge-success' : item.foodSafetyHoldStatus === 'Rejected' || item.foodSafetyHoldStatus === 'Recalled' ? 'badge-danger' : item.foodSafetyHoldStatus === 'On Hold' ? 'badge-warning' : ''}`}>{item.foodSafetyHoldStatus}</span>
+                              {item.releasedByName ? <span style={{ fontSize: 10, color: 'var(--jp-ink-3)' }}>by {item.releasedByName}</span> : null}
+                              {item.holdReason && item.foodSafetyHoldStatus === 'On Hold' ? <span style={{ fontSize: 10, color: '#b22b2b' }}>{item.holdReason}</span> : null}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="inline-actions">
+                              <button className="table-button" aria-label={`Edit ${item.stockNumber}`} onClick={() => handleStartEdit(item)}>Edit</button>
+                              {onFoodSafetyHoldChange && item.foodSafetyHoldStatus !== 'On Hold' ? (
+                                <button className="table-button" onClick={() => {
+                                  const reason = typeof window !== 'undefined' ? window.prompt('Reason for hold?') : '';
+                                  if (reason !== null) onFoodSafetyHoldChange(item.id, 'On Hold', reason || '');
+                                }}>Hold</button>
+                              ) : null}
+                              {onFoodSafetyHoldChange && canReleaseFoodSafetyBatches && item.foodSafetyHoldStatus !== 'Released' && item.foodSafetyHoldStatus !== 'Dispatched' ? (
+                                <button className="table-button table-button-promote" onClick={() => onFoodSafetyHoldChange(item.id, 'Released')}>Release</button>
+                              ) : null}
+                              {onFoodSafetyHoldChange && item.foodSafetyHoldStatus !== 'Rejected' ? (
+                                <button className="table-button" onClick={() => onFoodSafetyHoldChange(item.id, 'Rejected')}>Reject</button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );

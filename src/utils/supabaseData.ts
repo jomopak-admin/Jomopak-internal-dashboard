@@ -1,10 +1,14 @@
 import {
   AppData,
+  AppSettings,
   ArtworkRecord,
   BiEvent,
+  buildBlankChangeoverChecklist,
+  buildBlankQcPlan,
   Client,
   CostProfile,
   CustomerStockRelease,
+  DEFAULT_APP_SETTINGS,
   DeliveryNote,
   DispatchRecord,
   FinishedGoodsStock,
@@ -22,9 +26,12 @@ import {
   QuoteEstimate,
   SparePart,
   StockChangeLog,
+  StockCount,
+  StockIssue,
   Supplier,
   WasteEntry,
 } from '../types';
+import { normalizeAppSettings } from './storage';
 import { supabase } from './supabase';
 
 const MISSING_TABLE = '42P01';
@@ -45,6 +52,49 @@ async function safeUpsert(table: string, rows: Record<string, unknown>[]) {
   if (result.error && result.error.code !== MISSING_TABLE) {
     throw result.error;
   }
+}
+
+/**
+ * Fetch a single-row settings table. Falls back to null when the row or table
+ * doesn't exist yet so the caller can substitute defaults.
+ */
+async function safeSelectOne(table: string, id: string) {
+  const result = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+  if (result.error && result.error.code !== MISSING_TABLE && result.error.code !== 'PGRST116') {
+    throw result.error;
+  }
+  return result.data;
+}
+
+function mapAppSettings(row: any): AppSettings {
+  if (!row) return DEFAULT_APP_SETTINGS;
+  return normalizeAppSettings({
+    company: {
+      name: row.company_name ?? row.companyName,
+      legalName: row.legal_name ?? row.legalName,
+      addressLine1: row.address_line_1 ?? row.addressLine1,
+      addressLine2: row.address_line_2 ?? row.addressLine2,
+      phone: row.phone,
+      email: row.email,
+      vatNumber: row.vat_number ?? row.vatNumber,
+      logoUrl: row.logo_url ?? row.logoUrl ?? '',
+    },
+    templates: {
+      invoiceFooterLines: row.invoice_footer_lines ?? row.invoiceFooterLines,
+      deliveryNoteFooterLines: row.delivery_note_footer_lines ?? row.deliveryNoteFooterLines,
+      productionSpecFooterLines: row.production_spec_footer_lines ?? row.productionSpecFooterLines,
+      defaultPaymentTerms: row.default_payment_terms ?? row.defaultPaymentTerms,
+      defaultInvoiceNotes: row.default_invoice_notes ?? row.defaultInvoiceNotes ?? '',
+      defaultDeliveryNoteNotes: row.default_delivery_note_notes ?? row.defaultDeliveryNoteNotes ?? '',
+    },
+    stockHolding: {
+      defaultMaxDays: row.default_stock_holding_max_days ?? row.defaultMaxDays,
+      defaultReviewCadenceDays: row.default_stock_holding_review_cadence_days ?? row.defaultReviewCadenceDays,
+      defaultAgreementTermsText: row.default_stock_holding_terms ?? row.defaultAgreementTermsText,
+    },
+    updatedAt: row.updated_at ?? row.updatedAt ?? '',
+    updatedBy: row.updated_by ?? row.updatedBy ?? '',
+  });
 }
 
 function mapSupplier(row: any): Supplier {
@@ -129,10 +179,15 @@ function mapMachine(row: any): Machine {
     status: row.status ?? 'Active',
     notes: row.notes ?? '',
     active: row.active !== false,
+    // Phase 5.5 maintenance gate
+    maintenanceStatus: row.maintenance_status ?? 'OK',
+    lastServicedDate: row.last_serviced_date ?? '',
+    nextServiceDate: row.next_service_date ?? '',
+    openMaintenanceIssue: row.open_maintenance_issue ?? '',
   };
 }
 
-function mapQuoteEstimate(row: any): QuoteEstimate {
+export function mapQuoteEstimate(row: any): QuoteEstimate {
   return {
     id: row.id,
     quoteNumber: row.quote_number,
@@ -165,7 +220,7 @@ function mapQuoteEstimate(row: any): QuoteEstimate {
   };
 }
 
-function mapLead(row: any): Lead {
+export function mapLead(row: any): Lead {
   return {
     id: row.id,
     leadNumber: row.lead_number,
@@ -188,6 +243,11 @@ function mapLead(row: any): Lead {
     linkedQuoteId: row.linked_quote_id ?? '',
     linkedQuoteNumber: row.linked_quote_number ?? '',
     notes: row.notes ?? '',
+    // Lead CRM upgrades
+    nextFollowUpDate: row.next_follow_up_date ?? '',
+    activities: Array.isArray(row.activities) ? row.activities : [],
+    lostReason: row.lost_reason ?? '',
+    estimatedValue: Number(row.estimated_value ?? 0),
   };
 }
 
@@ -332,10 +392,12 @@ function mapCostProfile(row: any): CostProfile {
   };
 }
 
-function mapClient(row: any): Client {
+export function mapClient(row: any): Client {
   return {
     id: row.id,
     name: row.name,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
     companyName: row.company_name ?? '',
     code: row.code ?? '',
     pricingTierId: row.pricing_tier_id ?? '',
@@ -406,6 +468,14 @@ function mapClient(row: any): Client {
     portalRequestRelease: Boolean(row.portal_request_release),
     notes: row.notes ?? '',
     active: row.active !== false,
+    // Customer food-safety requirements (Phase 5.6)
+    foodSafeDeclarationRequired: Boolean(row.food_safe_declaration_required),
+    batchNumberRequiredOnDeliveryNote: Boolean(row.batch_number_required_on_delivery_note),
+    coaRequired: Boolean(row.coa_required),
+    productSpecRequired: Boolean(row.product_spec_required),
+    specialPackingRules: row.special_packing_rules ?? '',
+    specialDeliveryRules: row.special_delivery_rules ?? '',
+    approvedMaterialRestrictions: row.approved_material_restrictions ?? '',
   };
 }
 
@@ -427,10 +497,12 @@ function mapProduct(row: any): Product {
   };
 }
 
-function mapJob(row: any): JobCard {
+export function mapJob(row: any): JobCard {
   return {
     id: row.id,
     jobNumber: row.job_number,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
     createdAt: row.created_at,
     jobDate: row.job_date,
     dueDate: row.due_date ?? '',
@@ -505,6 +577,18 @@ function mapJob(row: any): JobCard {
     releasedBy: row.released_by ?? '',
     notes: row.notes ?? '',
     fscRelated: Boolean(row.fsc_related),
+    // Food-safety fields are not yet persisted server-side; default-safe values
+    // until the Phase 1 schema migration adds the columns.
+    foodContactLevel: row.food_contact_level ?? 'NonFood',
+    foodSafeMaterialIds: Array.isArray(row.food_safe_material_ids) ? row.food_safe_material_ids : [],
+    internalBatchNumber: row.internal_batch_number ?? '',
+    foodSafetyNotes: row.food_safety_notes ?? '',
+    // Phase 2 fields — also local-only until schema lands.
+    assignedMachineId: row.assigned_machine_id ?? '',
+    changeoverChecklist: Array.isArray(row.changeover_checklist) && row.changeover_checklist.length === 9
+      ? row.changeover_checklist
+      : buildBlankChangeoverChecklist(),
+    qcPlan: Array.isArray(row.qc_plan) && row.qc_plan.length === 4 ? row.qc_plan : buildBlankQcPlan(),
   };
 }
 
@@ -533,7 +617,7 @@ function mapMaterialOrderRequest(row: any): MaterialOrderRequest {
   };
 }
 
-function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
+export function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
   return {
     id: row.id,
     stockNumber: row.stock_number,
@@ -554,6 +638,10 @@ function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
     stockStatus: row.stock_status ?? 'In Storage',
     brandingStatus: row.branding_status ?? '',
     notes: row.notes ?? '',
+    foodSafetyHoldStatus: row.food_safety_hold_status ?? 'In Production',
+    releasedByName: row.released_by_name ?? '',
+    releasedAt: row.released_at ?? '',
+    holdReason: row.hold_reason ?? '',
   };
 }
 
@@ -576,13 +664,21 @@ function mapStockChangeLog(row: any): StockChangeLog {
 }
 
 function mapSparePart(row: any): SparePart {
+  const itemType = row.item_type === 'Tool' ? 'Tool' : 'Consumable';
   return {
     id: row.id,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
     partCode: row.part_code,
     barcode: row.barcode ?? row.part_code,
     createdAt: row.created_at,
     partName: row.part_name,
     category: row.category ?? '',
+    itemType,
+    productionUse: row.production_use !== false,
+    currentStatus: row.current_status === 'Out' ? 'Out' : 'In Stock',
+    currentHolderUserId: row.current_holder_user_id ?? '',
+    currentHolderName: row.current_holder_name ?? '',
     machineId: row.machine_id ?? '',
     machineReference: row.machine_reference ?? '',
     supplierId: row.supplier_id ?? '',
@@ -598,7 +694,62 @@ function mapSparePart(row: any): SparePart {
   };
 }
 
-function mapMaterialReceipt(row: any): MaterialReceipt {
+function mapStockIssue(row: any): StockIssue {
+  return {
+    id: row.id,
+    itemId: row.item_id ?? '',
+    itemName: row.item_name ?? '',
+    itemType: row.item_type === 'Tool' ? 'Tool' : 'Consumable',
+    category: row.category ?? '',
+    quantity: Number(row.quantity ?? 0),
+    unitOfMeasure: row.unit_of_measure ?? 'units',
+    issuedAt: row.issued_at ?? '',
+    issuedToUserId: row.issued_to_user_id ?? '',
+    issuedToName: row.issued_to_name ?? '',
+    issuedByUserId: row.issued_by_user_id ?? '',
+    issuedByName: row.issued_by_name ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    notes: row.notes ?? '',
+    status: row.status === 'Returned' ? 'Returned' : 'Issued',
+    returnedAt: row.returned_at ?? '',
+    conditionOnReturn: row.condition_on_return ?? '',
+    returnedByUserId: row.returned_by_user_id ?? '',
+    returnedByName: row.returned_by_name ?? '',
+    createdAt: row.created_at ?? row.issued_at ?? '',
+  };
+}
+
+function mapStockCount(row: any, lines: any[]): StockCount {
+  return {
+    id: row.id,
+    countedAt: row.counted_at ?? '',
+    countedByUserId: row.counted_by_user_id ?? '',
+    countedByName: row.counted_by_name ?? '',
+    scope: row.scope ?? '',
+    notes: row.notes ?? '',
+    reconciled: Boolean(row.reconciled),
+    reconciledAt: row.reconciled_at ?? '',
+    reconciledByUserId: row.reconciled_by_user_id ?? '',
+    reconciledByName: row.reconciled_by_name ?? '',
+    createdAt: row.created_at ?? row.counted_at ?? '',
+    lines: lines
+      .filter((line) => line.count_id === row.id)
+      .map((line) => ({
+        id: line.id,
+        countId: line.count_id,
+        itemId: line.item_id,
+        itemName: line.item_name,
+        systemQty: Number(line.system_qty ?? 0),
+        countedQty: Number(line.counted_qty ?? 0),
+        variance: Number(line.variance ?? 0),
+        notes: line.notes ?? '',
+        createdAt: line.created_at ?? '',
+      })),
+  };
+}
+
+export function mapMaterialReceipt(row: any): MaterialReceipt {
   return {
     id: row.id,
     receiptNumber: row.receipt_number,
@@ -609,6 +760,8 @@ function mapMaterialReceipt(row: any): MaterialReceipt {
     supplierName: row.supplier_name,
     supplierBatchNumber: row.supplier_batch_number ?? '',
     internalRollCode: row.internal_roll_code,
+    materialKind: row.material_kind ?? 'Paper',
+    itemName: row.item_name ?? '',
     paperType: row.paper_type ?? '',
     gsm: row.gsm ?? '',
     width: row.width ?? '',
@@ -735,7 +888,7 @@ function mapPaper(row: any): PaperLog {
   };
 }
 
-function mapDispatch(row: any): DispatchRecord {
+export function mapDispatch(row: any): DispatchRecord {
   return {
     id: row.id,
     dispatchNumber: row.dispatch_number,
@@ -776,6 +929,599 @@ function mapBiEvent(row: any): BiEvent {
   };
 }
 
+// ============================================================================
+// Phase 15 mappers — new tables added by schema-phase15-full-data-model.sql
+// ============================================================================
+
+function mapInkRate(row: any): any {
+  return {
+    id: row.id,
+    name: row.name,
+    inkType: row.ink_type ?? 'Process',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    costPerKg: Number(row.cost_per_kg ?? 0),
+    coverageSqmPerKg: Number(row.coverage_sqm_per_kg ?? 100),
+    defaultCoveragePercent: Number(row.default_coverage_percent ?? 30),
+    notes: row.notes ?? '',
+    active: row.active !== false,
+  };
+}
+
+function mapFinishingOperation(row: any): any {
+  return {
+    id: row.id,
+    name: row.name,
+    machineName: row.machine_name ?? '',
+    rateType: row.rate_type ?? 'PerThousand',
+    rate: Number(row.rate ?? 0),
+    setupCost: Number(row.setup_cost ?? 0),
+    runSpeedPerHour: Number(row.run_speed_per_hour ?? 0),
+    notes: row.notes ?? '',
+    active: row.active !== false,
+  };
+}
+
+function mapPressRate(row: any): any {
+  return {
+    id: row.id,
+    machineId: row.machine_id ?? '',
+    machineName: row.machine_name ?? '',
+    ratePerHour: Number(row.rate_per_hour ?? 0),
+    makeReadySheets: Number(row.make_ready_sheets ?? 0),
+    makeReadyMinutes: Number(row.make_ready_minutes ?? 0),
+    runSpeedSheetsPerHour: Number(row.run_speed_sheets_per_hour ?? 0),
+    notes: row.notes ?? '',
+    active: row.active !== false,
+  };
+}
+
+function mapPlateCost(row: any): any {
+  return {
+    id: row.id,
+    name: row.name,
+    format: row.format ?? '',
+    costPerColor: Number(row.cost_per_color ?? 0),
+    originationCost: Number(row.origination_cost ?? 0),
+    notes: row.notes ?? '',
+    active: row.active !== false,
+  };
+}
+
+export function mapInvoice(row: any): any {
+  return {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
+    createdAt: row.created_at,
+    invoiceDate: row.invoice_date,
+    dueDate: row.due_date ?? '',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    clientCompanyName: row.client_company_name ?? '',
+    clientVatNumber: row.client_vat_number ?? '',
+    clientBillingAddress: row.client_billing_address ?? '',
+    clientContactName: row.client_contact_name ?? '',
+    clientContactEmail: row.client_contact_email ?? '',
+    clientContactPhone: row.client_contact_phone ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    quoteId: row.quote_id ?? '',
+    quoteNumber: row.quote_number ?? '',
+    productionSpecId: row.production_spec_id ?? '',
+    productionSpecNumber: row.production_spec_number ?? '',
+    customerReference: row.customer_reference ?? '',
+    termsType: row.terms_type ?? '50% Deposit',
+    termsText: row.terms_text ?? '',
+    notes: row.notes ?? '',
+    footerNotes: row.footer_notes ?? '',
+    status: row.status ?? 'Draft',
+    currency: row.currency ?? 'ZAR',
+    lineItems: Array.isArray(row.line_items) ? row.line_items : [],
+    subtotalExclVat: Number(row.subtotal_excl_vat ?? 0),
+    vatTotal: Number(row.vat_total ?? 0),
+    totalInclVat: Number(row.total_incl_vat ?? 0),
+    payments: Array.isArray(row.payments) ? row.payments : [],
+    amountPaid: Number(row.amount_paid ?? 0),
+    amountOutstanding: Number(row.amount_outstanding ?? 0),
+    stockHoldingApplies: Boolean(row.stock_holding_applies),
+    stockHoldingStatus: row.stock_holding_status ?? 'Not Applicable',
+    stockHoldingStartDate: row.stock_holding_start_date ?? '',
+    stockHoldingMaxDays: Number(row.stock_holding_max_days ?? 0),
+    clientVisible: row.client_visible !== false,
+  };
+}
+
+function mapProductionSpec(row: any): any {
+  return {
+    id: row.id,
+    specNumber: row.spec_number,
+    createdAt: row.created_at,
+    specDate: row.spec_date,
+    status: row.status ?? 'Draft',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    productId: row.product_id ?? '',
+    productName: row.product_name ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    sizeWidthMm: Number(row.size_width_mm ?? 0),
+    sizeHeightMm: Number(row.size_height_mm ?? 0),
+    sizeGussetMm: Number(row.size_gusset_mm ?? 0),
+    paperGsm: Number(row.paper_gsm ?? 0),
+    paperType: row.paper_type ?? '',
+    handleType: row.handle_type ?? '',
+    finishingNotes: row.finishing_notes ?? '',
+    printMethod: row.print_method ?? 'Plain',
+    printColours: Number(row.print_colours ?? 0),
+    pantoneReferences: row.pantone_references ?? '',
+    artworkReference: row.artwork_reference ?? '',
+    printPositionNotes: row.print_position_notes ?? '',
+    quantityOrdered: Number(row.quantity_ordered ?? 0),
+    quantityUnit: row.quantity_unit ?? 'units',
+    leadTimeDays: Number(row.lead_time_days ?? 0),
+    packingFormat: row.packing_format ?? '',
+    packingNotes: row.packing_notes ?? '',
+    approvedBy: row.approved_by ?? '',
+    approvedDate: row.approved_date ?? '',
+    notes: row.notes ?? '',
+    clientVisible: row.client_visible !== false,
+  };
+}
+
+export function mapWorkTicket(row: any): any {
+  return {
+    id: row.id,
+    ticketNumber: row.ticket_number,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
+    createdAt: row.created_at,
+    ticketDate: row.ticket_date,
+    linkedQuoteId: row.linked_quote_id ?? '',
+    linkedQuoteNumber: row.linked_quote_number ?? '',
+    linkedJobId: row.linked_job_id ?? '',
+    linkedJobNumber: row.linked_job_number ?? '',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    productId: row.product_id ?? '',
+    productName: row.product_name ?? '',
+    productDescription: row.product_description ?? '',
+    sizeSpec: row.size_spec ?? '',
+    handleType: row.handle_type ?? 'None',
+    printMethod: row.print_method ?? 'Plain',
+    colors: Number(row.colors ?? 0),
+    quantity: Number(row.quantity ?? 0),
+    sheets: Number(row.sheets ?? 0),
+    sheetSize: row.sheet_size ?? '',
+    paperRateId: row.paper_rate_id ?? '',
+    paperRateName: row.paper_rate_name ?? '',
+    paperType: row.paper_type ?? '',
+    paperGsm: row.paper_gsm ?? '',
+    paperKg: Number(row.paper_kg ?? 0),
+    paperCost: Number(row.paper_cost ?? 0),
+    plateCostId: row.plate_cost_id ?? '',
+    plateCostName: row.plate_cost_name ?? '',
+    prePressCost: Number(row.pre_press_cost ?? 0),
+    inkLines: Array.isArray(row.ink_lines) ? row.ink_lines : [],
+    inkSubtotal: Number(row.ink_subtotal ?? 0),
+    pressLines: Array.isArray(row.press_lines) ? row.press_lines : [],
+    pressSubtotal: Number(row.press_subtotal ?? 0),
+    guillotineLines: Array.isArray(row.guillotine_lines) ? row.guillotine_lines : [],
+    guillotineSubtotal: Number(row.guillotine_subtotal ?? 0),
+    finishingLines: Array.isArray(row.finishing_lines) ? row.finishing_lines : [],
+    finishingSubtotal: Number(row.finishing_subtotal ?? 0),
+    despatchCost: Number(row.despatch_cost ?? 0),
+    despatchNotes: row.despatch_notes ?? '',
+    totalCost: Number(row.total_cost ?? 0),
+    marginPercent: Number(row.margin_percent ?? 0),
+    sellingPricePerUnit: Number(row.selling_price_per_unit ?? 0),
+    sellingPriceTotal: Number(row.selling_price_total ?? 0),
+    status: row.status ?? 'Draft',
+    notes: row.notes ?? '',
+    pricedFromMasters: row.priced_from_masters !== false,
+  };
+}
+
+function mapChemicalRegisterEntry(row: any): any {
+  return {
+    id: row.id,
+    registerNumber: row.register_number,
+    createdAt: row.created_at,
+    chemicalName: row.chemical_name,
+    tradeName: row.trade_name ?? '',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    casNumber: row.cas_number ?? '',
+    unNumber: row.un_number ?? '',
+    state: row.state ?? 'Liquid',
+    ghsPictograms: Array.isArray(row.ghs_pictograms) ? row.ghs_pictograms : [],
+    hazardStatements: row.hazard_statements ?? '',
+    precautionaryStatements: row.precautionary_statements ?? '',
+    storageLocation: row.storage_location ?? '',
+    maxOnSiteQuantity: Number(row.max_on_site_quantity ?? 0),
+    currentOnSiteQuantity: Number(row.current_on_site_quantity ?? 0),
+    quantityUnit: row.quantity_unit ?? 'L',
+    msdsDocumentUrl: row.msds_document_url ?? '',
+    msdsLastReviewedDate: row.msds_last_reviewed_date ?? '',
+    msdsReviewIntervalMonths: Number(row.msds_review_interval_months ?? 12),
+    emergencyProcedure: row.emergency_procedure ?? '',
+    requiredPPE: row.required_ppe ?? '',
+    fireSuppressionType: row.fire_suppression_type ?? '',
+    notes: row.notes ?? '',
+    archived: Boolean(row.archived),
+  };
+}
+
+function mapFoodSafeMaterial(row: any): any {
+  return {
+    id: row.id,
+    materialNumber: row.material_number,
+    createdAt: row.created_at,
+    materialName: row.material_name,
+    category: row.category ?? 'Paper',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    supplierSku: row.supplier_sku ?? '',
+    directContactApproved: Boolean(row.direct_contact_approved),
+    indirectContactApproved: Boolean(row.indirect_contact_approved),
+    externalPrintOnly: Boolean(row.external_print_only),
+    foodSafeDeclarationUrl: row.food_safe_declaration_url ?? '',
+    msdsUrl: row.msds_url ?? '',
+    certificateOfAnalysisUrl: row.certificate_of_analysis_url ?? '',
+    supplierBatchNumber: row.supplier_batch_number ?? '',
+    internalBatchNumber: row.internal_batch_number ?? '',
+    storageLocation: row.storage_location ?? '',
+    status: row.status ?? 'Pending',
+    approvalDate: row.approval_date ?? '',
+    reviewDate: row.review_date ?? '',
+    expiryDate: row.expiry_date ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapCleaningLog(row: any): any {
+  return {
+    id: row.id,
+    logNumber: row.log_number,
+    createdAt: row.created_at,
+    area: row.area ?? 'Bag Machine',
+    areaDetail: row.area_detail ?? '',
+    machineId: row.machine_id ?? '',
+    cleaningType: row.cleaning_type ?? 'Pre-Shift',
+    performedAt: row.performed_at,
+    performedByName: row.performed_by_name ?? '',
+    chemicalRegisterId: row.chemical_register_id ?? '',
+    chemicalName: row.chemical_name ?? '',
+    result: row.result ?? 'Pass',
+    supervisorSignOffName: row.supervisor_sign_off_name ?? '',
+    supervisorSignOffAt: row.supervisor_sign_off_at ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    beforePhotoUrl: row.before_photo_url ?? '',
+    afterPhotoUrl: row.after_photo_url ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapCustomerComplaint(row: any): any {
+  return {
+    id: row.id,
+    complaintNumber: row.complaint_number,
+    createdAt: row.created_at,
+    complaintDate: row.complaint_date,
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    reportedByName: row.reported_by_name ?? '',
+    reportedByContact: row.reported_by_contact ?? '',
+    productId: row.product_id ?? '',
+    productName: row.product_name ?? '',
+    finishedGoodsStockId: row.finished_goods_stock_id ?? '',
+    finishedGoodsStockNumber: row.finished_goods_stock_number ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    internalBatchNumber: row.internal_batch_number ?? '',
+    deliveryNoteId: row.delivery_note_id ?? '',
+    deliveryNoteNumber: row.delivery_note_number ?? '',
+    invoiceId: row.invoice_id ?? '',
+    invoiceNumber: row.invoice_number ?? '',
+    complaintType: row.complaint_type ?? 'Product Defect',
+    severity: row.severity ?? 'Medium',
+    description: row.description ?? '',
+    quantityAffected: Number(row.quantity_affected ?? 0),
+    quantityUnit: row.quantity_unit ?? 'units',
+    quantityWithCustomer: Number(row.quantity_with_customer ?? 0),
+    quantityInternalStock: Number(row.quantity_internal_stock ?? 0),
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    status: row.status ?? 'New',
+    investigationNotes: row.investigation_notes ?? '',
+    rootCauseAnalysis: row.root_cause_analysis ?? '',
+    immediateAction: row.immediate_action ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    preventiveAction: row.preventive_action ?? '',
+    outcome: row.outcome ?? 'Pending',
+    outcomeNotes: row.outcome_notes ?? '',
+    closedByName: row.closed_by_name ?? '',
+    closedAt: row.closed_at ?? '',
+    recallTriggered: Boolean(row.recall_triggered),
+    recallScope: row.recall_scope ?? '',
+  };
+}
+
+function mapNonConformance(row: any): any {
+  return {
+    id: row.id,
+    ncrNumber: row.ncr_number,
+    createdAt: row.created_at,
+    issueDate: row.issue_date,
+    area: row.area ?? 'Bag Machine',
+    areaDetail: row.area_detail ?? '',
+    issueType: row.issue_type ?? 'Cleaning Not Completed',
+    severity: row.severity ?? 'Medium',
+    description: row.description ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    internalBatchNumber: row.internal_batch_number ?? '',
+    finishedGoodsStockId: row.finished_goods_stock_id ?? '',
+    finishedGoodsStockNumber: row.finished_goods_stock_number ?? '',
+    cleaningLogId: row.cleaning_log_id ?? '',
+    reportedByName: row.reported_by_name ?? '',
+    immediateAction: row.immediate_action ?? '',
+    rootCauseAnalysis: row.root_cause_analysis ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    preventiveAction: row.preventive_action ?? '',
+    responsiblePersonName: row.responsible_person_name ?? '',
+    dueDate: row.due_date ?? '',
+    evidencePhotoUrls: Array.isArray(row.evidence_photo_urls) ? row.evidence_photo_urls : [],
+    status: row.status ?? 'Open',
+    verifiedByName: row.verified_by_name ?? '',
+    verifiedAt: row.verified_at ?? '',
+    closedByName: row.closed_by_name ?? '',
+    closedAt: row.closed_at ?? '',
+    closureNotes: row.closure_notes ?? '',
+  };
+}
+
+function mapHaccpHazard(row: any): any {
+  return {
+    id: row.id,
+    hazardNumber: row.hazard_number,
+    createdAt: row.created_at,
+    processStep: row.process_step ?? 'Raw Material Receiving',
+    hazardType: row.hazard_type ?? 'Physical',
+    hazardName: row.hazard_name,
+    description: row.description ?? '',
+    likelihood: Number(row.likelihood ?? 3),
+    severity: Number(row.severity ?? 3),
+    riskLevel: row.risk_level ?? 'Medium',
+    controlMeasure: row.control_measure ?? '',
+    isCCP: Boolean(row.is_ccp),
+    monitoringMethod: row.monitoring_method ?? '',
+    monitoringFrequency: row.monitoring_frequency ?? '',
+    criticalLimits: row.critical_limits ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    verificationMethod: row.verification_method ?? '',
+    responsiblePerson: row.responsible_person ?? '',
+    reviewIntervalMonths: Number(row.review_interval_months ?? 12),
+    lastReviewedDate: row.last_reviewed_date ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapSopDocument(row: any): any {
+  return {
+    id: row.id,
+    documentNumber: row.document_number,
+    createdAt: row.created_at,
+    title: row.title,
+    category: row.category ?? 'Food Safety Policy',
+    version: row.version ?? '1.0',
+    ownerName: row.owner_name ?? '',
+    approvedByName: row.approved_by_name ?? '',
+    approvedDate: row.approved_date ?? '',
+    reviewDate: row.review_date ?? '',
+    documentUrl: row.document_url ?? '',
+    summary: row.summary ?? '',
+    status: row.status ?? 'Draft',
+    acknowledgements: Array.isArray(row.acknowledgements) ? row.acknowledgements : [],
+    supersedesId: row.supersedes_id ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapStaffTrainingRecord(row: any): any {
+  return {
+    id: row.id,
+    recordNumber: row.record_number,
+    createdAt: row.created_at,
+    staffName: row.staff_name,
+    staffRole: row.staff_role ?? '',
+    topic: row.topic ?? 'Food Safety',
+    trainingDate: row.training_date,
+    trainerName: row.trainer_name ?? '',
+    method: row.method ?? '',
+    acknowledged: Boolean(row.acknowledged),
+    acknowledgedDate: row.acknowledged_date ?? '',
+    refresherIntervalMonths: Number(row.refresher_interval_months ?? 12),
+    nextRefresherDate: row.next_refresher_date ?? '',
+    certificateUrl: row.certificate_url ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapPpeIssueRecord(row: any): any {
+  return {
+    id: row.id,
+    issueNumber: row.issue_number,
+    createdAt: row.created_at,
+    staffName: row.staff_name,
+    staffRole: row.staff_role ?? '',
+    itemType: row.item_type ?? 'Hairnet',
+    itemDescription: row.item_description ?? '',
+    quantity: Number(row.quantity ?? 1),
+    issuedByName: row.issued_by_name ?? '',
+    issuedDate: row.issued_date,
+    status: row.status ?? 'Issued',
+    returnDate: row.return_date ?? '',
+    replacementDueDate: row.replacement_due_date ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapPestControlRecord(row: any): any {
+  return {
+    id: row.id,
+    recordNumber: row.record_number,
+    createdAt: row.created_at,
+    serviceDate: row.service_date,
+    providerName: row.provider_name ?? '',
+    technicianName: row.technician_name ?? '',
+    nextServiceDate: row.next_service_date ?? '',
+    activityType: row.activity_type ?? 'Preventive Treatment',
+    pestType: row.pest_type ?? '',
+    findings: row.findings ?? '',
+    correctiveActions: row.corrective_actions ?? '',
+    productAffected: Boolean(row.product_affected),
+    stockOnHold: Boolean(row.stock_on_hold),
+    reportUrls: Array.isArray(row.report_urls) ? row.report_urls : [],
+    baitStationMapUrl: row.bait_station_map_url ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapForeignObjectRecord(row: any): any {
+  return {
+    id: row.id,
+    recordNumber: row.record_number,
+    createdAt: row.created_at,
+    area: row.area ?? 'Bag Machine',
+    material: row.material ?? 'Glass',
+    description: row.description ?? '',
+    recordType: row.record_type ?? 'Risk Inventory',
+    inspectionDate: row.inspection_date,
+    inspectedByName: row.inspected_by_name ?? '',
+    status: row.status ?? 'Open',
+    controlMeasure: row.control_measure ?? '',
+    linkedNcrId: row.linked_ncr_id ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    notes: row.notes ?? '',
+  };
+}
+
+function mapToolBladeRecord(row: any): any {
+  return {
+    id: row.id,
+    recordNumber: row.record_number,
+    createdAt: row.created_at,
+    itemType: row.item_type ?? 'Blade',
+    serialNumber: row.serial_number,
+    description: row.description ?? '',
+    homeLocation: row.home_location ?? '',
+    currentHolderName: row.current_holder_name ?? '',
+    issuedToName: row.issued_to_name ?? '',
+    issuedDate: row.issued_date ?? '',
+    expectedReturnDate: row.expected_return_date ?? '',
+    returnedDate: row.returned_date ?? '',
+    status: row.status ?? 'Available',
+    isCritical: row.is_critical !== false,
+    linkedNcrId: row.linked_ncr_id ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapVisitorLogEntry(row: any): any {
+  return {
+    id: row.id,
+    visitNumber: row.visit_number,
+    createdAt: row.created_at,
+    visitDate: row.visit_date,
+    visitorName: row.visitor_name,
+    visitorType: row.visitor_type ?? 'Contractor',
+    company: row.company ?? '',
+    hostName: row.host_name ?? '',
+    purpose: row.purpose ?? '',
+    areasVisited: Array.isArray(row.areas_visited) ? row.areas_visited : [],
+    timeIn: row.time_in ?? '',
+    timeOut: row.time_out ?? '',
+    hygieneAcknowledged: Boolean(row.hygiene_acknowledged),
+    ppeIssued: row.ppe_issued ?? '',
+    enteredFoodContactArea: Boolean(row.entered_food_contact_area),
+    notes: row.notes ?? '',
+  };
+}
+
+// ============================================================================
+// Phase 17 mappers — Driver POD (Task #81) + Invoice Inbox (Task #82)
+// ============================================================================
+
+export function mapProofOfDelivery(row: any): any {
+  return {
+    id: row.id,
+    podNumber: row.pod_number,
+    createdAt: row.created_at,
+    dispatchRecordId: row.dispatch_record_id ?? '',
+    dispatchNumber: row.dispatch_number ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    driverName: row.driver_name ?? '',
+    driverUserId: row.driver_user_id ?? '',
+    receiverName: row.receiver_name ?? '',
+    receiverRole: row.receiver_role ?? '',
+    receiverCompany: row.receiver_company ?? '',
+    receiverIdNumber: row.receiver_id_number ?? '',
+    receiverPhone: row.receiver_phone ?? '',
+    outcome: row.outcome ?? 'Delivered',
+    failureReason: row.failure_reason ?? '',
+    quantityDelivered: Number(row.quantity_delivered ?? 0),
+    quantityUnit: row.quantity_unit ?? 'units',
+    goodsCondition: row.goods_condition ?? 'Good',
+    conditionNotes: row.condition_notes ?? '',
+    capturedAt: row.captured_at ?? '',
+    gpsLatitude: Number(row.gps_latitude ?? 0),
+    gpsLongitude: Number(row.gps_longitude ?? 0),
+    gpsAccuracyMeters: Number(row.gps_accuracy_meters ?? 0),
+    signatureUrl: row.signature_url ?? '',
+    signatureDataUrl: '',
+    signedDocumentPhotoUrl: row.signed_document_photo_url ?? '',
+    goodsPhotoUrls: Array.isArray(row.goods_photo_urls) ? row.goods_photo_urls : [],
+    notes: row.notes ?? '',
+    syncStatus: row.sync_status ?? 'synced',
+    syncError: row.sync_error ?? '',
+  };
+}
+
+export function mapInvoiceInboxItem(row: any): any {
+  return {
+    id: row.id,
+    inboxNumber: row.inbox_number,
+    createdAt: row.created_at,
+    source: row.source ?? 'manualUpload',
+    uploaderName: row.uploader_name ?? '',
+    uploaderUserId: row.uploader_user_id ?? '',
+    fileName: row.file_name ?? '',
+    fileMimeType: row.file_mime_type ?? '',
+    fileSizeBytes: Number(row.file_size_bytes ?? 0),
+    fileUrl: row.file_url ?? '',
+    storagePath: row.storage_path ?? '',
+    fileHash: row.file_hash ?? '',
+    status: row.status ?? 'pending',
+    ocrError: row.ocr_error ?? '',
+    extractedJson: row.extracted_json ?? null,
+    validatedJson: row.validated_json ?? null,
+    reviewedByName: row.reviewed_by_name ?? '',
+    reviewedAt: row.reviewed_at ?? '',
+    reviewNotes: row.review_notes ?? '',
+    postedAsMaterialReceiptId: row.posted_as_material_receipt_id ?? '',
+    postedAsMaterialReceiptNumber: row.posted_as_material_receipt_number ?? '',
+    postedAsApInvoiceId: row.posted_as_ap_invoice_id ?? '',
+    postedAt: row.posted_at ?? '',
+    duplicateCandidateIds: Array.isArray(row.duplicate_candidate_ids) ? row.duplicate_candidate_ids : [],
+    senderHandle: row.sender_handle ?? '',
+    senderSubject: row.sender_subject ?? '',
+  };
+}
+
 export async function fetchAppData(): Promise<AppData> {
   const [
     suppliers,
@@ -793,6 +1539,9 @@ export async function fetchAppData(): Promise<AppData> {
     jobs,
     finishedGoodsStock,
     spareParts,
+    stockIssueRows,
+    stockCountRows,
+    stockCountLineRows,
     materialReceipts,
     productionLogs,
     wasteEntries,
@@ -802,6 +1551,29 @@ export async function fetchAppData(): Promise<AppData> {
     materialOrderRequests,
     inventoryMovements,
     biEvents,
+    appSettingsRow,
+    inkRates,
+    finishingOperations,
+    pressRates,
+    plateCosts,
+    invoices,
+    productionSpecs,
+    workTickets,
+    chemicalRegisterEntries,
+    foodSafeMaterials,
+    cleaningLogs,
+    customerComplaints,
+    nonConformances,
+    haccpHazards,
+    sopDocuments,
+    staffTrainingRecords,
+    ppeIssueRecords,
+    pestControlRecords,
+    foreignObjectRecords,
+    toolBladeRecords,
+    visitorLogEntries,
+    proofOfDeliveriesRows,
+    invoiceInboxItemRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -818,6 +1590,9 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('jobs'),
     safeSelect('finished_goods_stock'),
     safeSelect('spare_parts'),
+    safeSelect('stock_issues'),
+    safeSelect('stock_counts'),
+    safeSelect('stock_count_lines'),
     safeSelect('material_receipts'),
     safeSelect('production_logs'),
     safeSelect('waste_entries'),
@@ -827,6 +1602,31 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('material_order_requests'),
     safeSelect('inventory_movements'),
     safeSelect('bi_events'),
+    safeSelectOne('app_settings', 'default'),
+    // Phase 15 — newly added tables.
+    safeSelect('ink_rates'),
+    safeSelect('finishing_operations'),
+    safeSelect('press_rates'),
+    safeSelect('plate_costs'),
+    safeSelect('invoices'),
+    safeSelect('production_specs'),
+    safeSelect('work_tickets'),
+    safeSelect('chemical_register_entries'),
+    safeSelect('food_safe_materials'),
+    safeSelect('cleaning_logs'),
+    safeSelect('customer_complaints'),
+    safeSelect('non_conformances'),
+    safeSelect('haccp_hazards'),
+    safeSelect('sop_documents'),
+    safeSelect('staff_training_records'),
+    safeSelect('ppe_issue_records'),
+    safeSelect('pest_control_records'),
+    safeSelect('foreign_object_records'),
+    safeSelect('tool_blade_records'),
+    safeSelect('visitor_log_entries'),
+    // Phase 17 — Driver POD + supplier-invoice OCR Inbox.
+    safeSelect('proof_of_deliveries'),
+    safeSelect('invoice_inbox_items'),
   ]);
 
   return {
@@ -837,28 +1637,48 @@ export async function fetchAppData(): Promise<AppData> {
     artworkRecords: artworkRecords.map(mapArtworkRecord),
     customerStockReleases: customerStockReleases.map(mapCustomerStockRelease),
     deliveryNotes: deliveryNotes.map(mapDeliveryNote),
-    // Invoices + Production Specs are local-only for now (no DB table yet).
-    // They live in AppData state and persist via localStorage; round-trip to
-    // Supabase will be added once the corresponding tables exist.
-    invoices: [],
-    productionSpecs: [],
+    invoices: invoices.map(mapInvoice),
+    productionSpecs: productionSpecs.map(mapProductionSpec),
     paperRates: paperRates.map(mapPaperRate),
     costProfiles: costProfiles.map(mapCostProfile),
+    inkRates: inkRates.map(mapInkRate),
+    finishingOperations: finishingOperations.map(mapFinishingOperation),
+    pressRates: pressRates.map(mapPressRate),
+    plateCosts: plateCosts.map(mapPlateCost),
+    workTickets: workTickets.map(mapWorkTicket),
     pricingTiers: pricingTiers.map(mapPricingTier),
     clients: clients.map(mapClient),
     products: products.map(mapProduct),
     jobs: jobs.map(mapJob),
     finishedGoodsStock: finishedGoodsStock.map(mapFinishedGoodsStock),
     spareParts: spareParts.map(mapSparePart),
+    stockIssues: stockIssueRows.map(mapStockIssue),
+    stockCounts: stockCountRows.map((row: any) => mapStockCount(row, stockCountLineRows)),
     materialReceipts: materialReceipts.map(mapMaterialReceipt),
+    chemicalRegisterEntries: chemicalRegisterEntries.map(mapChemicalRegisterEntry),
+    foodSafeMaterials: foodSafeMaterials.map(mapFoodSafeMaterial),
+    cleaningLogs: cleaningLogs.map(mapCleaningLog),
+    customerComplaints: customerComplaints.map(mapCustomerComplaint),
+    nonConformances: nonConformances.map(mapNonConformance),
+    staffTrainingRecords: staffTrainingRecords.map(mapStaffTrainingRecord),
+    ppeIssueRecords: ppeIssueRecords.map(mapPpeIssueRecord),
+    pestControlRecords: pestControlRecords.map(mapPestControlRecord),
+    foreignObjectRecords: foreignObjectRecords.map(mapForeignObjectRecord),
+    toolBladeRecords: toolBladeRecords.map(mapToolBladeRecord),
+    visitorLogEntries: visitorLogEntries.map(mapVisitorLogEntry),
+    sopDocuments: sopDocuments.map(mapSopDocument),
+    haccpHazards: haccpHazards.map(mapHaccpHazard),
     productionLogs: productionLogs.map(mapProductionLog),
     wasteEntries: wasteEntries.map(mapWaste),
     paperLogs: paperLogs.map(mapPaper),
     dispatchRecords: dispatchRecords.map(mapDispatch),
+    proofOfDeliveries: proofOfDeliveriesRows.map(mapProofOfDelivery),
+    invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
     stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
     biEvents: biEvents.map(mapBiEvent),
+    appSettings: mapAppSettings(appSettingsRow),
   };
 }
 
@@ -904,6 +1724,11 @@ export async function syncAppData(data: AppData): Promise<void> {
       status: machine.status,
       notes: machine.notes || null,
       active: machine.active,
+      // Phase 5.5 maintenance gate
+      maintenance_status: machine.maintenanceStatus ?? 'OK',
+      last_serviced_date: machine.lastServicedDate || null,
+      next_service_date: machine.nextServiceDate || null,
+      open_maintenance_issue: machine.openMaintenanceIssue ?? '',
     }))),
     safeUpsert('leads', data.leads.map((lead) => ({
       id: lead.id,
@@ -927,6 +1752,11 @@ export async function syncAppData(data: AppData): Promise<void> {
       linked_quote_id: lead.linkedQuoteId || null,
       linked_quote_number: lead.linkedQuoteNumber || null,
       notes: lead.notes || null,
+      // Lead CRM upgrades (#88)
+      next_follow_up_date: lead.nextFollowUpDate || null,
+      activities: lead.activities ?? [],
+      lost_reason: lead.lostReason ?? '',
+      estimated_value: lead.estimatedValue ?? 0,
     }))),
     safeUpsert('quote_estimates', data.quoteEstimates.map((quote) => ({
       id: quote.id,
@@ -1135,6 +1965,14 @@ export async function syncAppData(data: AppData): Promise<void> {
       portal_request_release: client.portalRequestRelease,
       notes: client.notes || null,
       active: client.active,
+      // Customer food-safety requirements (Phase 5.6)
+      food_safe_declaration_required: client.foodSafeDeclarationRequired ?? false,
+      batch_number_required_on_delivery_note: client.batchNumberRequiredOnDeliveryNote ?? false,
+      coa_required: client.coaRequired ?? false,
+      product_spec_required: client.productSpecRequired ?? false,
+      special_packing_rules: client.specialPackingRules ?? '',
+      special_delivery_rules: client.specialDeliveryRules ?? '',
+      approved_material_restrictions: client.approvedMaterialRestrictions ?? '',
     }))),
     safeUpsert('products', data.products.map((product) => ({
       id: product.id,
@@ -1228,6 +2066,14 @@ export async function syncAppData(data: AppData): Promise<void> {
       released_by: job.releasedBy || null,
       notes: job.notes || null,
       fsc_related: job.fscRelated,
+      // Food safety + scheduling (Phase 1 + 2 + 5)
+      food_contact_level: job.foodContactLevel ?? 'NonFood',
+      food_safe_material_ids: job.foodSafeMaterialIds ?? [],
+      internal_batch_number: job.internalBatchNumber ?? '',
+      food_safety_notes: job.foodSafetyNotes ?? '',
+      assigned_machine_id: job.assignedMachineId || null,
+      changeover_checklist: job.changeoverChecklist ?? [],
+      qc_plan: job.qcPlan ?? [],
     }))),
     safeUpsert('material_order_requests', data.materialOrderRequests.map((request) => ({
       id: request.id,
@@ -1271,6 +2117,11 @@ export async function syncAppData(data: AppData): Promise<void> {
       stock_status: item.stockStatus,
       branding_status: item.brandingStatus || null,
       notes: item.notes || null,
+      // Food-safety hold/release (Phase 2)
+      food_safety_hold_status: item.foodSafetyHoldStatus ?? 'In Production',
+      released_by_name: item.releasedByName ?? '',
+      released_at: item.releasedAt || null,
+      hold_reason: item.holdReason ?? '',
     }))),
     safeUpsert('spare_parts', data.spareParts.map((part) => ({
       id: part.id,
@@ -1291,7 +2142,61 @@ export async function syncAppData(data: AppData): Promise<void> {
       storage_location: part.storageLocation || null,
       last_purchase_date: part.lastPurchaseDate || null,
       notes: part.notes || null,
+      item_type: part.itemType,
+      production_use: part.productionUse,
+      current_status: part.currentStatus,
+      current_holder_user_id: part.currentHolderUserId || null,
+      current_holder_name: part.currentHolderName || null,
     }))),
+    safeUpsert('stock_issues', data.stockIssues.map((issue) => ({
+      id: issue.id,
+      item_id: issue.itemId,
+      item_name: issue.itemName,
+      item_type: issue.itemType,
+      category: issue.category || null,
+      quantity: issue.quantity,
+      unit_of_measure: issue.unitOfMeasure,
+      issued_at: issue.issuedAt,
+      issued_to_user_id: issue.issuedToUserId || null,
+      issued_to_name: issue.issuedToName || null,
+      issued_by_user_id: issue.issuedByUserId || null,
+      issued_by_name: issue.issuedByName || null,
+      job_id: issue.jobId || null,
+      job_number: issue.jobNumber || null,
+      notes: issue.notes || null,
+      status: issue.status,
+      returned_at: issue.returnedAt || null,
+      condition_on_return: issue.conditionOnReturn || null,
+      returned_by_user_id: issue.returnedByUserId || null,
+      returned_by_name: issue.returnedByName || null,
+      created_at: issue.createdAt,
+    }))),
+    safeUpsert('stock_counts', data.stockCounts.map((count) => ({
+      id: count.id,
+      counted_at: count.countedAt,
+      counted_by_user_id: count.countedByUserId || null,
+      counted_by_name: count.countedByName || null,
+      scope: count.scope || null,
+      notes: count.notes || null,
+      reconciled: count.reconciled,
+      reconciled_at: count.reconciledAt || null,
+      reconciled_by_user_id: count.reconciledByUserId || null,
+      reconciled_by_name: count.reconciledByName || null,
+      created_at: count.createdAt,
+    }))),
+    safeUpsert('stock_count_lines', data.stockCounts.flatMap((count) =>
+      count.lines.map((line) => ({
+        id: line.id,
+        count_id: count.id,
+        item_id: line.itemId,
+        item_name: line.itemName,
+        system_qty: line.systemQty,
+        counted_qty: line.countedQty,
+        variance: line.variance,
+        notes: line.notes || null,
+        created_at: line.createdAt,
+      })),
+    )),
     safeUpsert('material_receipts', data.materialReceipts.map((receipt) => ({
       id: receipt.id,
       receipt_number: receipt.receiptNumber,
@@ -1302,6 +2207,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       supplier_name: receipt.supplierName,
       supplier_batch_number: receipt.supplierBatchNumber || null,
       internal_roll_code: receipt.internalRollCode,
+      material_kind: receipt.materialKind || 'Paper',
+      item_name: receipt.itemName || null,
       paper_type: receipt.paperType || null,
       gsm: receipt.gsm || null,
       width: receipt.width || null,
@@ -1446,5 +2353,557 @@ export async function syncAppData(data: AppData): Promise<void> {
       moved_by_name: movement.movedByName || null,
       notes: movement.notes || null,
     }))),
+    safeUpsert('app_settings', [{
+      id: 'default',
+      company_name: data.appSettings.company.name,
+      legal_name: data.appSettings.company.legalName,
+      address_line_1: data.appSettings.company.addressLine1,
+      address_line_2: data.appSettings.company.addressLine2,
+      phone: data.appSettings.company.phone,
+      email: data.appSettings.company.email,
+      vat_number: data.appSettings.company.vatNumber,
+      logo_url: data.appSettings.company.logoUrl || null,
+      invoice_footer_lines: data.appSettings.templates.invoiceFooterLines,
+      delivery_note_footer_lines: data.appSettings.templates.deliveryNoteFooterLines,
+      production_spec_footer_lines: data.appSettings.templates.productionSpecFooterLines,
+      default_payment_terms: data.appSettings.templates.defaultPaymentTerms,
+      default_invoice_notes: data.appSettings.templates.defaultInvoiceNotes,
+      default_delivery_note_notes: data.appSettings.templates.defaultDeliveryNoteNotes,
+      default_stock_holding_max_days: data.appSettings.stockHolding.defaultMaxDays,
+      default_stock_holding_review_cadence_days: data.appSettings.stockHolding.defaultReviewCadenceDays,
+      default_stock_holding_terms: data.appSettings.stockHolding.defaultAgreementTermsText,
+      updated_at: data.appSettings.updatedAt || new Date().toISOString(),
+      updated_by: data.appSettings.updatedBy || null,
+    }]),
+    // ====================================================================
+    // Phase 15 — upserts for all newly persisted tables.
+    // ====================================================================
+    safeUpsert('ink_rates', data.inkRates.map((r) => ({
+      id: r.id, name: r.name, ink_type: r.inkType || 'Process',
+      supplier_id: r.supplierId || '', supplier_name: r.supplierName || '',
+      cost_per_kg: r.costPerKg,
+      coverage_sqm_per_kg: r.coverageSqmPerKg,
+      default_coverage_percent: r.defaultCoveragePercent,
+      notes: r.notes || '', active: r.active,
+    }))),
+    safeUpsert('finishing_operations', data.finishingOperations.map((r) => ({
+      id: r.id, name: r.name,
+      machine_name: r.machineName || '',
+      rate_type: r.rateType || 'PerThousand',
+      rate: r.rate,
+      setup_cost: r.setupCost,
+      run_speed_per_hour: r.runSpeedPerHour,
+      notes: r.notes || '', active: r.active,
+    }))),
+    safeUpsert('press_rates', data.pressRates.map((r) => ({
+      id: r.id, machine_id: r.machineId || '', machine_name: r.machineName || '',
+      rate_per_hour: r.ratePerHour,
+      make_ready_sheets: r.makeReadySheets,
+      make_ready_minutes: r.makeReadyMinutes,
+      run_speed_sheets_per_hour: r.runSpeedSheetsPerHour,
+      notes: r.notes || '', active: r.active,
+    }))),
+    safeUpsert('plate_costs', data.plateCosts.map((r) => ({
+      id: r.id, name: r.name,
+      format: r.format || '',
+      cost_per_color: r.costPerColor,
+      origination_cost: r.originationCost,
+      notes: r.notes || '', active: r.active,
+    }))),
+    safeUpsert('invoices', data.invoices.map((inv) => ({
+      id: inv.id, invoice_number: inv.invoiceNumber, created_at: inv.createdAt,
+      invoice_date: inv.invoiceDate, due_date: inv.dueDate || null,
+      client_id: inv.clientId || null, client_name: inv.clientName,
+      client_company_name: inv.clientCompanyName,
+      client_vat_number: inv.clientVatNumber,
+      client_billing_address: inv.clientBillingAddress,
+      client_contact_name: inv.clientContactName,
+      client_contact_email: inv.clientContactEmail,
+      client_contact_phone: inv.clientContactPhone,
+      job_id: inv.jobId || null, job_number: inv.jobNumber || null,
+      quote_id: inv.quoteId || null, quote_number: inv.quoteNumber || null,
+      production_spec_id: inv.productionSpecId || null,
+      production_spec_number: inv.productionSpecNumber || null,
+      customer_reference: inv.customerReference, terms_type: inv.termsType,
+      terms_text: inv.termsText, notes: inv.notes, footer_notes: inv.footerNotes,
+      status: inv.status, currency: inv.currency,
+      line_items: inv.lineItems, subtotal_excl_vat: inv.subtotalExclVat,
+      vat_total: inv.vatTotal, total_incl_vat: inv.totalInclVat,
+      payments: inv.payments, amount_paid: inv.amountPaid,
+      amount_outstanding: inv.amountOutstanding,
+      stock_holding_applies: inv.stockHoldingApplies,
+      stock_holding_status: inv.stockHoldingStatus,
+      stock_holding_start_date: inv.stockHoldingStartDate || null,
+      stock_holding_max_days: inv.stockHoldingMaxDays,
+      client_visible: inv.clientVisible,
+    }))),
+    safeUpsert('production_specs', data.productionSpecs.map((s) => ({
+      id: s.id, spec_number: s.specNumber, created_at: s.createdAt,
+      spec_date: s.specDate, status: s.status,
+      client_id: s.clientId || null, client_name: s.clientName,
+      product_id: s.productId || null, product_name: s.productName,
+      job_id: s.jobId || null, job_number: s.jobNumber || null,
+      size_width_mm: s.sizeWidthMm, size_height_mm: s.sizeHeightMm,
+      size_gusset_mm: s.sizeGussetMm, paper_gsm: s.paperGsm,
+      paper_type: s.paperType, handle_type: s.handleType,
+      finishing_notes: s.finishingNotes, print_method: s.printMethod,
+      print_colours: s.printColours, pantone_references: s.pantoneReferences,
+      artwork_reference: s.artworkReference,
+      print_position_notes: s.printPositionNotes,
+      quantity_ordered: s.quantityOrdered, quantity_unit: s.quantityUnit,
+      lead_time_days: s.leadTimeDays, packing_format: s.packingFormat,
+      packing_notes: s.packingNotes, approved_by: s.approvedBy,
+      approved_date: s.approvedDate || null,
+      notes: s.notes, client_visible: s.clientVisible,
+    }))),
+    safeUpsert('work_tickets', data.workTickets.map((t) => ({
+      id: t.id, ticket_number: t.ticketNumber, created_at: t.createdAt,
+      ticket_date: t.ticketDate,
+      linked_quote_id: t.linkedQuoteId || null,
+      linked_quote_number: t.linkedQuoteNumber || null,
+      linked_job_id: t.linkedJobId || null,
+      linked_job_number: t.linkedJobNumber || null,
+      client_id: t.clientId || null, client_name: t.clientName,
+      product_id: t.productId || null, product_name: t.productName,
+      product_description: t.productDescription, size_spec: t.sizeSpec,
+      handle_type: t.handleType, print_method: t.printMethod,
+      colors: t.colors, quantity: t.quantity, sheets: t.sheets,
+      sheet_size: t.sheetSize,
+      paper_rate_id: t.paperRateId || null,
+      paper_rate_name: t.paperRateName || null,
+      paper_type: t.paperType, paper_gsm: t.paperGsm,
+      paper_kg: t.paperKg, paper_cost: t.paperCost,
+      plate_cost_id: t.plateCostId || null,
+      plate_cost_name: t.plateCostName || null,
+      pre_press_cost: t.prePressCost,
+      ink_lines: t.inkLines, ink_subtotal: t.inkSubtotal,
+      press_lines: t.pressLines, press_subtotal: t.pressSubtotal,
+      guillotine_lines: t.guillotineLines, guillotine_subtotal: t.guillotineSubtotal,
+      finishing_lines: t.finishingLines, finishing_subtotal: t.finishingSubtotal,
+      despatch_cost: t.despatchCost, despatch_notes: t.despatchNotes,
+      total_cost: t.totalCost, margin_percent: t.marginPercent,
+      selling_price_per_unit: t.sellingPricePerUnit,
+      selling_price_total: t.sellingPriceTotal,
+      status: t.status, notes: t.notes, priced_from_masters: t.pricedFromMasters,
+    }))),
+    safeUpsert('chemical_register_entries', data.chemicalRegisterEntries.map((c) => ({
+      id: c.id, register_number: c.registerNumber, created_at: c.createdAt,
+      chemical_name: c.chemicalName, trade_name: c.tradeName,
+      supplier_id: c.supplierId || null, supplier_name: c.supplierName,
+      cas_number: c.casNumber, un_number: c.unNumber, state: c.state,
+      ghs_pictograms: c.ghsPictograms,
+      hazard_statements: c.hazardStatements,
+      precautionary_statements: c.precautionaryStatements,
+      storage_location: c.storageLocation,
+      max_on_site_quantity: c.maxOnSiteQuantity,
+      current_on_site_quantity: c.currentOnSiteQuantity,
+      quantity_unit: c.quantityUnit,
+      msds_document_url: c.msdsDocumentUrl,
+      msds_last_reviewed_date: c.msdsLastReviewedDate || null,
+      msds_review_interval_months: c.msdsReviewIntervalMonths,
+      emergency_procedure: c.emergencyProcedure,
+      required_ppe: c.requiredPPE,
+      fire_suppression_type: c.fireSuppressionType,
+      notes: c.notes, archived: c.archived,
+    }))),
+    safeUpsert('food_safe_materials', data.foodSafeMaterials.map((m) => ({
+      id: m.id, material_number: m.materialNumber, created_at: m.createdAt,
+      material_name: m.materialName, category: m.category,
+      supplier_id: m.supplierId || null, supplier_name: m.supplierName,
+      supplier_sku: m.supplierSku,
+      direct_contact_approved: m.directContactApproved,
+      indirect_contact_approved: m.indirectContactApproved,
+      external_print_only: m.externalPrintOnly,
+      food_safe_declaration_url: m.foodSafeDeclarationUrl,
+      msds_url: m.msdsUrl,
+      certificate_of_analysis_url: m.certificateOfAnalysisUrl,
+      supplier_batch_number: m.supplierBatchNumber,
+      internal_batch_number: m.internalBatchNumber,
+      storage_location: m.storageLocation,
+      status: m.status,
+      approval_date: m.approvalDate || null,
+      review_date: m.reviewDate || null,
+      expiry_date: m.expiryDate || null,
+      notes: m.notes,
+    }))),
+    safeUpsert('cleaning_logs', data.cleaningLogs.map((l) => ({
+      id: l.id, log_number: l.logNumber, created_at: l.createdAt,
+      area: l.area, area_detail: l.areaDetail,
+      machine_id: l.machineId || null,
+      cleaning_type: l.cleaningType, performed_at: l.performedAt,
+      performed_by_name: l.performedByName,
+      chemical_register_id: l.chemicalRegisterId || null,
+      chemical_name: l.chemicalName, result: l.result,
+      supervisor_sign_off_name: l.supervisorSignOffName,
+      supervisor_sign_off_at: l.supervisorSignOffAt || null,
+      corrective_action: l.correctiveAction,
+      before_photo_url: l.beforePhotoUrl,
+      after_photo_url: l.afterPhotoUrl,
+      notes: l.notes,
+    }))),
+    safeUpsert('customer_complaints', data.customerComplaints.map((c) => ({
+      id: c.id, complaint_number: c.complaintNumber, created_at: c.createdAt,
+      complaint_date: c.complaintDate,
+      client_id: c.clientId || null, client_name: c.clientName,
+      reported_by_name: c.reportedByName, reported_by_contact: c.reportedByContact,
+      product_id: c.productId || null, product_name: c.productName,
+      finished_goods_stock_id: c.finishedGoodsStockId || null,
+      finished_goods_stock_number: c.finishedGoodsStockNumber,
+      job_id: c.jobId || null, job_number: c.jobNumber,
+      internal_batch_number: c.internalBatchNumber,
+      delivery_note_id: c.deliveryNoteId || null,
+      delivery_note_number: c.deliveryNoteNumber,
+      invoice_id: c.invoiceId || null, invoice_number: c.invoiceNumber,
+      complaint_type: c.complaintType, severity: c.severity,
+      description: c.description,
+      quantity_affected: c.quantityAffected, quantity_unit: c.quantityUnit,
+      quantity_with_customer: c.quantityWithCustomer,
+      quantity_internal_stock: c.quantityInternalStock,
+      photo_urls: c.photoUrls, status: c.status,
+      investigation_notes: c.investigationNotes,
+      root_cause_analysis: c.rootCauseAnalysis,
+      immediate_action: c.immediateAction,
+      corrective_action: c.correctiveAction,
+      preventive_action: c.preventiveAction,
+      outcome: c.outcome, outcome_notes: c.outcomeNotes,
+      closed_by_name: c.closedByName,
+      closed_at: c.closedAt || null,
+      recall_triggered: c.recallTriggered, recall_scope: c.recallScope,
+    }))),
+    safeUpsert('non_conformances', data.nonConformances.map((n) => ({
+      id: n.id, ncr_number: n.ncrNumber, created_at: n.createdAt,
+      issue_date: n.issueDate, area: n.area, area_detail: n.areaDetail,
+      issue_type: n.issueType, severity: n.severity, description: n.description,
+      job_id: n.jobId || null, job_number: n.jobNumber,
+      internal_batch_number: n.internalBatchNumber,
+      finished_goods_stock_id: n.finishedGoodsStockId || null,
+      finished_goods_stock_number: n.finishedGoodsStockNumber,
+      cleaning_log_id: n.cleaningLogId || null,
+      reported_by_name: n.reportedByName,
+      immediate_action: n.immediateAction,
+      root_cause_analysis: n.rootCauseAnalysis,
+      corrective_action: n.correctiveAction,
+      preventive_action: n.preventiveAction,
+      responsible_person_name: n.responsiblePersonName,
+      due_date: n.dueDate || null,
+      evidence_photo_urls: n.evidencePhotoUrls,
+      status: n.status,
+      verified_by_name: n.verifiedByName,
+      verified_at: n.verifiedAt || null,
+      closed_by_name: n.closedByName,
+      closed_at: n.closedAt || null,
+      closure_notes: n.closureNotes,
+    }))),
+    safeUpsert('haccp_hazards', data.haccpHazards.map((h) => ({
+      id: h.id, hazard_number: h.hazardNumber, created_at: h.createdAt,
+      process_step: h.processStep, hazard_type: h.hazardType,
+      hazard_name: h.hazardName, description: h.description,
+      likelihood: h.likelihood, severity: h.severity, risk_level: h.riskLevel,
+      control_measure: h.controlMeasure, is_ccp: h.isCCP,
+      monitoring_method: h.monitoringMethod,
+      monitoring_frequency: h.monitoringFrequency,
+      critical_limits: h.criticalLimits,
+      corrective_action: h.correctiveAction,
+      verification_method: h.verificationMethod,
+      responsible_person: h.responsiblePerson,
+      review_interval_months: h.reviewIntervalMonths,
+      last_reviewed_date: h.lastReviewedDate || null,
+      notes: h.notes,
+    }))),
+    safeUpsert('sop_documents', data.sopDocuments.map((d) => ({
+      id: d.id, document_number: d.documentNumber, created_at: d.createdAt,
+      title: d.title, category: d.category, version: d.version,
+      owner_name: d.ownerName, approved_by_name: d.approvedByName,
+      approved_date: d.approvedDate || null,
+      review_date: d.reviewDate || null,
+      document_url: d.documentUrl, summary: d.summary, status: d.status,
+      acknowledgements: d.acknowledgements,
+      supersedes_id: d.supersedesId || null,
+      notes: d.notes,
+    }))),
+    safeUpsert('staff_training_records', data.staffTrainingRecords.map((r) => ({
+      id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
+      staff_name: r.staffName, staff_role: r.staffRole, topic: r.topic,
+      training_date: r.trainingDate, trainer_name: r.trainerName,
+      method: r.method, acknowledged: r.acknowledged,
+      acknowledged_date: r.acknowledgedDate || null,
+      refresher_interval_months: r.refresherIntervalMonths,
+      next_refresher_date: r.nextRefresherDate || null,
+      certificate_url: r.certificateUrl, notes: r.notes,
+    }))),
+    safeUpsert('ppe_issue_records', data.ppeIssueRecords.map((r) => ({
+      id: r.id, issue_number: r.issueNumber, created_at: r.createdAt,
+      staff_name: r.staffName, staff_role: r.staffRole,
+      item_type: r.itemType, item_description: r.itemDescription,
+      quantity: r.quantity, issued_by_name: r.issuedByName,
+      issued_date: r.issuedDate, status: r.status,
+      return_date: r.returnDate || null,
+      replacement_due_date: r.replacementDueDate || null,
+      notes: r.notes,
+    }))),
+    safeUpsert('pest_control_records', data.pestControlRecords.map((r) => ({
+      id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
+      service_date: r.serviceDate, provider_name: r.providerName,
+      technician_name: r.technicianName,
+      next_service_date: r.nextServiceDate || null,
+      activity_type: r.activityType, pest_type: r.pestType,
+      findings: r.findings, corrective_actions: r.correctiveActions,
+      product_affected: r.productAffected, stock_on_hold: r.stockOnHold,
+      report_urls: r.reportUrls,
+      bait_station_map_url: r.baitStationMapUrl,
+      notes: r.notes,
+    }))),
+    safeUpsert('foreign_object_records', data.foreignObjectRecords.map((r) => ({
+      id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
+      area: r.area, material: r.material, description: r.description,
+      record_type: r.recordType, inspection_date: r.inspectionDate,
+      inspected_by_name: r.inspectedByName, status: r.status,
+      control_measure: r.controlMeasure,
+      linked_ncr_id: r.linkedNcrId || null,
+      photo_urls: r.photoUrls, notes: r.notes,
+    }))),
+    safeUpsert('tool_blade_records', data.toolBladeRecords.map((r) => ({
+      id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
+      item_type: r.itemType, serial_number: r.serialNumber,
+      description: r.description, home_location: r.homeLocation,
+      current_holder_name: r.currentHolderName,
+      issued_to_name: r.issuedToName,
+      issued_date: r.issuedDate || null,
+      expected_return_date: r.expectedReturnDate || null,
+      returned_date: r.returnedDate || null,
+      status: r.status, is_critical: r.isCritical,
+      linked_ncr_id: r.linkedNcrId || null,
+      notes: r.notes,
+    }))),
+    safeUpsert('visitor_log_entries', data.visitorLogEntries.map((r) => ({
+      id: r.id, visit_number: r.visitNumber, created_at: r.createdAt,
+      visit_date: r.visitDate, visitor_name: r.visitorName,
+      visitor_type: r.visitorType, company: r.company,
+      host_name: r.hostName, purpose: r.purpose,
+      areas_visited: r.areasVisited,
+      time_in: r.timeIn, time_out: r.timeOut,
+      hygiene_acknowledged: r.hygieneAcknowledged,
+      ppe_issued: r.ppeIssued,
+      entered_food_contact_area: r.enteredFoodContactArea,
+      notes: r.notes,
+    }))),
+    // Phase 17 — Driver POD + Invoice Inbox upserts.
+    // We push only rows that have already been uploaded (signature lives in
+    // Storage, not in the DB). Offline-pending rows stay client-side until
+    // the sync queue flushes.
+    safeUpsert('proof_of_deliveries', data.proofOfDeliveries
+      .filter((r) => r.syncStatus === 'synced')
+      .map((r) => ({
+        id: r.id,
+        pod_number: r.podNumber,
+        created_at: r.createdAt,
+        dispatch_record_id: r.dispatchRecordId || null,
+        dispatch_number: r.dispatchNumber || '',
+        job_id: r.jobId || null,
+        job_number: r.jobNumber || '',
+        client_id: r.clientId || null,
+        client_name: r.clientName || '',
+        driver_name: r.driverName || '',
+        driver_user_id: r.driverUserId || null,
+        receiver_name: r.receiverName || '',
+        receiver_role: r.receiverRole || '',
+        receiver_company: r.receiverCompany || '',
+        receiver_id_number: r.receiverIdNumber || '',
+        receiver_phone: r.receiverPhone || '',
+        outcome: r.outcome,
+        failure_reason: r.failureReason || '',
+        quantity_delivered: r.quantityDelivered,
+        quantity_unit: r.quantityUnit,
+        goods_condition: r.goodsCondition,
+        condition_notes: r.conditionNotes || '',
+        captured_at: r.capturedAt || null,
+        gps_latitude: r.gpsLatitude,
+        gps_longitude: r.gpsLongitude,
+        gps_accuracy_meters: r.gpsAccuracyMeters,
+        signature_url: r.signatureUrl || '',
+        signed_document_photo_url: r.signedDocumentPhotoUrl || '',
+        goods_photo_urls: r.goodsPhotoUrls || [],
+        notes: r.notes || '',
+        sync_status: 'synced',
+        sync_error: '',
+      }))),
+    safeUpsert('invoice_inbox_items', data.invoiceInboxItems.map((r) => ({
+      id: r.id,
+      inbox_number: r.inboxNumber,
+      created_at: r.createdAt,
+      source: r.source,
+      uploader_name: r.uploaderName || '',
+      uploader_user_id: r.uploaderUserId || null,
+      file_name: r.fileName || '',
+      file_mime_type: r.fileMimeType || '',
+      file_size_bytes: r.fileSizeBytes || 0,
+      file_url: r.fileUrl || '',
+      storage_path: r.storagePath || '',
+      file_hash: r.fileHash || '',
+      status: r.status,
+      ocr_error: r.ocrError || '',
+      extracted_json: r.extractedJson,
+      validated_json: r.validatedJson,
+      reviewed_by_name: r.reviewedByName || '',
+      reviewed_at: r.reviewedAt || null,
+      review_notes: r.reviewNotes || '',
+      posted_as_material_receipt_id: r.postedAsMaterialReceiptId || null,
+      posted_as_material_receipt_number: r.postedAsMaterialReceiptNumber || '',
+      posted_as_ap_invoice_id: r.postedAsApInvoiceId || null,
+      posted_at: r.postedAt || null,
+      duplicate_candidate_ids: r.duplicateCandidateIds || [],
+      sender_handle: r.senderHandle || '',
+      sender_subject: r.senderSubject || '',
+    }))),
   ]);
+}
+
+/**
+ * Payload for `recordAuditEvent`. Identifies what was touched (sourceTable +
+ * sourceRecordId), categorises the action, and lets the caller pass arbitrary
+ * structured context in `details` (e.g. { previousStatus, nextStatus }).
+ *
+ * Most write paths in this app are server-trigger-logged (see schema-phase9-bi-backend.sql),
+ * but some user-facing actions — undos, deletes, manual notes, batch operations
+ * — only happen client-side, and we still want them in the audit history.
+ */
+export interface AuditEventInput {
+  sourceTable: string;
+  sourceRecordId: string;
+  eventCategory: string;
+  eventType: string;
+  action: string;
+  summary: string;
+  actorName?: string;
+  jobId?: string;
+  jobNumber?: string;
+  clientId?: string;
+  clientName?: string;
+  visibilityScope?: 'internal' | 'client_shared' | 'client_only';
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Records an audit event by calling the SECURITY DEFINER `insert_bi_event` RPC.
+ * Returns silently on failure — audit logging must never block a user action.
+ * The error is logged so we can spot regressions during review.
+ */
+export async function recordAuditEvent(payload: AuditEventInput): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('insert_bi_event', {
+      p_source_table: payload.sourceTable,
+      p_source_record_id: payload.sourceRecordId,
+      p_event_category: payload.eventCategory,
+      p_event_type: payload.eventType,
+      p_action: payload.action,
+      p_summary: payload.summary,
+      p_actor_name: payload.actorName ?? '',
+      p_job_id: payload.jobId ?? '',
+      p_job_number: payload.jobNumber ?? '',
+      p_client_id: payload.clientId ?? '',
+      p_client_name: payload.clientName ?? '',
+      p_visibility_scope: payload.visibilityScope ?? 'internal',
+      p_details: payload.details ?? {},
+    });
+    if (error && error.code !== MISSING_TABLE) {
+      console.warn('[audit] insert_bi_event failed', error);
+    }
+  } catch (err) {
+    console.warn('[audit] insert_bi_event threw', err);
+  }
+}
+
+/**
+ * Pulls recent audit events for a single record, newest first.
+ * Used by HistoryDrawer to render the timeline of changes for a job, invoice,
+ * spare part, etc. Returns [] if the table is missing or RLS blocks the read.
+ */
+export async function fetchAuditEventsFor(
+  sourceTable: string,
+  sourceRecordId: string,
+  limit = 100,
+): Promise<BiEvent[]> {
+  try {
+    const result = await supabase
+      .from('bi_events')
+      .select('*')
+      .eq('source_table', sourceTable)
+      .eq('source_record_id', sourceRecordId)
+      .order('occurred_at', { ascending: false })
+      .limit(limit);
+    if (result.error) {
+      if (result.error.code !== MISSING_TABLE) {
+        console.warn('[audit] fetchAuditEventsFor failed', result.error);
+      }
+      return [];
+    }
+    return (result.data ?? []).map(mapBiEvent);
+  } catch (err) {
+    console.warn('[audit] fetchAuditEventsFor threw', err);
+    return [];
+  }
+}
+
+/**
+ * Optimistic concurrency check (phase 14).
+ *
+ * Reads the row's current `version` from the DB and compares against the
+ * version the caller has in memory. Returns one of:
+ *   - { kind: 'ok' }                    — versions match, safe to save
+ *   - { kind: 'conflict', dbVersion }   — another user has saved more recently
+ *   - { kind: 'unknown' }               — couldn't read the row (RLS, table missing,
+ *                                          row never persisted, network blip).
+ *                                          Caller should treat as "proceed" — we
+ *                                          never want to block a save just because
+ *                                          we couldn't run the check.
+ *
+ * The check is intentionally cheap (single-column read by id). It runs
+ * pre-save, not as part of the bulk-app sync, so latency only matters when a
+ * user actually clicks Save on a job/invoice/client/part edit form.
+ *
+ * Tables with the `version` column (jobs, invoices, clients, spare_parts) get
+ * the auto-bumping trigger from schema-phase14-concurrency.sql. Tables without
+ * that column will return `unknown` here and degrade to last-write-wins, which
+ * matches their pre-phase-14 behaviour.
+ */
+export type VersionCheckResult =
+  | { kind: 'ok' }
+  | { kind: 'conflict'; dbVersion: number }
+  | { kind: 'unknown' };
+
+export async function detectVersionConflict(
+  table: string,
+  id: string,
+  knownVersion: number | undefined,
+): Promise<VersionCheckResult> {
+  if (knownVersion === undefined) {
+    // The caller doesn't have a version yet (e.g. a brand-new row that hasn't
+    // been persisted, or a record loaded before phase 14 shipped). Skip the
+    // check — there's nothing to compare against.
+    return { kind: 'unknown' };
+  }
+  try {
+    const result = await supabase
+      .from(table)
+      .select('version')
+      .eq('id', id)
+      .maybeSingle();
+    if (result.error) {
+      if (result.error.code !== MISSING_TABLE && result.error.code !== 'PGRST116') {
+        console.warn('[concurrency] version read failed', table, id, result.error);
+      }
+      return { kind: 'unknown' };
+    }
+    const dbVersion = result.data?.version;
+    if (typeof dbVersion !== 'number') {
+      return { kind: 'unknown' };
+    }
+    if (dbVersion === knownVersion) {
+      return { kind: 'ok' };
+    }
+    return { kind: 'conflict', dbVersion };
+  } catch (err) {
+    console.warn('[concurrency] version read threw', err);
+    return { kind: 'unknown' };
+  }
 }

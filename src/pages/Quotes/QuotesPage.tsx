@@ -24,6 +24,14 @@ interface QuotesPageProps {
   setQuoteFilters: (value: QuoteEstimateFilters) => void;
   filteredQuotes: QuoteEstimate[];
   onEdit: (quote: QuoteEstimate) => void;
+  /**
+   * Promote this quote to a Job. Caller pre-fills jobForm from the quote and
+   * switches the view to 'jobs' so the user just confirms + saves. The quote
+   * is auto-marked "Converted to Job" on the resulting Job save.
+   */
+  onConvertToJob?: (quote: QuoteEstimate) => void;
+  /** Open the printable quote overlay. */
+  onPrint?: (quote: QuoteEstimate) => void;
 }
 
 export function QuotesPage({
@@ -44,6 +52,8 @@ export function QuotesPage({
   setQuoteFilters,
   filteredQuotes,
   onEdit,
+  onConvertToJob,
+  onPrint,
 }: QuotesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const paperTypeOptions = useMemo(() => {
@@ -220,7 +230,7 @@ export function QuotesPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Quote</th><th>Date</th><th>Client</th><th>Product</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>{filteredQuotes.map((quote) => <tr key={quote.id}><td><strong>{quote.quoteNumber}</strong><div className="table-subtext">{quote.quickbooksEstimateNumber ? `QB ${quote.quickbooksEstimateNumber}` : (quote.sizeSpec || 'No size')}</div></td><td>{formatDate(quote.quoteDate)}</td><td>{quote.clientName}</td><td>{quote.productName}</td><td>{formatNumber(quote.totalQuote, 2)}</td><td>{quote.status}</td><td><button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button></td></tr>)}</tbody>
+                <tbody>{filteredQuotes.map((quote) => <tr key={quote.id}><td><strong>{quote.quoteNumber}</strong><div className="table-subtext">{quote.quickbooksEstimateNumber ? `QB ${quote.quickbooksEstimateNumber}` : (quote.sizeSpec || 'No size')}</div></td><td>{formatDate(quote.quoteDate)}</td><td>{quote.clientName}</td><td>{quote.productName}</td><td>{formatNumber(quote.totalQuote, 2)}</td><td>{quote.status}</td><td><button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button>{onPrint ? <button className="table-button" onClick={() => onPrint(quote)} title="Print quote PDF">Print</button> : null}{onConvertToJob && quote.status !== 'Converted to Job' && quote.status !== 'Lost' ? <button className="table-button table-button-promote" onClick={() => onConvertToJob(quote)} title="Create a job from this quote">→ Job</button> : null}</td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No quotes yet" body="Save estimates here before converting them into jobs." />}

@@ -1,8 +1,12 @@
 import { buildSeedData } from '../data/seedData';
 import {
   AppData,
+  AppSettings,
   ArtworkRecord,
+  buildBlankChangeoverChecklist,
+  buildBlankQcPlan,
   CustomerStockRelease,
+  DEFAULT_APP_SETTINGS,
   DeliveryNote,
   DeliveryNoteLineItem,
   DispatchRecord,
@@ -19,6 +23,9 @@ import {
   QuoteEstimate,
   SparePart,
   StockChangeLog,
+  StockCount,
+  StockCountLine,
+  StockIssue,
   Supplier,
   WasteEntry,
 } from '../types';
@@ -105,6 +112,15 @@ function normalizeJob(raw: any): JobCard {
     releasedBy: raw.releasedBy ?? '',
     notes: raw.notes ?? '',
     fscRelated: Boolean(raw.fscRelated),
+    foodContactLevel: raw.foodContactLevel ?? 'NonFood',
+    foodSafeMaterialIds: Array.isArray(raw.foodSafeMaterialIds) ? raw.foodSafeMaterialIds : [],
+    internalBatchNumber: raw.internalBatchNumber ?? '',
+    foodSafetyNotes: raw.foodSafetyNotes ?? '',
+    assignedMachineId: raw.assignedMachineId ?? '',
+    changeoverChecklist: Array.isArray(raw.changeoverChecklist) && raw.changeoverChecklist.length === 9
+      ? raw.changeoverChecklist
+      : buildBlankChangeoverChecklist(),
+    qcPlan: Array.isArray(raw.qcPlan) && raw.qcPlan.length === 4 ? raw.qcPlan : buildBlankQcPlan(),
   };
 }
 
@@ -230,6 +246,10 @@ function normalizeMachine(raw: any): Machine {
     status: raw.status ?? 'Active',
     notes: raw.notes ?? '',
     active: raw.active !== false,
+    maintenanceStatus: raw.maintenanceStatus ?? 'OK',
+    lastServicedDate: raw.lastServicedDate ?? '',
+    nextServiceDate: raw.nextServiceDate ?? '',
+    openMaintenanceIssue: raw.openMaintenanceIssue ?? '',
   };
 }
 
@@ -291,6 +311,10 @@ function normalizeLead(raw: any): Lead {
     linkedQuoteId: raw.linkedQuoteId ?? '',
     linkedQuoteNumber: raw.linkedQuoteNumber ?? '',
     notes: raw.notes ?? '',
+    nextFollowUpDate: raw.nextFollowUpDate ?? '',
+    activities: Array.isArray(raw.activities) ? raw.activities : [],
+    lostReason: raw.lostReason ?? '',
+    estimatedValue: Number(raw.estimatedValue ?? 0),
   };
 }
 
@@ -414,18 +438,33 @@ function normalizeFinishedGoodsStock(raw: any): FinishedGoodsStock {
     stockStatus: raw.stockStatus ?? 'In Storage',
     brandingStatus: raw.brandingStatus ?? '',
     notes: raw.notes ?? '',
+    foodSafetyHoldStatus: raw.foodSafetyHoldStatus ?? 'In Production',
+    releasedByName: raw.releasedByName ?? '',
+    releasedAt: raw.releasedAt ?? '',
+    holdReason: raw.holdReason ?? '',
   };
 }
 
 function normalizeSparePart(raw: any): SparePart {
   const code = raw.partCode ?? raw.id ?? '';
+  // Default itemType to 'Consumable' so legacy spare-parts records still work,
+  // and `productionUse` to true so production-floor consumables get the safer
+  // default (job picker required). Admins can flip both per-item.
+  const inferredCategory: string = raw.category ?? '';
+  const guessedItemType =
+    raw.itemType ?? (inferredCategory === 'Tool' ? 'Tool' : 'Consumable');
   return {
     id: code,
     partCode: code,
     barcode: raw.barcode ?? code,
     createdAt: raw.createdAt ?? new Date(`${raw.lastPurchaseDate ?? getToday()}T08:00:00.000Z`).toISOString(),
     partName: raw.partName ?? '',
-    category: raw.category ?? '',
+    category: inferredCategory,
+    itemType: guessedItemType,
+    productionUse: raw.productionUse !== false,
+    currentStatus: raw.currentStatus ?? 'In Stock',
+    currentHolderUserId: raw.currentHolderUserId ?? '',
+    currentHolderName: raw.currentHolderName ?? '',
     machineId: raw.machineId ?? '',
     machineReference: raw.machineReference ?? '',
     supplierId: raw.supplierId ?? '',
@@ -438,6 +477,66 @@ function normalizeSparePart(raw: any): SparePart {
     storageLocation: raw.storageLocation ?? '',
     lastPurchaseDate: raw.lastPurchaseDate ?? '',
     notes: raw.notes ?? '',
+  };
+}
+
+function normalizeStockIssue(raw: any): StockIssue {
+  return {
+    id: raw.id ?? `issue-${Date.now()}`,
+    itemId: raw.itemId ?? '',
+    itemName: raw.itemName ?? '',
+    itemType: raw.itemType === 'Tool' ? 'Tool' : 'Consumable',
+    category: raw.category ?? '',
+    quantity: Number(raw.quantity ?? 0),
+    unitOfMeasure: raw.unitOfMeasure ?? 'units',
+    issuedAt: raw.issuedAt ?? new Date().toISOString(),
+    issuedToUserId: raw.issuedToUserId ?? '',
+    issuedToName: raw.issuedToName ?? '',
+    issuedByUserId: raw.issuedByUserId ?? '',
+    issuedByName: raw.issuedByName ?? '',
+    jobId: raw.jobId ?? '',
+    jobNumber: raw.jobNumber ?? '',
+    notes: raw.notes ?? '',
+    status: raw.status === 'Returned' ? 'Returned' : 'Issued',
+    returnedAt: raw.returnedAt ?? '',
+    conditionOnReturn: raw.conditionOnReturn ?? '',
+    returnedByUserId: raw.returnedByUserId ?? '',
+    returnedByName: raw.returnedByName ?? '',
+    createdAt: raw.createdAt ?? raw.issuedAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeStockCountLine(raw: any, fallbackCountId: string): StockCountLine {
+  const systemQty = Number(raw.systemQty ?? 0);
+  const countedQty = Number(raw.countedQty ?? 0);
+  return {
+    id: raw.id ?? `count-line-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    countId: raw.countId ?? fallbackCountId,
+    itemId: raw.itemId ?? '',
+    itemName: raw.itemName ?? '',
+    systemQty,
+    countedQty,
+    variance: Number(raw.variance ?? countedQty - systemQty),
+    notes: raw.notes ?? '',
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeStockCount(raw: any): StockCount {
+  const id = raw.id ?? `count-${Date.now()}`;
+  return {
+    id,
+    countedAt: raw.countedAt ?? new Date().toISOString(),
+    countedByUserId: raw.countedByUserId ?? '',
+    countedByName: raw.countedByName ?? '',
+    scope: raw.scope ?? '',
+    notes: raw.notes ?? '',
+    reconciled: Boolean(raw.reconciled),
+    reconciledAt: raw.reconciledAt ?? '',
+    reconciledByUserId: raw.reconciledByUserId ?? '',
+    reconciledByName: raw.reconciledByName ?? '',
+    createdAt: raw.createdAt ?? raw.countedAt ?? new Date().toISOString(),
+    lines: Array.isArray(raw.lines) ? raw.lines.map((line: any) => normalizeStockCountLine(line, id)) : [],
   };
 }
 
@@ -597,6 +696,51 @@ function normalizeStockChangeLog(raw: any): StockChangeLog {
   };
 }
 
+/**
+ * Backfill an AppSettings row from whatever's in storage. Each leaf falls back
+ * to DEFAULT_APP_SETTINGS so older devices that don't have the field yet still
+ * boot cleanly.
+ */
+export function normalizeAppSettings(raw: any): AppSettings {
+  const safe = raw && typeof raw === 'object' ? raw : {};
+  const company = safe.company && typeof safe.company === 'object' ? safe.company : {};
+  const templates = safe.templates && typeof safe.templates === 'object' ? safe.templates : {};
+  const stockHolding = safe.stockHolding && typeof safe.stockHolding === 'object' ? safe.stockHolding : {};
+  const lines = (value: unknown, fallback: string[]): string[] => {
+    if (!Array.isArray(value)) return fallback;
+    const cleaned = value.filter((entry): entry is string => typeof entry === 'string');
+    return cleaned.length > 0 ? cleaned : fallback;
+  };
+  return {
+    id: 'default',
+    company: {
+      name: company.name ?? DEFAULT_APP_SETTINGS.company.name,
+      legalName: company.legalName ?? DEFAULT_APP_SETTINGS.company.legalName,
+      addressLine1: company.addressLine1 ?? DEFAULT_APP_SETTINGS.company.addressLine1,
+      addressLine2: company.addressLine2 ?? DEFAULT_APP_SETTINGS.company.addressLine2,
+      phone: company.phone ?? DEFAULT_APP_SETTINGS.company.phone,
+      email: company.email ?? DEFAULT_APP_SETTINGS.company.email,
+      vatNumber: company.vatNumber ?? DEFAULT_APP_SETTINGS.company.vatNumber,
+      logoUrl: company.logoUrl ?? DEFAULT_APP_SETTINGS.company.logoUrl,
+    },
+    templates: {
+      invoiceFooterLines: lines(templates.invoiceFooterLines, DEFAULT_APP_SETTINGS.templates.invoiceFooterLines),
+      deliveryNoteFooterLines: lines(templates.deliveryNoteFooterLines, DEFAULT_APP_SETTINGS.templates.deliveryNoteFooterLines),
+      productionSpecFooterLines: lines(templates.productionSpecFooterLines, DEFAULT_APP_SETTINGS.templates.productionSpecFooterLines),
+      defaultPaymentTerms: templates.defaultPaymentTerms ?? DEFAULT_APP_SETTINGS.templates.defaultPaymentTerms,
+      defaultInvoiceNotes: templates.defaultInvoiceNotes ?? DEFAULT_APP_SETTINGS.templates.defaultInvoiceNotes,
+      defaultDeliveryNoteNotes: templates.defaultDeliveryNoteNotes ?? DEFAULT_APP_SETTINGS.templates.defaultDeliveryNoteNotes,
+    },
+    stockHolding: {
+      defaultMaxDays: Number(stockHolding.defaultMaxDays ?? DEFAULT_APP_SETTINGS.stockHolding.defaultMaxDays),
+      defaultReviewCadenceDays: Number(stockHolding.defaultReviewCadenceDays ?? DEFAULT_APP_SETTINGS.stockHolding.defaultReviewCadenceDays),
+      defaultAgreementTermsText: stockHolding.defaultAgreementTermsText ?? DEFAULT_APP_SETTINGS.stockHolding.defaultAgreementTermsText,
+    },
+    updatedAt: typeof safe.updatedAt === 'string' ? safe.updatedAt : '',
+    updatedBy: typeof safe.updatedBy === 'string' ? safe.updatedBy : '',
+  };
+}
+
 function normalizeInventoryMovement(raw: any): InventoryMovement {
   const code = raw.movementNumber ?? raw.id ?? '';
   return {
@@ -675,6 +819,12 @@ export function loadAppData(): AppData {
       productionSpecs: (parsed.productionSpecs ?? []) as AppData['productionSpecs'],
       paperRates: (parsed.paperRates ?? []).map(normalizePaperRate),
       costProfiles: parsed.costProfiles ?? [],
+      // Phase 15 work-ticket masters — local-only for now, no normalizer.
+      inkRates: parsed.inkRates ?? [],
+      finishingOperations: parsed.finishingOperations ?? [],
+      pressRates: parsed.pressRates ?? [],
+      plateCosts: parsed.plateCosts ?? [],
+      workTickets: parsed.workTickets ?? [],
       pricingTiers: parsed.pricingTiers ?? [],
       clients: parsed.clients ?? [],
       products: (parsed.products ?? []).map((product: any) => ({
@@ -695,15 +845,36 @@ export function loadAppData(): AppData {
       jobs: (parsed.jobs ?? []).map(normalizeJob),
       finishedGoodsStock: (parsed.finishedGoodsStock ?? []).map(normalizeFinishedGoodsStock),
       spareParts: (parsed.spareParts ?? []).map(normalizeSparePart),
+      stockIssues: (parsed.stockIssues ?? []).map(normalizeStockIssue),
+      stockCounts: (parsed.stockCounts ?? []).map(normalizeStockCount),
       materialReceipts: (parsed.materialReceipts ?? []).map(normalizeMaterialReceipt),
+      chemicalRegisterEntries: parsed.chemicalRegisterEntries ?? [],
+      foodSafeMaterials: parsed.foodSafeMaterials ?? [],
+      cleaningLogs: parsed.cleaningLogs ?? [],
+      customerComplaints: parsed.customerComplaints ?? [],
+      nonConformances: parsed.nonConformances ?? [],
+      staffTrainingRecords: parsed.staffTrainingRecords ?? [],
+      ppeIssueRecords: parsed.ppeIssueRecords ?? [],
+      pestControlRecords: parsed.pestControlRecords ?? [],
+      foreignObjectRecords: parsed.foreignObjectRecords ?? [],
+      toolBladeRecords: parsed.toolBladeRecords ?? [],
+      visitorLogEntries: parsed.visitorLogEntries ?? [],
+      sopDocuments: parsed.sopDocuments ?? [],
+      haccpHazards: parsed.haccpHazards ?? [],
       productionLogs: (parsed.productionLogs ?? []).map(normalizeProductionLog),
       wasteEntries: (parsed.wasteEntries ?? []).map(normalizeWaste),
       paperLogs: (parsed.paperLogs ?? []).map(normalizePaper),
       dispatchRecords: (parsed.dispatchRecords ?? []).map(normalizeDispatch),
+      // Phase 17 — POD + invoice-inbox are local-only at the moment. We
+      // pass them through unshaped; the editor on each page is the only
+      // way these get populated client-side.
+      proofOfDeliveries: (parsed.proofOfDeliveries ?? []) as AppData['proofOfDeliveries'],
+      invoiceInboxItems: (parsed.invoiceInboxItems ?? []) as AppData['invoiceInboxItems'],
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),
       biEvents: parsed.biEvents ?? [],
+      appSettings: normalizeAppSettings(parsed.appSettings),
     };
   } catch {
     return buildSeedData();

@@ -198,22 +198,49 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     },
     {
       key: 'spec',
-      title: 'Paper specification',
+      title: 'Material specification',
+      // Paper rows still capture paperType/GSM/width; non-paper kinds use the
+      // free-text item name and leave the paper-specific fields blank.
       subtitle: 'What was actually delivered.',
       body: (
         <div className="form-grid">
           <label>
-            <span>Paper type</span>
+            <span>Material kind</span>
+            <select
+              value={materialForm.materialKind || 'Paper'}
+              onChange={(event) => setMaterialForm({ ...materialForm, materialKind: event.target.value as any })}
+            >
+              {(['Paper', 'Ink', 'Plate', 'Adhesive', 'Foil', 'Chemical', 'Other'] as const).map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </label>
+          {(materialForm.materialKind || 'Paper') !== 'Paper' ? (
+            <label>
+              <span>Item name</span>
+              <input
+                placeholder="e.g. Cyan process ink — IK-450"
+                value={materialForm.itemName || ''}
+                onChange={(event) => setMaterialForm({ ...materialForm, itemName: event.target.value })}
+              />
+            </label>
+          ) : null}
+          <label>
+            <span>{(materialForm.materialKind || 'Paper') === 'Paper' ? 'Paper type' : 'Type / grade'}</span>
             <input value={materialForm.paperType} onChange={(event) => setMaterialForm({ ...materialForm, paperType: event.target.value })} />
           </label>
-          <label>
-            <span>GSM</span>
-            <input value={materialForm.gsm} onChange={(event) => setMaterialForm({ ...materialForm, gsm: event.target.value })} />
-          </label>
-          <label>
-            <span>Width</span>
-            <input value={materialForm.width} onChange={(event) => setMaterialForm({ ...materialForm, width: event.target.value })} />
-          </label>
+          {(materialForm.materialKind || 'Paper') === 'Paper' ? (
+            <>
+              <label>
+                <span>GSM</span>
+                <input value={materialForm.gsm} onChange={(event) => setMaterialForm({ ...materialForm, gsm: event.target.value })} />
+              </label>
+              <label>
+                <span>Width</span>
+                <input value={materialForm.width} onChange={(event) => setMaterialForm({ ...materialForm, width: event.target.value })} />
+              </label>
+            </>
+          ) : null}
         </div>
       ),
     },

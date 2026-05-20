@@ -13,11 +13,13 @@ interface AppLayoutProps {
 }
 
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
-  { title: 'Overview', views: ['dashboard', 'reports'] },
-  { title: 'Sales', views: ['salesDesk', 'leads', 'quotes', 'invoices', 'clients', 'pricing', 'calculator', 'costInputs'] },
-  { title: 'Production', views: ['artwork', 'productionSpecs', 'jobs', 'production', 'waste', 'paper', 'machines'] },
-  { title: 'Stock', views: ['materials', 'finishedStock', 'customerStock', 'dispatch', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
-  { title: 'Admin', views: ['permissions'] },
+  { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
+  { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'calculator', 'costInputs'] },
+  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines'] },
+  { title: 'Materials', views: ['materials', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
+  { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
+  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog'] },
+  { title: 'Admin', views: ['permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';
@@ -40,6 +42,15 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
   const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
   const currentItem = navItems.find((item) => item.key === view);
+  // Mobile drawer state — sidebar is hidden by default on narrow viewports
+  // and toggled open via the hamburger in the topbar. On desktop the
+  // drawer state is ignored (CSS keeps the sidebar always visible).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Close drawer whenever the user picks a nav item so it doesn't sit
+  // open over the page they just jumped to.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [view]);
   const groupedNav = useMemo(
     () =>
       NAV_GROUPS
@@ -99,8 +110,15 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={drawerOpen ? 'app-shell drawer-open' : 'app-shell'}>
+      {/* Mobile overlay — tapping it closes the drawer. Always rendered so
+          the slide animation can play; CSS hides it on desktop. */}
+      <div
+        className="sidebar-overlay"
+        aria-hidden={!drawerOpen}
+        onClick={() => setDrawerOpen(false)}
+      />
+      <aside className={drawerOpen ? 'sidebar is-open' : 'sidebar'}>
         <div className="brand-block">
           <p className="eyebrow">Jomopak OS</p>
           <h1>JomoPak</h1>
@@ -161,6 +179,15 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
 
       <main className="main-content">
         <header className="topbar">
+          <button
+            type="button"
+            className="topbar-menu-toggle"
+            aria-label="Toggle navigation"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen((v) => !v)}
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
           <div className="topbar-title">
             <p className="eyebrow">Workspace</p>
             <h2 className="page-heading">{currentItem?.label || 'Dashboard'}</h2>

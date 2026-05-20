@@ -1,8 +1,51 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from './components/Layout/AppLayout';
+import { UndoToast, UndoToastState } from './components/UndoToast';
+import { HistoryDrawer, HistoryDrawerTarget } from './components/HistoryDrawer';
+import { CommandPalette } from './components/CommandPalette';
 import { ArtworkPage } from './pages/Artwork/ArtworkPage';
 import { CalculatorPage } from './pages/Calculator/CalculatorPage';
 import { CostInputsPage } from './pages/CostInputs/CostInputsPage';
+import { CostMastersPage } from './pages/CostMasters/CostMastersPage';
+import { ChemicalRegisterPage } from './pages/ChemicalRegister/ChemicalRegisterPage';
+import { FoodSafeMaterialsPage } from './pages/FoodSafeMaterials/FoodSafeMaterialsPage';
+import { CleaningLogsPage } from './pages/CleaningLogs/CleaningLogsPage';
+import { AgedDebtorsPage } from './pages/Reports/AgedDebtorsPage';
+import { ProfitabilityPage } from './pages/Reports/ProfitabilityPage';
+import { SalesPipelinePage } from './pages/SalesPipeline/SalesPipelinePage';
+import { ProductionSchedulePage } from './pages/ProductionSchedule/ProductionSchedulePage';
+import { MaterialRequirementsPage } from './pages/Reports/MaterialRequirementsPage';
+import { CashFlowPage } from './pages/Reports/CashFlowPage';
+import { MorningDigestPage } from './pages/MorningDigest/MorningDigestPage';
+import { LeadAnalyticsPage } from './pages/LeadAnalytics/LeadAnalyticsPage';
+import { ReorderRemindersPage } from './pages/ReorderReminders/ReorderRemindersPage';
+import { NotificationBell } from './components/NotificationBell';
+import { useNotifications } from './hooks/useNotifications';
+import { DriverPodPage } from './pages/DriverPod/DriverPodPage';
+import { InvoiceInboxPage } from './pages/InvoiceInbox/InvoiceInboxPage';
+import { runOcrOnInboxItem } from './utils/ocrRunner';
+import { attachAutoFlush, flushPodQueue } from './utils/podSync';
+import { uploadInvoiceInboxFile } from './utils/invoiceInboxStorage';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
+import { computeQuote, emptyCalculatorState } from './utils/calculatorEngine';
+import { FoodSafeCertificatePrint } from './pages/Phase5/FoodSafeCertificatePrint';
+import { QuotePrint } from './pages/Quotes/QuotePrint';
+import { JobCardPrint } from './pages/JobCards/JobCardPrint';
+import { SopRegisterPage } from './pages/Phase5/SopRegisterPage';
+import { TraceabilityPage } from './pages/Traceability/TraceabilityPage';
+import { ComplaintsPage } from './pages/Complaints/ComplaintsPage';
+import { FoodSafetyControlCentrePage } from './pages/FoodSafetyControlCentre/FoodSafetyControlCentrePage';
+import { HaccpRegisterPage } from './pages/HaccpRegister/HaccpRegisterPage';
+import { NonConformancePage } from './pages/NonConformance/NonConformancePage';
+import { StaffTrainingPage } from './pages/Phase4/StaffTrainingPage';
+import { PpeIssuePage } from './pages/Phase4/PpeIssuePage';
+import { PestControlPage } from './pages/Phase4/PestControlPage';
+import { ForeignObjectPage } from './pages/Phase4/ForeignObjectPage';
+import { ToolBladePage } from './pages/Phase4/ToolBladePage';
+import { VisitorLogPage } from './pages/Phase4/VisitorLogPage';
+import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
+import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
+import { DeliveryNotePrint } from './pages/DeliveryNotes/DeliveryNotePrint';
 import { ClientsPage } from './pages/Clients/ClientsPage';
 import { CustomerStockPage } from './pages/CustomerStock/CustomerStockPage';
 import { DeliveryNotesPage } from './pages/DeliveryNotes/DeliveryNotesPage';
@@ -27,10 +70,13 @@ import { ProductionLogsPage } from './pages/ProductionLogs/ProductionLogsPage';
 import { QuotesPage } from './pages/Quotes/QuotesPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
+import { SettingsPage } from './pages/Settings/SettingsPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
+  AppSettings,
+  AppSettingsFormState,
   ArtworkFilters,
   ArtworkFormState,
   ArtworkRecord,
@@ -67,6 +113,7 @@ import {
   JobFilters,
   JobFormState,
   Lead,
+  LeadActivity,
   LeadFilters,
   LeadFormState,
   Machine,
@@ -75,6 +122,63 @@ import {
   MaterialFilters,
   MaterialOrderRequest,
   MaterialReceipt,
+  ChemicalRegisterEntry,
+  ChemicalRegisterFilters,
+  ChemicalRegisterFormState,
+  FoodSafeMaterial,
+  FoodSafeMaterialFilters,
+  FoodSafeMaterialFormState,
+  FoodSafetyApprovalStatus,
+  FoodContactLevel,
+  FoodSafetyHoldStatus,
+  validateJobFoodSafety,
+  validateJobReleaseGate,
+  isFoodPackagingLevel,
+  canUserReleaseFoodSafetyBatch,
+  buildBlankChangeoverChecklist,
+  buildBlankQcPlan,
+  CleaningLogEntry,
+  CleaningLogFilters,
+  CleaningLogFormState,
+  FactoryArea,
+  CustomerComplaint,
+  CustomerComplaintFilters,
+  CustomerComplaintFormState,
+  ComplaintType,
+  ComplaintStatus,
+  ComplaintOutcome,
+  TraceabilitySearchType,
+  HaccpHazard,
+  HaccpHazardFilters,
+  HaccpHazardFormState,
+  computeHaccpRiskLevel,
+  NonConformance,
+  NonConformanceFilters,
+  NonConformanceFormState,
+  NcrSeverity,
+  NcrStatus,
+  NcrIssueType,
+  StaffTrainingRecord,
+  StaffTrainingFilters,
+  StaffTrainingFormState,
+  PpeIssueRecord,
+  PpeIssueFilters,
+  PpeIssueFormState,
+  PestControlRecord,
+  PestControlFilters,
+  PestControlFormState,
+  ForeignObjectRecord,
+  ForeignObjectFilters,
+  ForeignObjectFormState,
+  ToolBladeRecord,
+  ToolBladeFilters,
+  ToolBladeFormState,
+  VisitorLogEntry,
+  VisitorLogFilters,
+  VisitorLogFormState,
+  SopDocument,
+  SopDocumentFilters,
+  SopDocumentFormState,
   MaterialReceiptFormState,
   PaperFilters,
   PaperFormState,
@@ -82,6 +186,22 @@ import {
   PaperRate,
   PaperRateFilters,
   PaperRateFormState,
+  InkRate,
+  InkRateFilters,
+  InkRateFormState,
+  FinishingOperation,
+  FinishingOperationFilters,
+  FinishingOperationFormState,
+  PressRate,
+  PressRateFilters,
+  PressRateFormState,
+  PlateCost,
+  PlateCostFilters,
+  PlateCostFormState,
+  WorkTicket,
+  WorkTicketFilters,
+  WorkTicketFormState,
+  WorkTicketStatus,
   PricingTier,
   PricingTierFilters,
   PricingTierFormState,
@@ -98,6 +218,14 @@ import {
   SparePart,
   SparePartFilters,
   SparePartFormState,
+  StockCount,
+  StockCountFormState,
+  StockCountLine,
+  StockIssue,
+  StockIssueFilters,
+  StockIssueFormState,
+  StockItemCategory,
+  STOCK_ITEM_CATEGORIES,
   Supplier,
   SupplierFilters,
   SupplierFormState,
@@ -106,6 +234,9 @@ import {
   WasteEntry,
   WasteFilters,
   WasteFormState,
+  ProofOfDelivery,
+  InvoiceInboxItem,
+  InvoiceExtraction,
 } from './types';
 import {
   PRODUCTION_LOG_TYPES,
@@ -128,6 +259,7 @@ import {
 import { generateCode } from './utils/codeGenerator';
 import { syncJobThread } from './utils/messagingSync';
 import { supabase } from './utils/supabase';
+import { detectVersionConflict, recordAuditEvent } from './utils/supabaseData';
 
 const currentMonth = getCurrentMonthValue();
 const VIEW_ORDER: View[] = [
@@ -135,6 +267,8 @@ const VIEW_ORDER: View[] = [
   'salesDesk',
   'leads',
   'calculator',
+  'workTicket',
+  'costMasters',
   'costInputs',
   'permissions',
   'suppliers',
@@ -229,6 +363,13 @@ const createInitialJobForm = (): JobFormState => ({
   releasedBy: '',
   notes: '',
   fscRelated: false,
+  foodContactLevel: 'NonFood',
+  foodSafeMaterialIds: [],
+  internalBatchNumber: '',
+  foodSafetyNotes: '',
+  assignedMachineId: '',
+  changeoverChecklist: buildBlankChangeoverChecklist(),
+  qcPlan: buildBlankQcPlan(),
 });
 
 const createInitialPaperRateForm = (): PaperRateFormState => ({
@@ -318,6 +459,10 @@ const createInitialLeadForm = (): LeadFormState => ({
   quickbooksEstimateNumber: '',
   linkedQuoteId: '',
   notes: '',
+  nextFollowUpDate: '',
+  activities: [],
+  lostReason: '',
+  estimatedValue: '',
 });
 
 const createInitialArtworkForm = (): ArtworkFormState => ({
@@ -398,7 +543,9 @@ const createInitialFinishedStockForm = (): FinishedGoodsStockFormState => ({
 
 const createInitialSpareForm = (): SparePartFormState => ({
   partName: '',
-  category: '',
+  category: 'Consumable',
+  itemType: 'Consumable',
+  productionUse: true,
   machineId: '',
   machineReference: '',
   supplierId: '',
@@ -421,6 +568,8 @@ const createInitialMaterialForm = (): MaterialReceiptFormState => ({
   supplierBatchNumber: '',
   internalRollCode: '',
   barcode: '',
+  materialKind: 'Paper',
+  itemName: '',
   paperType: '',
   gsm: '',
   width: '',
@@ -552,6 +701,250 @@ const createInitialDeliveryNoteForm = (): DeliveryNoteFormState => ({
   collectedByIdNumber: '',
 });
 
+const createInitialCleaningLogForm = (): CleaningLogFormState => ({
+  area: 'Bag Machine',
+  areaDetail: '',
+  machineId: '',
+  cleaningType: 'Pre-Shift',
+  performedAt: new Date().toISOString().slice(0, 16),
+  performedByName: '',
+  chemicalRegisterId: '',
+  chemicalName: '',
+  result: 'Pass',
+  supervisorSignOffName: '',
+  supervisorSignOffAt: '',
+  correctiveAction: '',
+  beforePhotoUrl: '',
+  afterPhotoUrl: '',
+  notes: '',
+});
+
+const createInitialNcrForm = (): NonConformanceFormState => ({
+  issueDate: getToday(),
+  area: 'Bag Machine',
+  areaDetail: '',
+  issueType: 'Cleaning Not Completed',
+  severity: 'Medium',
+  description: '',
+  jobId: '',
+  finishedGoodsStockId: '',
+  cleaningLogId: '',
+  reportedByName: '',
+  immediateAction: '',
+  rootCauseAnalysis: '',
+  correctiveAction: '',
+  preventiveAction: '',
+  responsiblePersonName: '',
+  dueDate: '',
+  evidencePhotoUrls: [],
+  status: 'Open',
+  verifiedByName: '',
+  closedByName: '',
+  closureNotes: '',
+});
+
+const createInitialTrainingForm = (): StaffTrainingFormState => ({
+  staffName: '',
+  staffRole: '',
+  topic: 'Food Safety',
+  trainingDate: getToday(),
+  trainerName: '',
+  method: '',
+  acknowledged: false,
+  acknowledgedDate: '',
+  refresherIntervalMonths: '12',
+  certificateUrl: '',
+  notes: '',
+});
+
+const createInitialPpeForm = (): PpeIssueFormState => ({
+  staffName: '',
+  staffRole: '',
+  itemType: 'Hairnet',
+  itemDescription: '',
+  quantity: '1',
+  issuedByName: '',
+  issuedDate: getToday(),
+  status: 'Issued',
+  returnDate: '',
+  replacementDueDate: '',
+  notes: '',
+});
+
+const createInitialPestForm = (): PestControlFormState => ({
+  serviceDate: getToday(),
+  providerName: '',
+  technicianName: '',
+  nextServiceDate: '',
+  activityType: 'Preventive Treatment',
+  pestType: '',
+  findings: '',
+  correctiveActions: '',
+  productAffected: false,
+  stockOnHold: false,
+  reportUrls: [],
+  baitStationMapUrl: '',
+  notes: '',
+});
+
+const createInitialForeignObjectForm = (): ForeignObjectFormState => ({
+  area: 'Bag Machine',
+  material: 'Glass',
+  description: '',
+  recordType: 'Risk Inventory',
+  inspectionDate: getToday(),
+  inspectedByName: '',
+  status: 'Open',
+  controlMeasure: '',
+  linkedNcrId: '',
+  photoUrls: [],
+  notes: '',
+});
+
+const createInitialToolBladeForm = (): ToolBladeFormState => ({
+  itemType: 'Blade',
+  serialNumber: '',
+  description: '',
+  homeLocation: '',
+  currentHolderName: '',
+  issuedToName: '',
+  issuedDate: '',
+  expectedReturnDate: '',
+  returnedDate: '',
+  status: 'Available',
+  isCritical: true,
+  linkedNcrId: '',
+  notes: '',
+});
+
+const createInitialSopForm = (): SopDocumentFormState => ({
+  title: '',
+  category: 'Food Safety Policy',
+  version: '1.0',
+  ownerName: '',
+  approvedByName: '',
+  approvedDate: '',
+  reviewDate: '',
+  documentUrl: '',
+  summary: '',
+  status: 'Draft',
+  acknowledgements: [],
+  supersedesId: '',
+  notes: '',
+});
+
+const createInitialVisitorForm = (): VisitorLogFormState => ({
+  visitDate: getToday(),
+  visitorName: '',
+  visitorType: 'Contractor',
+  company: '',
+  hostName: '',
+  purpose: '',
+  areasVisited: [],
+  timeIn: '',
+  timeOut: '',
+  hygieneAcknowledged: false,
+  ppeIssued: '',
+  enteredFoodContactArea: false,
+  notes: '',
+});
+
+const createInitialHaccpForm = (): HaccpHazardFormState => ({
+  processStep: 'Raw Material Receiving',
+  hazardType: 'Physical',
+  hazardName: '',
+  description: '',
+  likelihood: '3',
+  severity: '3',
+  controlMeasure: '',
+  isCCP: false,
+  monitoringMethod: '',
+  monitoringFrequency: '',
+  criticalLimits: '',
+  correctiveAction: '',
+  verificationMethod: '',
+  responsiblePerson: '',
+  reviewIntervalMonths: '12',
+  lastReviewedDate: '',
+  notes: '',
+});
+
+const createInitialComplaintForm = (): CustomerComplaintFormState => ({
+  complaintDate: getToday(),
+  clientId: '',
+  reportedByName: '',
+  reportedByContact: '',
+  productId: '',
+  finishedGoodsStockId: '',
+  jobId: '',
+  deliveryNoteId: '',
+  invoiceId: '',
+  complaintType: 'Product Defect',
+  severity: 'Medium',
+  description: '',
+  quantityAffected: '',
+  quantityUnit: 'units',
+  quantityWithCustomer: '',
+  quantityInternalStock: '',
+  photoUrls: [],
+  status: 'New',
+  investigationNotes: '',
+  rootCauseAnalysis: '',
+  immediateAction: '',
+  correctiveAction: '',
+  preventiveAction: '',
+  outcome: 'Pending',
+  outcomeNotes: '',
+  closedByName: '',
+  recallTriggered: false,
+  recallScope: '',
+});
+
+const createInitialFoodSafeMaterialForm = (): FoodSafeMaterialFormState => ({
+  materialName: '',
+  category: 'Paper',
+  supplierId: '',
+  supplierSku: '',
+  directContactApproved: false,
+  indirectContactApproved: false,
+  externalPrintOnly: false,
+  foodSafeDeclarationUrl: '',
+  msdsUrl: '',
+  certificateOfAnalysisUrl: '',
+  supplierBatchNumber: '',
+  internalBatchNumber: '',
+  storageLocation: '',
+  status: 'Pending',
+  approvalDate: '',
+  reviewDate: '',
+  expiryDate: '',
+  notes: '',
+});
+
+const createInitialChemicalForm = (): ChemicalRegisterFormState => ({
+  chemicalName: '',
+  tradeName: '',
+  supplierId: '',
+  casNumber: '',
+  unNumber: '',
+  state: 'Liquid',
+  ghsPictograms: [],
+  hazardStatements: '',
+  precautionaryStatements: '',
+  storageLocation: '',
+  maxOnSiteQuantity: '',
+  currentOnSiteQuantity: '',
+  quantityUnit: 'L',
+  msdsDocumentUrl: '',
+  msdsLastReviewedDate: '',
+  msdsReviewIntervalMonths: '12',
+  emergencyProcedure: '',
+  requiredPPE: '',
+  fireSuppressionType: '',
+  notes: '',
+  archived: false,
+});
+
 const createInitialInvoiceForm = (): InvoiceFormState => ({
   invoiceDate: getToday(),
   dueDate: '',
@@ -572,6 +965,28 @@ const createInitialInvoiceForm = (): InvoiceFormState => ({
   stockHoldingStartDate: getToday(),
   stockHoldingMaxDays: '90',
   clientVisible: true,
+});
+
+/**
+ * Build the editable form state for Settings → all tabs from a saved AppSettings
+ * record. The form keeps numeric / multi-line fields as raw strings so the
+ * inputs remain forgiving while the user types; conversion happens on save.
+ */
+const buildSettingsForm = (settings: AppSettings): AppSettingsFormState => ({
+  company: { ...settings.company },
+  templates: {
+    invoiceFooterLines: settings.templates.invoiceFooterLines.join('\n'),
+    deliveryNoteFooterLines: settings.templates.deliveryNoteFooterLines.join('\n'),
+    productionSpecFooterLines: settings.templates.productionSpecFooterLines.join('\n'),
+    defaultPaymentTerms: settings.templates.defaultPaymentTerms,
+    defaultInvoiceNotes: settings.templates.defaultInvoiceNotes,
+    defaultDeliveryNoteNotes: settings.templates.defaultDeliveryNoteNotes,
+  },
+  stockHolding: {
+    defaultMaxDays: String(settings.stockHolding.defaultMaxDays),
+    defaultReviewCadenceDays: String(settings.stockHolding.defaultReviewCadenceDays),
+    defaultAgreementTermsText: settings.stockHolding.defaultAgreementTermsText,
+  },
 });
 
 const createInitialProductionSpecForm = (): ProductionSpecFormState => ({
@@ -714,7 +1129,54 @@ function App() {
   const [costProfileMessage, setCostProfileMessage] = useState('');
   const [costProfileFilters, setCostProfileFilters] = useState<CostProfileFilters>({ search: '', active: 'all' });
 
+  // ----- Phase 15: work-ticket masters -----
+  const [inkRateForm, setInkRateForm] = useState<InkRateFormState>({
+    name: '', inkType: 'Pantone', supplierId: '', costPerKg: '', coverageSqmPerKg: '100', defaultCoveragePercent: '50', notes: '', active: true,
+  });
+  const [inkRateEditingId, setInkRateEditingId] = useState<string | null>(null);
+  const [inkRateMessage, setInkRateMessage] = useState('');
+  const [inkRateFilters, setInkRateFilters] = useState<InkRateFilters>({ search: '', inkType: '', active: 'all' });
+
+  const [finishingForm, setFinishingForm] = useState<FinishingOperationFormState>({
+    name: '', machineName: '', rateType: 'PerThousand', rate: '', setupCost: '', runSpeedPerHour: '', notes: '', active: true,
+  });
+  const [finishingEditingId, setFinishingEditingId] = useState<string | null>(null);
+  const [finishingMessage, setFinishingMessage] = useState('');
+  const [finishingFilters, setFinishingFilters] = useState<FinishingOperationFilters>({ search: '', rateType: '', active: 'all' });
+
+  const [pressRateForm, setPressRateForm] = useState<PressRateFormState>({
+    machineId: '', ratePerHour: '', makeReadySheets: '0', makeReadyMinutes: '0', runSpeedSheetsPerHour: '0', notes: '', active: true,
+  });
+  const [pressRateEditingId, setPressRateEditingId] = useState<string | null>(null);
+  const [pressRateMessage, setPressRateMessage] = useState('');
+  const [pressRateFilters, setPressRateFilters] = useState<PressRateFilters>({ search: '', active: 'all' });
+
+  const [plateCostForm, setPlateCostForm] = useState<PlateCostFormState>({
+    name: '', format: '', costPerColor: '', originationCost: '', notes: '', active: true,
+  });
+  const [plateCostEditingId, setPlateCostEditingId] = useState<string | null>(null);
+  const [plateCostMessage, setPlateCostMessage] = useState('');
+  const [plateCostFilters, setPlateCostFilters] = useState<PlateCostFilters>({ search: '', active: 'all' });
+
+  const [workTicketForm, setWorkTicketForm] = useState<WorkTicketFormState>(() => emptyWorkTicketForm(getToday()));
+  const [workTicketEditingId, setWorkTicketEditingId] = useState<string | null>(null);
+  const [workTicketMessage, setWorkTicketMessage] = useState('');
+  const [workTicketFilters, setWorkTicketFilters] = useState<WorkTicketFilters>({ search: '', month: '', status: '', client: '' });
+  /** When set, the WorkTicketPrint overlay is shown over the page. */
+  const [workTicketPrintTarget, setWorkTicketPrintTarget] = useState<WorkTicket | null>(null);
+  /** When set, the DeliveryNotePrint overlay is shown over the page. */
+  const [deliveryNotePrintTarget, setDeliveryNotePrintTarget] = useState<DeliveryNote | null>(null);
+  /** When set, the Food-Safe Certificate print overlay is shown. */
+  const [foodSafeCertificateJob, setFoodSafeCertificateJob] = useState<JobCard | null>(null);
+  const [quotePrintTarget, setQuotePrintTarget] = useState<QuoteEstimate | null>(null);
+  const [jobCardPrintTarget, setJobCardPrintTarget] = useState<JobCard | null>(null);
+
+  // Legacy single-line calculator state. Kept around so other code that
+  // still references it doesn't break, but the page itself no longer
+  // reads from it. The new multi-line state lives below.
   const [calculatorQuoteForm, setCalculatorQuoteForm] = useState(createInitialCalculatorQuoteForm);
+  // Calculator v2 — multi-line.
+  const [calculatorState, setCalculatorState] = useState(() => emptyCalculatorState(getToday()));
 
   const [supplierForm, setSupplierForm] = useState(createInitialSupplierForm);
   const [supplierEditingId, setSupplierEditingId] = useState<string | null>(null);
@@ -763,6 +1225,36 @@ function App() {
   const [spareEditingId, setSpareEditingId] = useState<string | null>(null);
   const [spareMessage, setSpareMessage] = useState('');
   const [spareFilters, setSpareFilters] = useState<SparePartFilters>({ search: '', category: '', lowStock: 'all', supplier: '' });
+  const [stockIssueForm, setStockIssueForm] = useState<StockIssueFormState>({
+    itemId: '',
+    quantity: '',
+    issuedToName: '',
+    issuedByName: '',
+    jobId: '',
+    jobNumber: '',
+    notes: '',
+  });
+  const [stockIssueMessage, setStockIssueMessage] = useState('');
+  const [stockIssueFilters, setStockIssueFilters] = useState<StockIssueFilters>({ search: '', status: 'all', itemType: 'all' });
+  const [undoToast, setUndoToast] = useState<UndoToastState | null>(null);
+  // History drawer slot — set to a target to open, null to close. Any page can
+  // call openHistory(target) (passed via context-style prop drilling on the
+  // detail screens that need it).
+  const [historyTarget, setHistoryTarget] = useState<HistoryDrawerTarget | null>(null);
+  const openHistory = useCallback((target: HistoryDrawerTarget) => {
+    setHistoryTarget(target);
+  }, []);
+  // Cmd-K palette open/close. The shortcut is registered globally in a useEffect
+  // below so it works regardless of which view is active.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [stockCountForm, setStockCountForm] = useState<StockCountFormState>({
+    scope: '',
+    countedByName: '',
+    notes: '',
+    selectedItemIds: [],
+    countedQty: {},
+  });
+  const [stockCountMessage, setStockCountMessage] = useState('');
 
   const [tierForm, setTierForm] = useState(createInitialPricingTierForm);
   const [tierEditingId, setTierEditingId] = useState<string | null>(null);
@@ -785,6 +1277,120 @@ function App() {
   const [materialFilters, setMaterialFilters] = useState<MaterialFilters>({ search: '', month: '', supplier: '', paperType: '', fsc: 'all' });
   const [inventoryScanForm, setInventoryScanForm] = useState(createInitialInventoryScanForm);
   const [inventoryScanMessage, setInventoryScanMessage] = useState('');
+
+  const [chemicalForm, setChemicalForm] = useState<ChemicalRegisterFormState>(createInitialChemicalForm);
+  const [chemicalEditingId, setChemicalEditingId] = useState<string | null>(null);
+  const [chemicalMessage, setChemicalMessage] = useState('');
+  const [chemicalFilters, setChemicalFilters] = useState<ChemicalRegisterFilters>({
+    search: '',
+    pictogram: '',
+    storageLocation: '',
+    reviewStatus: 'all',
+    archived: 'active',
+  });
+
+  // Food Safety - Phase 1: Approved Food-Safe Material Register
+  const [foodSafeMaterialForm, setFoodSafeMaterialForm] = useState<FoodSafeMaterialFormState>(createInitialFoodSafeMaterialForm);
+  const [foodSafeMaterialEditingId, setFoodSafeMaterialEditingId] = useState<string | null>(null);
+  const [foodSafeMaterialMessage, setFoodSafeMaterialMessage] = useState('');
+  const [foodSafeMaterialFilters, setFoodSafeMaterialFilters] = useState<FoodSafeMaterialFilters>({
+    search: '',
+    category: '',
+    supplier: '',
+    status: '',
+    contactLevel: 'all',
+    reviewStatus: 'all',
+  });
+
+  // Food Safety - Phase 2: Cleaning logs
+  const [cleaningLogForm, setCleaningLogForm] = useState<CleaningLogFormState>(createInitialCleaningLogForm);
+  const [cleaningLogEditingId, setCleaningLogEditingId] = useState<string | null>(null);
+  const [cleaningLogMessage, setCleaningLogMessage] = useState('');
+  const [cleaningLogFilters, setCleaningLogFilters] = useState<CleaningLogFilters>({
+    search: '',
+    area: '',
+    cleaningType: '',
+    result: '',
+    dateWindow: '7d',
+  });
+
+  // Food Safety - Phase 3: Complaints + Traceability
+  const [complaintForm, setComplaintForm] = useState<CustomerComplaintFormState>(createInitialComplaintForm);
+  const [complaintEditingId, setComplaintEditingId] = useState<string | null>(null);
+  const [complaintMessage, setComplaintMessage] = useState('');
+  const [complaintFilters, setComplaintFilters] = useState<CustomerComplaintFilters>({
+    search: '',
+    client: '',
+    complaintType: '',
+    severity: '',
+    status: '',
+    recall: 'all',
+    dateWindow: '90d',
+  });
+  /** Traceability seed — when set, opens Traceability with this query pre-filled. */
+  const [traceabilitySeed, setTraceabilitySeed] = useState<{ type: TraceabilitySearchType; query: string } | null>(null);
+
+  // Food Safety - Phase 5: HACCP register
+  const [haccpForm, setHaccpForm] = useState<HaccpHazardFormState>(createInitialHaccpForm);
+  const [haccpEditingId, setHaccpEditingId] = useState<string | null>(null);
+  const [haccpMessage, setHaccpMessage] = useState('');
+  const [haccpFilters, setHaccpFilters] = useState<HaccpHazardFilters>({
+    search: '',
+    processStep: '',
+    hazardType: '',
+    riskLevel: '',
+    ccpOnly: false,
+  });
+
+  // Food Safety - Phase 4 registers
+  const [trainingForm, setTrainingForm] = useState<StaffTrainingFormState>(createInitialTrainingForm);
+  const [trainingEditingId, setTrainingEditingId] = useState<string | null>(null);
+  const [trainingMessage, setTrainingMessage] = useState('');
+  const [trainingFilters, setTrainingFilters] = useState<StaffTrainingFilters>({ search: '', topic: '', refresherStatus: 'all' });
+
+  const [ppeForm, setPpeForm] = useState<PpeIssueFormState>(createInitialPpeForm);
+  const [ppeEditingId, setPpeEditingId] = useState<string | null>(null);
+  const [ppeMessage, setPpeMessage] = useState('');
+  const [ppeFilters, setPpeFilters] = useState<PpeIssueFilters>({ search: '', itemType: '', status: '' });
+
+  const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
+  const [pestEditingId, setPestEditingId] = useState<string | null>(null);
+  const [pestMessage, setPestMessage] = useState('');
+  const [pestFilters, setPestFilters] = useState<PestControlFilters>({ search: '', activityType: '', pestType: '', serviceWindow: 'all' });
+
+  const [foreignObjectForm, setForeignObjectForm] = useState<ForeignObjectFormState>(createInitialForeignObjectForm);
+  const [foreignObjectEditingId, setForeignObjectEditingId] = useState<string | null>(null);
+  const [foreignObjectMessage, setForeignObjectMessage] = useState('');
+  const [foreignObjectFilters, setForeignObjectFilters] = useState<ForeignObjectFilters>({ search: '', area: '', material: '', recordType: '', status: '' });
+
+  const [toolBladeForm, setToolBladeForm] = useState<ToolBladeFormState>(createInitialToolBladeForm);
+  const [toolBladeEditingId, setToolBladeEditingId] = useState<string | null>(null);
+  const [toolBladeMessage, setToolBladeMessage] = useState('');
+  const [toolBladeFilters, setToolBladeFilters] = useState<ToolBladeFilters>({ search: '', itemType: '', status: '', criticalOnly: false });
+
+  const [visitorForm, setVisitorForm] = useState<VisitorLogFormState>(createInitialVisitorForm);
+  const [visitorEditingId, setVisitorEditingId] = useState<string | null>(null);
+  const [visitorMessage, setVisitorMessage] = useState('');
+  const [visitorFilters, setVisitorFilters] = useState<VisitorLogFilters>({ search: '', visitorType: '', dateWindow: '30d' });
+
+  const [sopForm, setSopForm] = useState<SopDocumentFormState>(createInitialSopForm);
+  const [sopEditingId, setSopEditingId] = useState<string | null>(null);
+  const [sopMessage, setSopMessage] = useState('');
+  const [sopFilters, setSopFilters] = useState<SopDocumentFilters>({ search: '', category: '', status: '', reviewStatus: 'all' });
+
+  // Food Safety - Phase 3.5: NCR + CAPA
+  const [ncrForm, setNcrForm] = useState<NonConformanceFormState>(createInitialNcrForm);
+  const [ncrEditingId, setNcrEditingId] = useState<string | null>(null);
+  const [ncrMessage, setNcrMessage] = useState('');
+  const [ncrFilters, setNcrFilters] = useState<NonConformanceFilters>({
+    search: '',
+    area: '',
+    issueType: '',
+    severity: '',
+    status: '',
+    overdue: 'all',
+    dateWindow: '30d',
+  });
 
   const [productionForm, setProductionForm] = useState(createInitialProductionForm);
   const [productionEditingId, setProductionEditingId] = useState<string | null>(null);
@@ -817,6 +1423,20 @@ function App() {
   const [productionSpecEditingId, setProductionSpecEditingId] = useState<string | null>(null);
   const [productionSpecMessage, setProductionSpecMessage] = useState('');
   const [productionSpecFilters, setProductionSpecFilters] = useState<ProductionSpecFilters>({ search: '', client: '', status: '', product: '' });
+  const [settingsForm, setSettingsForm] = useState<AppSettingsFormState>(() => buildSettingsForm(data.appSettings));
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const settingsHydratedAt = useRef<string>('');
+
+  // Reload the form state when Supabase responds with a fresh settings row, but
+  // only if the user hasn't started editing — otherwise we'd stomp their typing.
+  useEffect(() => {
+    const fingerprint = JSON.stringify(data.appSettings);
+    if (settingsHydratedAt.current === fingerprint) return;
+    if (settingsHydratedAt.current === '' || !settingsMessage) {
+      setSettingsForm(buildSettingsForm(data.appSettings));
+    }
+    settingsHydratedAt.current = fingerprint;
+  }, [data.appSettings, settingsMessage]);
 
   const [reportFilters, setReportFilters] = useState<ReportFilters>({
     month: currentMonth,
@@ -839,6 +1459,20 @@ function App() {
   const allowedViews = useMemo(() => new Set(navItems.map((item) => item.key)), [navItems]);
   const canManageCostInputs = allowedViews.has('costInputs');
   const canViewInternalCalculatorCosts = canManageCostInputs;
+
+  // Cmd-K / Ctrl-K — toggle the global command palette. Registered once at the
+  // App level so the shortcut works on any view. Skip if the user is typing in
+  // a textarea or contenteditable region.
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const isCmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k';
+      if (!isCmdK) return;
+      e.preventDefault();
+      setPaletteOpen((open) => !open);
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   useEffect(() => {
     if (!allowedViews.has(view)) {
@@ -886,6 +1520,40 @@ function App() {
   const dashboardPaper = useMemo(() => data.paperLogs.filter((log) => getMonthKey(log.logDate) === dashboardMonth), [dashboardMonth, data.paperLogs]);
   const dashboardDispatch = useMemo(() => data.dispatchRecords.filter((record) => getMonthKey(record.dispatchDate) === dashboardMonth), [dashboardMonth, data.dispatchRecords]);
   const dashboardFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => getMonthKey(item.storedDate) === dashboardMonth), [dashboardMonth, data.finishedGoodsStock]);
+
+  // Phase 18 — subscribe to live Supabase changes on the high-traffic
+  // tables so two devices logged into the same account stay in sync
+  // without page reloads.
+  useRealtimeSync(setData, { selfUserId: profile?.id });
+
+  // Phase 16 — auto-derived notifications powering the topbar bell.
+  const { notifications, unreadCount, markRead, markAllRead, isRead } = useNotifications(data);
+
+  // Phase 17 cleanup — flush queued PODs on mount + when the device
+  // comes back online. Synced PODs get merged into React state so the
+  // POD list updates without a full reload.
+  useEffect(() => {
+    const detach = attachAutoFlush(({ synced, failed }) => {
+      if (synced.length === 0 && failed.length === 0) return;
+      setData((current) => {
+        const byId = new Map(current.proofOfDeliveries.map((p) => [p.id, p]));
+        for (const p of [...synced, ...failed]) byId.set(p.id, p);
+        return { ...current, proofOfDeliveries: Array.from(byId.values()) };
+      });
+    });
+    return detach;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const topbarAction = (
+    <NotificationBell
+      notifications={notifications}
+      unreadCount={unreadCount}
+      isRead={isRead}
+      onOpen={(n) => markRead(n.id)}
+      onMarkAllRead={markAllRead}
+      onNavigate={(v) => setView(v)}
+    />
+  );
 
   const topbarSummary = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -1205,6 +1873,14 @@ function App() {
     return matchesSearch && matchesCategory && matchesSupplier && matchesLowStock;
   }), [data.spareParts, spareFilters]);
 
+  const filteredStockIssues = useMemo(() => data.stockIssues.filter((issue) => {
+    const matchesSearch = !stockIssueFilters.search
+      || [issue.itemName, issue.issuedToName, issue.issuedByName, issue.jobNumber, issue.notes].some((value) => matchesText(value, stockIssueFilters.search));
+    const matchesStatus = stockIssueFilters.status === 'all' || issue.status === stockIssueFilters.status;
+    const matchesType = stockIssueFilters.itemType === 'all' || issue.itemType === stockIssueFilters.itemType;
+    return matchesSearch && matchesStatus && matchesType;
+  }), [data.stockIssues, stockIssueFilters]);
+
   const filteredMaterialReceipts = useMemo(() => data.materialReceipts.filter((receipt) => {
     const matchesSearch = !materialFilters.search || [receipt.receiptNumber, receipt.internalRollCode, receipt.barcode, receipt.supplierName, receipt.supplierBatchNumber].some((value) => matchesText(value, materialFilters.search));
     const matchesMonth = !materialFilters.month || getMonthKey(receipt.receivedDate) === materialFilters.month;
@@ -1264,6 +1940,14 @@ function App() {
     const matchesClient = !quoteFilters.client || matchesText(quote.clientName, quoteFilters.client);
     return matchesSalesOwner && matchesSearch && matchesMonth && matchesStatus && matchesClient;
   }), [currentSalesOwner, data.quoteEstimates, isSalesUser, quoteFilters]);
+
+  const filteredWorkTickets = useMemo(() => data.workTickets.filter((ticket) => {
+    const matchesSearch = !workTicketFilters.search || [ticket.ticketNumber, ticket.linkedQuoteNumber, ticket.linkedJobNumber, ticket.clientName, ticket.productName, ticket.productDescription, ticket.sizeSpec].some((value) => matchesText(value, workTicketFilters.search));
+    const matchesMonth = !workTicketFilters.month || getMonthKey(ticket.ticketDate) === workTicketFilters.month;
+    const matchesStatus = !workTicketFilters.status || ticket.status === workTicketFilters.status;
+    const matchesClient = !workTicketFilters.client || matchesText(ticket.clientName, workTicketFilters.client);
+    return matchesSearch && matchesMonth && matchesStatus && matchesClient;
+  }), [data.workTickets, workTicketFilters]);
 
   const filteredLeads = useMemo(() => data.leads.filter((lead) => {
     const matchesSalesOwner = !isSalesUser || matchesText(lead.assignedTo, currentSalesOwner);
@@ -1843,6 +2527,41 @@ function App() {
   function resetDeliveryNoteEditor() { setDeliveryNoteForm(createInitialDeliveryNoteForm()); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
   function resetInvoiceEditor() { setInvoiceForm(createInitialInvoiceForm()); setInvoiceEditingId(null); setInvoiceMessage(''); }
   function resetProductionSpecEditor() { setProductionSpecForm(createInitialProductionSpecForm()); setProductionSpecEditingId(null); setProductionSpecMessage(''); }
+  function resetSettingsEditor() {
+    setSettingsForm(buildSettingsForm(data.appSettings));
+    setSettingsMessage('');
+  }
+  function handleSaveSettings() {
+    const splitLines = (value: string): string[] => value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    const numeric = (value: string, fallback: number) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    };
+    const next: AppSettings = {
+      id: 'default',
+      company: { ...settingsForm.company },
+      templates: {
+        invoiceFooterLines: splitLines(settingsForm.templates.invoiceFooterLines),
+        deliveryNoteFooterLines: splitLines(settingsForm.templates.deliveryNoteFooterLines),
+        productionSpecFooterLines: splitLines(settingsForm.templates.productionSpecFooterLines),
+        defaultPaymentTerms: settingsForm.templates.defaultPaymentTerms,
+        defaultInvoiceNotes: settingsForm.templates.defaultInvoiceNotes,
+        defaultDeliveryNoteNotes: settingsForm.templates.defaultDeliveryNoteNotes,
+      },
+      stockHolding: {
+        defaultMaxDays: numeric(settingsForm.stockHolding.defaultMaxDays, data.appSettings.stockHolding.defaultMaxDays),
+        defaultReviewCadenceDays: numeric(settingsForm.stockHolding.defaultReviewCadenceDays, data.appSettings.stockHolding.defaultReviewCadenceDays),
+        defaultAgreementTermsText: settingsForm.stockHolding.defaultAgreementTermsText,
+      },
+      updatedAt: new Date().toISOString(),
+      updatedBy: profile?.fullName || profile?.email || data.appSettings.updatedBy,
+    };
+    setData((current) => ({ ...current, appSettings: next }));
+    setSettingsMessage('Settings saved.');
+  }
   function resetPaperRateEditor() { setPaperRateForm(createInitialPaperRateForm()); setPaperRateEditingId(null); setPaperRateMessage(''); }
   function resetCostProfileEditor() { setCostProfileForm(createInitialCostProfileForm()); setCostProfileEditingId(null); setCostProfileMessage(''); }
   function resetStockEditor() { setStockForm(createInitialFinishedStockForm()); setStockEditingId(null); setStockMessage(''); }
@@ -1851,6 +2570,19 @@ function App() {
   function resetClientEditor() { setClientForm(createInitialClientForm()); setClientEditingId(null); setClientMessage(''); }
   function resetProductEditor() { setProductForm(createInitialProductForm()); setProductEditingId(null); setProductMessage(''); }
   function resetMaterialEditor() { setMaterialForm(createInitialMaterialForm()); setMaterialEditingId(null); setMaterialMessage(''); }
+  function resetChemicalEditor() { setChemicalForm(createInitialChemicalForm()); setChemicalEditingId(null); setChemicalMessage(''); }
+  function resetFoodSafeMaterialEditor() { setFoodSafeMaterialForm(createInitialFoodSafeMaterialForm()); setFoodSafeMaterialEditingId(null); setFoodSafeMaterialMessage(''); }
+  function resetCleaningLogEditor() { setCleaningLogForm(createInitialCleaningLogForm()); setCleaningLogEditingId(null); setCleaningLogMessage(''); }
+  function resetComplaintEditor() { setComplaintForm(createInitialComplaintForm()); setComplaintEditingId(null); setComplaintMessage(''); }
+  function resetHaccpEditor() { setHaccpForm(createInitialHaccpForm()); setHaccpEditingId(null); setHaccpMessage(''); }
+  function resetNcrEditor() { setNcrForm(createInitialNcrForm()); setNcrEditingId(null); setNcrMessage(''); }
+  function resetTrainingEditor() { setTrainingForm(createInitialTrainingForm()); setTrainingEditingId(null); setTrainingMessage(''); }
+  function resetPpeEditor() { setPpeForm(createInitialPpeForm()); setPpeEditingId(null); setPpeMessage(''); }
+  function resetPestEditor() { setPestForm(createInitialPestForm()); setPestEditingId(null); setPestMessage(''); }
+  function resetForeignObjectEditor() { setForeignObjectForm(createInitialForeignObjectForm()); setForeignObjectEditingId(null); setForeignObjectMessage(''); }
+  function resetToolBladeEditor() { setToolBladeForm(createInitialToolBladeForm()); setToolBladeEditingId(null); setToolBladeMessage(''); }
+  function resetVisitorEditor() { setVisitorForm(createInitialVisitorForm()); setVisitorEditingId(null); setVisitorMessage(''); }
+  function resetSopEditor() { setSopForm(createInitialSopForm()); setSopEditingId(null); setSopMessage(''); }
   function resetInventoryScan() { setInventoryScanForm(createInitialInventoryScanForm()); setInventoryScanMessage(''); }
   function resetProductionEditor() { setProductionForm(createInitialProductionForm()); setProductionEditingId(null); setProductionMessage(''); }
   function resetWasteEditor() { setWasteForm(createInitialWasteForm()); setWasteEditingId(null); setWasteMessage(''); }
@@ -2106,17 +2838,126 @@ function App() {
     resetQuoteEditor();
   }
 
+  // Calculator → Quote bridge. Phase 2 — turn the multi-line calculator
+  // state into one QuoteEstimate per SKU. The data model is single-SKU
+  // per quote today, so we emit N quotes sharing a common parent number
+  // (Q-202605-001-A, -B, -C). Returns the resulting quote numbers so the
+  // calculator can show a confirmation.
+  async function handleSaveCalculatorAsQuote(state: import('./types').CalculatorState): Promise<{ quoteNumbers: string[] }> {
+    const client = clientsById.get(state.shared.clientId);
+    if (!client) throw new Error('Client not found');
+    const linkedLead = state.shared.leadId ? data.leads.find((l) => l.id === state.shared.leadId) : undefined;
+    const pricingTier = state.shared.pricingTierId
+      ? tiersById.get(state.shared.pricingTierId)
+      : (client.pricingTierId ? tiersById.get(client.pricingTierId) : undefined);
+    const sharedPaperRate = state.shared.paperRateId ? paperRatesById.get(state.shared.paperRateId) : undefined;
+    const sharedProfile = state.shared.costProfileId ? costProfilesById.get(state.shared.costProfileId) : undefined;
+
+    // Compute every line so we capture the priced-at-save snapshot.
+    const computation = computeQuote(state, {
+      clients: data.clients,
+      pricingTiers: data.pricingTiers,
+      paperRates: data.paperRates,
+      costProfiles: data.costProfiles,
+    });
+
+    const baseNumber = generateCode('QTE', data.quoteEstimates.map((q) => q.quoteNumber), state.shared.quoteDate);
+    const created: import('./types').QuoteEstimate[] = [];
+
+    state.lines.forEach((line, idx) => {
+      const result = computation.lines[idx];
+      const product = line.productId ? productsById.get(line.productId) : undefined;
+      const paperRate = line.paperRateIdOverride
+        ? paperRatesById.get(line.paperRateIdOverride)
+        : sharedPaperRate;
+      const profile = line.costProfileIdOverride
+        ? costProfilesById.get(line.costProfileIdOverride)
+        : sharedProfile;
+
+      // One quote number per line. Single-line quotes get the bare base
+      // number to match the existing convention; multi-line quotes get
+      // -A / -B / -C suffixes so they group naturally on listing pages.
+      const quoteNumber = state.lines.length === 1 ? baseNumber : `${baseNumber}-${String.fromCharCode(65 + idx)}`;
+      const id = quoteNumber;
+
+      const sizeSpec = [line.bagWidthMm, line.bagHeightMm, line.gussetMm]
+        .filter(Boolean)
+        .join('x');
+
+      created.push({
+        id,
+        quoteNumber,
+        quickbooksEstimateNumber: '',
+        createdAt: new Date().toISOString(),
+        quoteDate: state.shared.quoteDate,
+        linkedLeadId: linkedLead?.id ?? '',
+        linkedLeadNumber: linkedLead?.leadNumber ?? '',
+        salesOwnerName: state.shared.salesOwnerName,
+        clientId: client.id,
+        clientName: client.name,
+        productId: product?.id ?? '',
+        productName: line.productName || product?.name || '',
+        pricingTierId: pricingTier?.id ?? '',
+        pricingTierName: pricingTier?.name ?? '',
+        paperRateId: paperRate?.id ?? '',
+        paperRateName: paperRate?.name ?? '',
+        costProfileId: profile?.id ?? '',
+        costProfileName: profile?.name ?? '',
+        quantity: Number(line.quantity || 0),
+        sizeSpec,
+        handleType: line.handleType,
+        printMethod: result.resolvedPrintMethod,
+        colors: Number(line.colors || 0),
+        unitCost: result.unitCost,
+        quotedUnitPrice: result.quotedUnitPrice,
+        totalQuote: result.lineTotal,
+        status: 'Quoted',
+        notes: [state.shared.notes, line.description].filter(Boolean).join('\n'),
+      });
+    });
+
+    setData((current) => ({
+      ...current,
+      quoteEstimates: [...created, ...current.quoteEstimates],
+      leads: linkedLead
+        ? current.leads.map((l) =>
+            l.id === linkedLead.id
+              ? {
+                  ...l,
+                  linkedQuoteId: created[0]?.id ?? l.linkedQuoteId,
+                  linkedQuoteNumber: created[0]?.quoteNumber ?? l.linkedQuoteNumber,
+                  status: l.status === 'Won' || l.status === 'Lost' ? l.status : 'Quoted',
+                }
+              : l,
+          )
+        : current.leads,
+    }));
+
+    // Reset calculator to a fresh state for the next quote.
+    setCalculatorState(emptyCalculatorState(getToday()));
+
+    return { quoteNumbers: created.map((q) => q.quoteNumber) };
+  }
+
   function handleSaveLead() {
-    if (!leadForm.companyName && !leadForm.clientId) {
-      setLeadMessage('Company name or an existing client is required.');
+    // Minimal validation — leads are often captured fast with partial info.
+    // We only require *some* way to identify who this is (name, phone, email,
+    // company, or a linked client). Everything else is filled in over time.
+    const hasIdentity = !!(
+      leadForm.contactName.trim()
+      || leadForm.phone.trim()
+      || leadForm.email.trim()
+      || leadForm.companyName.trim()
+      || leadForm.clientId
+    );
+    if (!hasIdentity) {
+      setLeadMessage('Add at least a name, phone, email, company, or linked client.');
       return;
     }
-    if (!leadForm.contactName && !leadForm.phone && !leadForm.email) {
-      setLeadMessage('Add at least one contact detail for the lead.');
-      return;
-    }
-    if (leadForm.status === 'Quoted' && !leadForm.quickbooksEstimateNumber.trim()) {
-      setLeadMessage('QuickBooks estimate number is required once the lead is marked as quoted.');
+    // QuickBooks estimate guard only applies on edits where status moves to
+    // Quoted — capture-stage saves remain unrestricted.
+    if (leadEditingId && leadForm.status === 'Quoted' && !leadForm.quickbooksEstimateNumber.trim() && !leadForm.linkedQuoteId) {
+      setLeadMessage('Link a quote or add a QuickBooks estimate number once the lead is marked as Quoted.');
       return;
     }
     const client = leadForm.clientId ? clientsById.get(leadForm.clientId) : undefined;
@@ -2141,6 +2982,10 @@ function App() {
       linkedQuoteId: quote?.id ?? '',
       linkedQuoteNumber: quote?.quoteNumber ?? '',
       notes: leadForm.notes,
+      nextFollowUpDate: leadForm.nextFollowUpDate,
+      activities: leadForm.activities ?? [],
+      lostReason: leadForm.lostReason,
+      estimatedValue: Number(leadForm.estimatedValue || 0),
     };
     if (leadEditingId) {
       setData((current) => ({ ...current, leads: current.leads.map((lead) => lead.id === leadEditingId ? { ...lead, ...payload } : lead) }));
@@ -2155,6 +3000,93 @@ function App() {
       setData((current) => ({ ...current, leads: [newLead, ...current.leads] }));
     }
     resetLeadEditor();
+  }
+
+  /** Re-schedule a job to a new date / machine from the Production Schedule. */
+  function handleRescheduleJob(jobId: string, newDate: string, newMachineId: string) {
+    setData((current) => ({
+      ...current,
+      jobs: current.jobs.map((j) => {
+        if (j.id !== jobId) return j;
+        return {
+          ...j,
+          // Use productionStartDate as the scheduling anchor since that's what the
+          // grid reads. Keep dueDate untouched (it's a commercial commitment).
+          productionStartDate: newDate,
+          assignedMachineId: newMachineId,
+        };
+      }),
+    }));
+  }
+
+  /** Re-assign a batch of leads to a new salesperson in one shot. */
+  function handleBulkReassignLeads(leadIds: string[], newOwner: string) {
+    if (leadIds.length === 0 || !newOwner.trim()) return;
+    const idSet = new Set(leadIds);
+    setData((current) => ({
+      ...current,
+      leads: current.leads.map((l) => {
+        if (!idSet.has(l.id)) return l;
+        const reassignNote: LeadActivity = {
+          id: `act-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          at: new Date().toISOString(),
+          type: 'Note',
+          byName: profile?.email || 'Manager',
+          summary: `Re-assigned from ${l.assignedTo || 'unassigned'} to ${newOwner}.`,
+        };
+        return {
+          ...l,
+          assignedTo: newOwner,
+          activities: [reassignNote, ...(l.activities ?? [])],
+        };
+      }),
+    }));
+    setLeadMessage(`Re-assigned ${leadIds.length} lead(s) to ${newOwner}.`);
+  }
+
+  /**
+   * Fast capture path used by the pinned Quick Add strip on the Leads page.
+   * Persists immediately — no extra confirmation. Returns nothing; the page
+   * resets its local capture state on submit so the user can move on.
+   */
+  function handleQuickAddLead(capture: { contactName: string; phone: string; email: string; source: Lead['source']; productHint: string; requestedQuantity: string }) {
+    const today = getToday();
+    const leadNumber = generateCode('LED', data.leads.map((l) => l.leadNumber), today);
+    const newLead: Lead = {
+      id: leadNumber,
+      leadNumber,
+      createdAt: new Date().toISOString(),
+      enquiryDate: today,
+      clientId: '',
+      clientName: '',
+      companyName: capture.contactName.trim() || capture.phone.trim() || 'New enquiry',
+      contactName: capture.contactName.trim(),
+      phone: capture.phone.trim(),
+      email: capture.email.trim(),
+      source: capture.source,
+      assignedTo: profile?.email || '',
+      productId: '',
+      productName: capture.productHint.trim(),
+      requestedQuantity: Number(capture.requestedQuantity || 0),
+      dueDate: '',
+      status: 'New',
+      quickbooksEstimateNumber: '',
+      linkedQuoteId: '',
+      linkedQuoteNumber: '',
+      notes: '',
+      nextFollowUpDate: today,
+      activities: [{
+        id: `act-${Date.now().toString(36)}`,
+        at: new Date().toISOString(),
+        type: 'Note',
+        byName: profile?.email || 'Quick capture',
+        summary: `Captured via Quick Add. ${capture.productHint.trim() ? `Wants: ${capture.productHint.trim()}.` : ''}`.trim(),
+      }],
+      lostReason: '',
+      estimatedValue: 0,
+    };
+    setData((current) => ({ ...current, leads: [newLead, ...current.leads] }));
+    setLeadMessage(`Lead ${leadNumber} captured. Click Open to add detail.`);
   }
 
   function handleSaveArtwork() {
@@ -2603,12 +3535,25 @@ function App() {
     resetProductionSpecEditor();
   }
 
-  function handleSaveJob() {
+  async function handleSaveJob() {
     if (!jobForm.jobDate || !jobForm.customerName || !jobForm.productName || !jobForm.quantityPlanned || !jobForm.status) {
       setJobMessage('Job date, customer, product, quantity planned, and status are required.');
       return;
     }
     const previousJob = jobEditingId ? data.jobs.find((job) => job.id === jobEditingId) : undefined;
+    // Optimistic concurrency guard (phase 14). Only meaningful on edits — a
+    // fresh insert has no row to conflict with. We don't BLOCK the save on
+    // an "unknown" result (RLS, missing column, network) so the UX degrades
+    // gracefully to last-write-wins, matching pre-phase-14 behaviour.
+    if (previousJob && previousJob.version !== undefined) {
+      const versionCheck = await detectVersionConflict('jobs', previousJob.id, previousJob.version);
+      if (versionCheck.kind === 'conflict') {
+        setJobMessage(
+          `This job was modified by someone else (their version ${versionCheck.dbVersion}, yours ${previousJob.version}). Refresh to see their changes, then re-apply yours.`,
+        );
+        return;
+      }
+    }
     const linkedClient = jobForm.clientId ? clientsById.get(jobForm.clientId) : undefined;
     const linkedProduct = jobForm.productId ? productsById.get(jobForm.productId) : undefined;
     const linkedQuote = jobForm.quoteId ? quotesById.get(jobForm.quoteId) : undefined;
@@ -2645,6 +3590,48 @@ function App() {
       }
     }
 
+    // Food-safety gate (Phase 1 + Phase 2). A food-packaging job (any level
+    // != NonFood) must have approved materials selected at draft, and once
+    // cleared for production it must pass the full release gate: approved
+    // materials + recent cleaning + complete changeover + QC sign-off.
+    if (isFoodPackagingLevel(jobForm.foodContactLevel)) {
+      if (commercialCleared) {
+        // Build a hypothetical post-save JobCard so the release-gate validator
+        // can examine the about-to-be-saved state, not stale DB state.
+        const hypothetical = {
+          id: previousJob?.id ?? 'pending',
+          jobNumber: previousJob?.jobNumber ?? 'pending',
+          foodContactLevel: jobForm.foodContactLevel,
+          foodSafeMaterialIds: jobForm.foodSafeMaterialIds,
+          assignedMachineId: jobForm.assignedMachineId,
+          changeoverChecklist: jobForm.changeoverChecklist,
+          qcPlan: jobForm.qcPlan,
+        } as unknown as JobCard;
+        const blocks = validateJobReleaseGate({
+          job: hypothetical,
+          approvedMaterials: data.foodSafeMaterials,
+          cleaningLogs: data.cleaningLogs,
+          machines: data.machines,
+        });
+        if (blocks.length > 0) {
+          setJobMessage(`Food safety release block — ${blocks.map((b) => b.reason).join(' · ')}`);
+          return;
+        }
+      } else {
+        // Pre-release: at minimum require materials to be selected.
+        const blocks = validateJobFoodSafety(
+          jobForm.foodContactLevel,
+          jobForm.foodSafeMaterialIds,
+          data.foodSafeMaterials,
+        );
+        const blockingNow = blocks.filter((b) => b.reason.includes('no approved materials'));
+        if (blockingNow.length > 0) {
+          setJobMessage(`Food safety block — ${blockingNow.map((b) => b.reason).join(' · ')}`);
+          return;
+        }
+      }
+    }
+
     if (commercialCleared) {
       if (!linkedClient) {
         setJobMessage('Select a linked client before clearing a job for production.');
@@ -2676,9 +3663,33 @@ function App() {
           return;
         }
         if (orderValue > availableCredit) {
-          setJobMessage(`Order value exceeds available credit. Available credit: ${availableCredit.toFixed(2)}.`);
+          setJobMessage(`Order value exceeds available credit. Available credit: R ${availableCredit.toFixed(2)}.`);
           return;
         }
+      }
+    }
+
+    // Credit smart-block (applies to every payment requirement, not just
+    // Credit Terms). Even on deposit / full-payment jobs, if this client
+    // is already over their credit limit OR the new order tips them over,
+    // we block production clearance.
+    if (commercialCleared && linkedClient && linkedClient.creditLimit > 0) {
+      const projectedBalance = linkedClient.currentBalance + orderValue;
+      if (projectedBalance > linkedClient.creditLimit) {
+        const overflow = projectedBalance - linkedClient.creditLimit;
+        setJobMessage(
+          `Credit block — ${linkedClient.name} would be R ${overflow.toFixed(2)} over their R ${linkedClient.creditLimit.toFixed(0)} credit limit. Current balance: R ${linkedClient.currentBalance.toFixed(2)}. Collect outstanding before clearing this job.`,
+        );
+        return;
+      }
+      // Soft warning at 90% — saves but flags in the message so the
+      // salesperson sees it before pressing again.
+      const utilisation = projectedBalance / linkedClient.creditLimit;
+      if (utilisation >= 0.9) {
+        setJobMessage(
+          `Saved. Heads up — ${linkedClient.name} will be at ${Math.round(utilisation * 100)}% of credit limit after this job (R ${projectedBalance.toFixed(2)} / R ${linkedClient.creditLimit.toFixed(0)}). Chase outstanding before the next order.`,
+        );
+        // Don't return — let save proceed.
       }
     }
 
@@ -2771,6 +3782,13 @@ function App() {
       releasedBy: jobForm.releasedBy,
       notes: jobForm.notes,
       fscRelated: jobForm.fscRelated,
+      foodContactLevel: jobForm.foodContactLevel,
+      foodSafeMaterialIds: jobForm.foodSafeMaterialIds,
+      internalBatchNumber: jobForm.internalBatchNumber,
+      foodSafetyNotes: jobForm.foodSafetyNotes,
+      assignedMachineId: jobForm.assignedMachineId,
+      changeoverChecklist: jobForm.changeoverChecklist,
+      qcPlan: jobForm.qcPlan,
     });
 
     setJobMessage('');
@@ -2949,6 +3967,13 @@ function App() {
             releasedBy: jobForm.releasedBy,
             notes: jobForm.notes,
             fscRelated: jobForm.fscRelated,
+            foodContactLevel: jobForm.foodContactLevel,
+            foodSafeMaterialIds: jobForm.foodSafeMaterialIds,
+            internalBatchNumber: jobForm.internalBatchNumber,
+            foodSafetyNotes: jobForm.foodSafetyNotes,
+            assignedMachineId: jobForm.assignedMachineId,
+            changeoverChecklist: jobForm.changeoverChecklist,
+            qcPlan: jobForm.qcPlan,
           } : job),
         };
       });
@@ -3039,6 +4064,16 @@ function App() {
         releasedBy: jobForm.releasedBy,
         notes: jobForm.notes,
         fscRelated: jobForm.fscRelated,
+        foodContactLevel: jobForm.foodContactLevel,
+        foodSafeMaterialIds: jobForm.foodSafeMaterialIds,
+        internalBatchNumber: jobForm.internalBatchNumber
+          || (isFoodPackagingLevel(jobForm.foodContactLevel)
+            ? generateCode('FSB', data.foodSafeMaterials.map((m) => m.internalBatchNumber).filter(Boolean), jobForm.jobDate)
+            : ''),
+        foodSafetyNotes: jobForm.foodSafetyNotes,
+        assignedMachineId: jobForm.assignedMachineId,
+        changeoverChecklist: jobForm.changeoverChecklist,
+        qcPlan: jobForm.qcPlan,
       };
 
       const nextMaterialOrders = [...data.materialOrderRequests];
@@ -3083,6 +4118,16 @@ function App() {
         } : item),
         materialOrderRequests: nextMaterialOrders,
         jobs: [newJob, ...current.jobs],
+        // When a job is created from a quote, auto-mark the quote as
+        // "Converted to Job" so the sales pipeline reflects reality and the
+        // same quote isn't double-converted.
+        quoteEstimates: jobForm.quoteId
+          ? current.quoteEstimates.map((q) =>
+              q.id === jobForm.quoteId && q.status !== 'Converted to Job'
+                ? { ...q, status: 'Converted to Job' as const }
+                : q,
+            )
+          : current.quoteEstimates,
       }));
       focusSavedJob(newJob);
       void syncJobThread(newJob, null, profile).catch((error) => {
@@ -3125,12 +4170,29 @@ function App() {
       stockStatus: stockForm.stockStatus,
       brandingStatus: stockForm.brandingStatus,
       notes: stockForm.notes,
+      // Phase 2 food-safety fields. New batches default to "In Production"
+      // and pick up the food-contact level from the linked job (if any).
+      foodSafetyHoldStatus: (linkedJob && isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') ? 'Awaiting QC' : 'In Production') as FoodSafetyHoldStatus,
+      releasedByName: '',
+      releasedAt: '',
+      holdReason: '',
     };
     if (stockEditingId) {
       const previousItem = data.finishedGoodsStock.find((item) => item.id === stockEditingId);
       setData((current) => ({
         ...current,
-        finishedGoodsStock: current.finishedGoodsStock.map((item) => item.id === stockEditingId ? { ...item, ...payload } : item),
+        // Preserve existing food-safety hold state on edit — only the Hold/Release
+        // action mutates those fields; a normal save shouldn't clear them.
+        finishedGoodsStock: current.finishedGoodsStock.map((item) => item.id === stockEditingId
+          ? {
+              ...item,
+              ...payload,
+              foodSafetyHoldStatus: item.foodSafetyHoldStatus,
+              releasedByName: item.releasedByName,
+              releasedAt: item.releasedAt,
+              holdReason: item.holdReason,
+            }
+          : item),
         stockChangeLogs: previousItem ? [
           {
             id: `stock-log-${Date.now()}`,
@@ -3273,6 +4335,8 @@ function App() {
     const payload = {
       partName: spareForm.partName,
       category: spareForm.category,
+      itemType: spareForm.itemType,
+      productionUse: spareForm.productionUse,
       machineId: linkedMachine?.id ?? '',
       machineReference: linkedMachine?.name ?? spareForm.machineReference,
       supplierId: linkedSupplier?.id ?? '',
@@ -3300,6 +4364,11 @@ function App() {
         createdAt: new Date().toISOString(),
         ...payload,
         barcode: barcode || buildBarcode(partCode),
+        itemType: 'Consumable',
+        productionUse: true,
+        currentStatus: 'In Stock',
+        currentHolderUserId: '',
+        currentHolderName: '',
       };
       const movement = createInventoryMovement({
         movementDate: spareForm.lastPurchaseDate || getToday(),
@@ -3317,6 +4386,214 @@ function App() {
       setData((current) => ({ ...current, spareParts: [newPart, ...current.spareParts], inventoryMovements: [movement, ...current.inventoryMovements] }));
     }
     resetSpareEditor();
+  }
+
+  function resetStockIssueForm() {
+    setStockIssueForm({
+      itemId: '',
+      quantity: '',
+      issuedToName: '',
+      issuedByName: '',
+      jobId: '',
+      jobNumber: '',
+      notes: '',
+    });
+    setStockIssueMessage('');
+  }
+
+  function startStockIssue(itemId: string) {
+    setStockIssueMessage('');
+    setStockIssueForm({
+      itemId,
+      quantity: '',
+      issuedToName: '',
+      issuedByName: '',
+      jobId: '',
+      jobNumber: '',
+      notes: '',
+    });
+  }
+
+  function handleSaveStockIssue() {
+    const item = data.spareParts.find((part) => part.id === stockIssueForm.itemId);
+    if (!item) {
+      setStockIssueMessage('Pick an item first.');
+      return;
+    }
+    if (!stockIssueForm.issuedToName.trim()) {
+      setStockIssueMessage('Who is this being issued to?');
+      return;
+    }
+    const isTool = item.itemType === 'Tool';
+    const quantity = isTool ? 1 : Number(stockIssueForm.quantity);
+    if (!isTool && (!quantity || quantity <= 0)) {
+      setStockIssueMessage('Quantity must be greater than zero.');
+      return;
+    }
+    if (!isTool && quantity > item.quantityOnHand) {
+      setStockIssueMessage(`Only ${item.quantityOnHand} ${item.unitOfMeasure} on hand.`);
+      return;
+    }
+    if (item.productionUse && !stockIssueForm.jobId) {
+      setStockIssueMessage('This item is for production — pick the job it is being used on.');
+      return;
+    }
+    if (isTool && item.currentStatus === 'Out') {
+      setStockIssueMessage(`This tool is already checked out to ${item.currentHolderName || 'someone'}. Mark it returned first.`);
+      return;
+    }
+    const issueId = generateCode('SI', data.stockIssues.map((issue) => issue.id), getToday());
+    const issue: StockIssue = {
+      id: issueId,
+      itemId: item.id,
+      itemName: item.partName,
+      itemType: item.itemType,
+      category: item.category,
+      quantity,
+      unitOfMeasure: item.unitOfMeasure,
+      issuedAt: new Date().toISOString(),
+      issuedToUserId: '',
+      issuedToName: stockIssueForm.issuedToName.trim(),
+      issuedByUserId: '',
+      issuedByName: stockIssueForm.issuedByName.trim(),
+      jobId: stockIssueForm.jobId,
+      jobNumber: stockIssueForm.jobNumber,
+      notes: stockIssueForm.notes,
+      status: isTool ? 'Issued' : 'Issued',
+      returnedAt: '',
+      conditionOnReturn: '',
+      returnedByUserId: '',
+      returnedByName: '',
+      createdAt: new Date().toISOString(),
+    };
+    setData((current) => ({
+      ...current,
+      stockIssues: [issue, ...current.stockIssues],
+      spareParts: current.spareParts.map((part) => {
+        if (part.id !== item.id) return part;
+        if (isTool) {
+          return {
+            ...part,
+            currentStatus: 'Out',
+            currentHolderUserId: '',
+            currentHolderName: stockIssueForm.issuedToName.trim(),
+          };
+        }
+        return {
+          ...part,
+          quantityOnHand: Math.max(0, part.quantityOnHand - quantity),
+        };
+      }),
+    }));
+    setStockIssueMessage(isTool ? 'Tool checked out.' : 'Stock issued and on-hand decremented.');
+    resetStockIssueForm();
+  }
+
+  function resetStockCountForm() {
+    setStockCountForm({
+      scope: '',
+      countedByName: '',
+      notes: '',
+      selectedItemIds: [],
+      countedQty: {},
+    });
+    setStockCountMessage('');
+  }
+
+  function handleSaveStockCount() {
+    if (stockCountForm.selectedItemIds.length === 0) {
+      setStockCountMessage('Pick at least one item to count.');
+      return;
+    }
+    if (!stockCountForm.countedByName.trim()) {
+      setStockCountMessage('Who is doing the count?');
+      return;
+    }
+    const today = getToday();
+    const countId = generateCode('SC', data.stockCounts.map((count) => count.id), today);
+    const lines: StockCountLine[] = stockCountForm.selectedItemIds.map((itemId, index) => {
+      const item = data.spareParts.find((part) => part.id === itemId);
+      const systemQty = item?.quantityOnHand ?? 0;
+      const countedQty = Number(stockCountForm.countedQty[itemId] ?? 0);
+      return {
+        id: `${countId}-L${String(index + 1).padStart(3, '0')}`,
+        countId,
+        itemId,
+        itemName: item?.partName ?? 'Unknown item',
+        systemQty,
+        countedQty,
+        variance: countedQty - systemQty,
+        notes: '',
+        createdAt: new Date().toISOString(),
+      };
+    });
+    const count: StockCount = {
+      id: countId,
+      countedAt: new Date().toISOString(),
+      countedByUserId: '',
+      countedByName: stockCountForm.countedByName.trim(),
+      scope: stockCountForm.scope,
+      notes: stockCountForm.notes,
+      reconciled: false,
+      reconciledAt: '',
+      reconciledByUserId: '',
+      reconciledByName: '',
+      createdAt: new Date().toISOString(),
+      lines,
+    };
+    setData((current) => ({
+      ...current,
+      stockCounts: [count, ...current.stockCounts],
+    }));
+    setStockCountMessage(`Count saved (${countId}). Variance ready for review.`);
+    resetStockCountForm();
+  }
+
+  function handleReconcileStockCount(countId: string, reconciledByName: string) {
+    const target = data.stockCounts.find((count) => count.id === countId);
+    if (!target || target.reconciled) return;
+    setData((current) => ({
+      ...current,
+      stockCounts: current.stockCounts.map((count) => count.id === countId
+        ? {
+            ...count,
+            reconciled: true,
+            reconciledAt: new Date().toISOString(),
+            reconciledByName: reconciledByName || 'Admin',
+          }
+        : count),
+      // Apply variance: set quantityOnHand to countedQty for each line item.
+      spareParts: current.spareParts.map((part) => {
+        const line = target.lines.find((entry) => entry.itemId === part.id);
+        if (!line) return part;
+        return { ...part, quantityOnHand: line.countedQty };
+      }),
+    }));
+  }
+
+  function handleReturnTool(issueId: string, condition: 'Good' | 'Damaged' | 'Lost') {
+    const issue = data.stockIssues.find((entry) => entry.id === issueId);
+    if (!issue || issue.status === 'Returned') return;
+    setData((current) => ({
+      ...current,
+      stockIssues: current.stockIssues.map((entry) => entry.id === issueId
+        ? {
+            ...entry,
+            status: 'Returned',
+            returnedAt: new Date().toISOString(),
+            conditionOnReturn: condition,
+          }
+        : entry),
+      spareParts: current.spareParts.map((part) => part.id === issue.itemId
+        ? {
+            ...part,
+            currentStatus: 'In Stock',
+            currentHolderUserId: '',
+            currentHolderName: '',
+            quantityOnHand: condition === 'Lost' ? Math.max(0, part.quantityOnHand - 1) : part.quantityOnHand,
+          }
+        : part),
+    }));
   }
 
   function handleSaveTier() {
@@ -3397,6 +4674,332 @@ function App() {
       setData((current) => ({ ...current, costProfiles: [{ id: `cost-${Date.now()}`, ...payload }, ...current.costProfiles] }));
     }
     resetCostProfileEditor();
+  }
+
+  // ============================================================
+  // Phase 15: work-ticket master + ticket handlers.
+  //
+  // The four masters (ink rates / finishing operations / press rates /
+  // plate costs) follow the same shape as paperRates / costProfiles
+  // above — small payloads, no DB sync (yet), localStorage round-trip
+  // via useProductionData. The full WorkTicket save is a bit chunkier:
+  // it pre-computes the breakdown so the saved record matches what the
+  // quoter saw on screen.
+  // ============================================================
+
+  function resetInkRateEditor() {
+    setInkRateForm({ name: '', inkType: 'Pantone', supplierId: '', costPerKg: '', coverageSqmPerKg: '100', defaultCoveragePercent: '50', notes: '', active: true });
+    setInkRateEditingId(null);
+    setInkRateMessage('');
+  }
+  function editInkRate(rate: InkRate) {
+    setInkRateForm({
+      name: rate.name,
+      inkType: rate.inkType,
+      supplierId: rate.supplierId,
+      costPerKg: String(rate.costPerKg),
+      coverageSqmPerKg: String(rate.coverageSqmPerKg),
+      defaultCoveragePercent: String(rate.defaultCoveragePercent),
+      notes: rate.notes,
+      active: rate.active,
+    });
+    setInkRateEditingId(rate.id);
+    setInkRateMessage('');
+  }
+  function handleSaveInkRate() {
+    if (!inkRateForm.name) { setInkRateMessage('Ink name is required.'); return; }
+    const supplier = inkRateForm.supplierId ? suppliersById.get(inkRateForm.supplierId) : undefined;
+    const payload: Omit<InkRate, 'id'> = {
+      name: inkRateForm.name,
+      inkType: inkRateForm.inkType,
+      supplierId: supplier?.id ?? '',
+      supplierName: supplier?.name ?? '',
+      costPerKg: Number(inkRateForm.costPerKg || 0),
+      coverageSqmPerKg: Number(inkRateForm.coverageSqmPerKg || 0),
+      defaultCoveragePercent: Number(inkRateForm.defaultCoveragePercent || 0),
+      notes: inkRateForm.notes,
+      active: inkRateForm.active,
+    };
+    if (inkRateEditingId) {
+      setData((current) => ({ ...current, inkRates: current.inkRates.map((r) => r.id === inkRateEditingId ? { ...r, ...payload } : r) }));
+    } else {
+      setData((current) => ({ ...current, inkRates: [{ id: `ink-${Date.now()}`, ...payload }, ...current.inkRates] }));
+    }
+    resetInkRateEditor();
+  }
+  function handleDeleteInkRate(rate: InkRate) {
+    setData((current) => ({ ...current, inkRates: current.inkRates.filter((r) => r.id !== rate.id) }));
+  }
+
+  function resetFinishingEditor() {
+    setFinishingForm({ name: '', machineName: '', rateType: 'PerThousand', rate: '', setupCost: '', runSpeedPerHour: '', notes: '', active: true });
+    setFinishingEditingId(null);
+    setFinishingMessage('');
+  }
+  function editFinishingOp(op: FinishingOperation) {
+    setFinishingForm({
+      name: op.name,
+      machineName: op.machineName,
+      rateType: op.rateType,
+      rate: String(op.rate),
+      setupCost: String(op.setupCost),
+      runSpeedPerHour: String(op.runSpeedPerHour),
+      notes: op.notes,
+      active: op.active,
+    });
+    setFinishingEditingId(op.id);
+    setFinishingMessage('');
+  }
+  function handleSaveFinishingOp() {
+    if (!finishingForm.name) { setFinishingMessage('Operation name is required.'); return; }
+    const payload: Omit<FinishingOperation, 'id'> = {
+      name: finishingForm.name,
+      machineName: finishingForm.machineName,
+      rateType: finishingForm.rateType,
+      rate: Number(finishingForm.rate || 0),
+      setupCost: Number(finishingForm.setupCost || 0),
+      runSpeedPerHour: Number(finishingForm.runSpeedPerHour || 0),
+      notes: finishingForm.notes,
+      active: finishingForm.active,
+    };
+    if (finishingEditingId) {
+      setData((current) => ({ ...current, finishingOperations: current.finishingOperations.map((o) => o.id === finishingEditingId ? { ...o, ...payload } : o) }));
+    } else {
+      setData((current) => ({ ...current, finishingOperations: [{ id: `fin-${Date.now()}`, ...payload }, ...current.finishingOperations] }));
+    }
+    resetFinishingEditor();
+  }
+  function handleDeleteFinishingOp(op: FinishingOperation) {
+    setData((current) => ({ ...current, finishingOperations: current.finishingOperations.filter((o) => o.id !== op.id) }));
+  }
+
+  function resetPressRateEditor() {
+    setPressRateForm({ machineId: '', ratePerHour: '', makeReadySheets: '0', makeReadyMinutes: '0', runSpeedSheetsPerHour: '0', notes: '', active: true });
+    setPressRateEditingId(null);
+    setPressRateMessage('');
+  }
+  function editPressRate(rate: PressRate) {
+    setPressRateForm({
+      machineId: rate.machineId,
+      ratePerHour: String(rate.ratePerHour),
+      makeReadySheets: String(rate.makeReadySheets),
+      makeReadyMinutes: String(rate.makeReadyMinutes),
+      runSpeedSheetsPerHour: String(rate.runSpeedSheetsPerHour),
+      notes: rate.notes,
+      active: rate.active,
+    });
+    setPressRateEditingId(rate.id);
+    setPressRateMessage('');
+  }
+  function handleSavePressRate() {
+    if (!pressRateForm.machineId) { setPressRateMessage('Pick a machine first.'); return; }
+    const machine = machinesById.get(pressRateForm.machineId);
+    if (!machine) { setPressRateMessage('Selected machine no longer exists.'); return; }
+    const payload: Omit<PressRate, 'id'> = {
+      machineId: machine.id,
+      machineName: machine.name,
+      ratePerHour: Number(pressRateForm.ratePerHour || 0),
+      makeReadySheets: Number(pressRateForm.makeReadySheets || 0),
+      makeReadyMinutes: Number(pressRateForm.makeReadyMinutes || 0),
+      runSpeedSheetsPerHour: Number(pressRateForm.runSpeedSheetsPerHour || 0),
+      notes: pressRateForm.notes,
+      active: pressRateForm.active,
+    };
+    if (pressRateEditingId) {
+      setData((current) => ({ ...current, pressRates: current.pressRates.map((r) => r.id === pressRateEditingId ? { ...r, ...payload } : r) }));
+    } else {
+      setData((current) => ({ ...current, pressRates: [{ id: `press-${Date.now()}`, ...payload }, ...current.pressRates] }));
+    }
+    resetPressRateEditor();
+  }
+  function handleDeletePressRate(rate: PressRate) {
+    setData((current) => ({ ...current, pressRates: current.pressRates.filter((r) => r.id !== rate.id) }));
+  }
+
+  function resetPlateCostEditor() {
+    setPlateCostForm({ name: '', format: '', costPerColor: '', originationCost: '', notes: '', active: true });
+    setPlateCostEditingId(null);
+    setPlateCostMessage('');
+  }
+  function editPlateCost(rate: PlateCost) {
+    setPlateCostForm({
+      name: rate.name,
+      format: rate.format,
+      costPerColor: String(rate.costPerColor),
+      originationCost: String(rate.originationCost),
+      notes: rate.notes,
+      active: rate.active,
+    });
+    setPlateCostEditingId(rate.id);
+    setPlateCostMessage('');
+  }
+  function handleSavePlateCost() {
+    if (!plateCostForm.name) { setPlateCostMessage('Plate name is required.'); return; }
+    const payload: Omit<PlateCost, 'id'> = {
+      name: plateCostForm.name,
+      format: plateCostForm.format,
+      costPerColor: Number(plateCostForm.costPerColor || 0),
+      originationCost: Number(plateCostForm.originationCost || 0),
+      notes: plateCostForm.notes,
+      active: plateCostForm.active,
+    };
+    if (plateCostEditingId) {
+      setData((current) => ({ ...current, plateCosts: current.plateCosts.map((r) => r.id === plateCostEditingId ? { ...r, ...payload } : r) }));
+    } else {
+      setData((current) => ({ ...current, plateCosts: [{ id: `plate-${Date.now()}`, ...payload }, ...current.plateCosts] }));
+    }
+    resetPlateCostEditor();
+  }
+  function handleDeletePlateCost(rate: PlateCost) {
+    setData((current) => ({ ...current, plateCosts: current.plateCosts.filter((r) => r.id !== rate.id) }));
+  }
+
+  // ----- Work tickets themselves -----
+  function resetWorkTicketEditor() {
+    setWorkTicketForm(emptyWorkTicketForm(getToday()));
+    setWorkTicketEditingId(null);
+    setWorkTicketMessage('');
+  }
+  function editWorkTicket(ticket: WorkTicket) {
+    setWorkTicketForm({
+      ticketDate: ticket.ticketDate,
+      linkedQuoteId: ticket.linkedQuoteId,
+      linkedJobId: ticket.linkedJobId,
+      clientId: ticket.clientId,
+      productId: ticket.productId,
+      productDescription: ticket.productDescription,
+      sizeSpec: ticket.sizeSpec,
+      handleType: ticket.handleType,
+      printMethod: ticket.printMethod,
+      colors: String(ticket.colors),
+      quantity: String(ticket.quantity),
+      sheets: String(ticket.sheets),
+      sheetSize: ticket.sheetSize,
+      paperRateId: ticket.paperRateId,
+      plateCostId: ticket.plateCostId,
+      pressRateId: ticket.pressLines[0]?.pressRateId ?? '',
+      guillotineRateId: ticket.guillotineLines[0]?.pressRateId ?? '',
+      inkLines: ticket.inkLines,
+      finishingLines: ticket.finishingLines,
+      despatchCost: String(ticket.despatchCost),
+      despatchNotes: ticket.despatchNotes,
+      marginPercentOverride: String(ticket.marginPercent),
+      status: ticket.status,
+      notes: ticket.notes,
+    });
+    setWorkTicketEditingId(ticket.id);
+    setWorkTicketMessage('');
+  }
+  async function handleSaveWorkTicket() {
+    if (!workTicketForm.clientId) { setWorkTicketMessage('Pick a client.'); return; }
+    if (!workTicketForm.quantity || Number(workTicketForm.quantity) <= 0) {
+      setWorkTicketMessage('Quantity must be > 0.');
+      return;
+    }
+    // Recompute the breakdown one last time so the saved row matches what
+    // the user sees in the form. Avoids drift between display + persistence.
+    const { computeWorkTicket, parseSheetAreaSqm } = await import('./utils/workTicketEngine');
+    const sheetAreaSqm = parseSheetAreaSqm(workTicketForm.sheetSize);
+    const marginOverrideRaw = workTicketForm.marginPercentOverride.trim();
+    const marginPercentOverride = marginOverrideRaw === '' ? null : Number(marginOverrideRaw);
+    const breakdown = computeWorkTicket(
+      {
+        quantity: Number(workTicketForm.quantity || 0),
+        sheets: Number(workTicketForm.sheets || 0),
+        sheetAreaSqm,
+        colors: Number(workTicketForm.colors || 0),
+        paperRateId: workTicketForm.paperRateId,
+        plateCostId: workTicketForm.plateCostId,
+        pressRateId: workTicketForm.pressRateId,
+        guillotineRateId: workTicketForm.guillotineRateId,
+        inkLines: workTicketForm.inkLines,
+        finishingLines: workTicketForm.finishingLines,
+        marginPercentOverride: Number.isFinite(marginPercentOverride) ? marginPercentOverride : null,
+        clientId: workTicketForm.clientId,
+        despatchCost: Number(workTicketForm.despatchCost || 0),
+      },
+      {
+        paperRates: data.paperRates,
+        costProfiles: data.costProfiles,
+        inkRates: data.inkRates,
+        finishingOperations: data.finishingOperations,
+        pressRates: data.pressRates,
+        plateCosts: data.plateCosts,
+        pricingTiers: data.pricingTiers,
+        clients: data.clients,
+        machines: data.machines,
+      },
+    );
+    const client = clientsById.get(workTicketForm.clientId);
+    const product = workTicketForm.productId ? productsById.get(workTicketForm.productId) : undefined;
+    const plate = workTicketForm.plateCostId ? data.plateCosts.find((p) => p.id === workTicketForm.plateCostId) : undefined;
+    const sheets = Number(workTicketForm.sheets || 0) || (Number(workTicketForm.quantity || 0) + (data.pressRates.find((p) => p.id === workTicketForm.pressRateId)?.makeReadySheets ?? 0));
+
+    const payloadCommon = {
+      ticketDate: workTicketForm.ticketDate,
+      linkedQuoteId: workTicketForm.linkedQuoteId,
+      linkedQuoteNumber: data.quoteEstimates.find((q) => q.id === workTicketForm.linkedQuoteId)?.quoteNumber ?? '',
+      linkedJobId: workTicketForm.linkedJobId,
+      linkedJobNumber: data.jobs.find((j) => j.id === workTicketForm.linkedJobId)?.jobNumber ?? '',
+      clientId: workTicketForm.clientId,
+      clientName: client?.name ?? '',
+      productId: product?.id ?? '',
+      productName: product?.name ?? '',
+      productDescription: workTicketForm.productDescription,
+      sizeSpec: workTicketForm.sizeSpec,
+      handleType: workTicketForm.handleType,
+      printMethod: workTicketForm.printMethod,
+      colors: Number(workTicketForm.colors || 0),
+      quantity: Number(workTicketForm.quantity || 0),
+      sheets,
+      sheetSize: workTicketForm.sheetSize,
+      paperRateId: workTicketForm.paperRateId,
+      paperRateName: breakdown.paperRateName,
+      paperType: breakdown.paperType,
+      paperGsm: breakdown.paperGsm,
+      paperKg: breakdown.paperKg,
+      paperCost: breakdown.paperCost,
+      plateCostId: workTicketForm.plateCostId,
+      plateCostName: plate?.name ?? '',
+      prePressCost: breakdown.prePressCost,
+      inkLines: breakdown.inkLines,
+      inkSubtotal: breakdown.inkSubtotal,
+      pressLines: breakdown.pressLines,
+      pressSubtotal: breakdown.pressSubtotal,
+      guillotineLines: breakdown.guillotineLines,
+      guillotineSubtotal: breakdown.guillotineSubtotal,
+      finishingLines: breakdown.finishingLines,
+      finishingSubtotal: breakdown.finishingSubtotal,
+      despatchCost: breakdown.despatchCost,
+      despatchNotes: workTicketForm.despatchNotes,
+      totalCost: breakdown.totalCost,
+      marginPercent: breakdown.marginPercentApplied,
+      sellingPricePerUnit: breakdown.sellingPricePerUnit,
+      sellingPriceTotal: breakdown.sellingPriceTotal,
+      status: workTicketForm.status,
+      notes: workTicketForm.notes,
+      pricedFromMasters: true,
+    };
+
+    if (workTicketEditingId) {
+      setData((current) => ({
+        ...current,
+        workTickets: current.workTickets.map((t) =>
+          t.id === workTicketEditingId ? { ...t, ...payloadCommon } : t,
+        ),
+      }));
+    } else {
+      const ticketNumber = generateCode('WT', data.workTickets.map((t) => t.ticketNumber), workTicketForm.ticketDate);
+      const newTicket: WorkTicket = {
+        id: ticketNumber,
+        ticketNumber,
+        createdAt: new Date().toISOString(),
+        ...payloadCommon,
+      };
+      setData((current) => ({ ...current, workTickets: [newTicket, ...current.workTickets] }));
+    }
+    resetWorkTicketEditor();
+    setWorkTicketMessage('Saved.');
   }
 
   function handleSaveClient() {
@@ -3525,6 +5128,24 @@ function App() {
       products: current.products.filter((item) => item.id !== product.id),
     }));
 
+    // Deletes don't fire any DB trigger (the row is already gone), so we
+    // explicitly record the audit event here. This keeps the History drawer
+    // truthful — every destructive op leaves a trace.
+    void recordAuditEvent({
+      sourceTable: 'products',
+      sourceRecordId: product.id,
+      eventCategory: 'product',
+      eventType: 'product_deleted',
+      action: 'deleted',
+      summary: `Product ${product.name} deleted`,
+      actorName: profile?.fullName || profile?.email || 'Unknown user',
+      details: {
+        productSku: product.sku,
+        productName: product.name,
+        category: product.category,
+      },
+    });
+
     if (productEditingId === product.id) {
       resetProductEditor();
     } else {
@@ -3567,6 +5188,8 @@ function App() {
             supplierBatchNumber: materialForm.supplierBatchNumber,
             internalRollCode: materialForm.internalRollCode,
             barcode: materialForm.barcode.trim() || materialForm.internalRollCode,
+            materialKind: materialForm.materialKind || 'Paper',
+            itemName: materialForm.itemName,
             paperType: materialForm.paperType,
             gsm: materialForm.gsm,
             width: materialForm.width,
@@ -3594,6 +5217,8 @@ function App() {
         supplierName: linkedSupplier?.name ?? materialForm.supplierName,
         supplierBatchNumber: materialForm.supplierBatchNumber,
         internalRollCode: materialForm.internalRollCode,
+        materialKind: materialForm.materialKind || 'Paper',
+        itemName: materialForm.itemName,
         paperType: materialForm.paperType,
         gsm: materialForm.gsm,
         width: materialForm.width,
@@ -4040,6 +5665,13 @@ function App() {
       releasedBy: job.releasedBy,
       notes: job.notes,
       fscRelated: job.fscRelated,
+      foodContactLevel: job.foodContactLevel ?? 'NonFood',
+      foodSafeMaterialIds: job.foodSafeMaterialIds ?? [],
+      internalBatchNumber: job.internalBatchNumber ?? '',
+      foodSafetyNotes: job.foodSafetyNotes ?? '',
+      assignedMachineId: job.assignedMachineId ?? '',
+      changeoverChecklist: job.changeoverChecklist?.length === 9 ? job.changeoverChecklist : buildBlankChangeoverChecklist(),
+      qcPlan: job.qcPlan?.length === 4 ? job.qcPlan : buildBlankQcPlan(),
     });
     setView('jobs');
   }
@@ -4067,7 +5699,9 @@ function App() {
     setSpareEditingId(part.id);
     setSpareForm({
       partName: part.partName,
-      category: part.category,
+      category: (part.category as StockItemCategory) || 'Consumable',
+      itemType: part.itemType,
+      productionUse: part.productionUse,
       machineId: part.machineId,
       machineReference: part.machineReference,
       supplierId: part.supplierId,
@@ -4158,6 +5792,14 @@ function App() {
       releasedBy: job.releasedBy,
       notes: job.notes,
       fscRelated: job.fscRelated,
+      foodContactLevel: job.foodContactLevel ?? 'NonFood',
+      foodSafeMaterialIds: job.foodSafeMaterialIds ?? [],
+      internalBatchNumber: '',
+      foodSafetyNotes: job.foodSafetyNotes ?? '',
+      assignedMachineId: job.assignedMachineId ?? '',
+      // Fresh checklist + fresh QC plan — these are per-run, not per-product.
+      changeoverChecklist: buildBlankChangeoverChecklist(),
+      qcPlan: buildBlankQcPlan(),
     });
     setJobMessage('Duplicate loaded. Saving will create a new job number.');
     setView('jobs');
@@ -4215,6 +5857,8 @@ function App() {
       supplierBatchNumber: receipt.supplierBatchNumber,
       internalRollCode: receipt.internalRollCode,
       barcode: receipt.barcode,
+      materialKind: receipt.materialKind || 'Paper',
+      itemName: receipt.itemName || '',
       paperType: receipt.paperType,
       gsm: receipt.gsm,
       width: receipt.width,
@@ -4228,6 +5872,987 @@ function App() {
       fscRelated: receipt.fscRelated,
     });
     setView('materials');
+  }
+
+  function editChemical(entry: ChemicalRegisterEntry) {
+    setChemicalEditingId(entry.id);
+    setChemicalForm({
+      chemicalName: entry.chemicalName,
+      tradeName: entry.tradeName,
+      supplierId: entry.supplierId,
+      casNumber: entry.casNumber,
+      unNumber: entry.unNumber,
+      state: entry.state,
+      ghsPictograms: [...entry.ghsPictograms],
+      hazardStatements: entry.hazardStatements,
+      precautionaryStatements: entry.precautionaryStatements,
+      storageLocation: entry.storageLocation,
+      maxOnSiteQuantity: String(entry.maxOnSiteQuantity ?? ''),
+      currentOnSiteQuantity: String(entry.currentOnSiteQuantity ?? ''),
+      quantityUnit: entry.quantityUnit,
+      msdsDocumentUrl: entry.msdsDocumentUrl,
+      msdsLastReviewedDate: entry.msdsLastReviewedDate,
+      msdsReviewIntervalMonths: String(entry.msdsReviewIntervalMonths || 12),
+      emergencyProcedure: entry.emergencyProcedure,
+      requiredPPE: entry.requiredPPE,
+      fireSuppressionType: entry.fireSuppressionType,
+      notes: entry.notes,
+      archived: entry.archived,
+    });
+    setView('chemicalRegister');
+  }
+
+  function handleSaveChemical() {
+    if (!chemicalForm.chemicalName.trim()) {
+      setChemicalMessage('Chemical name is required.');
+      return;
+    }
+    if (!chemicalForm.supplierId) {
+      setChemicalMessage('Supplier is required.');
+      return;
+    }
+    const supplier = data.suppliers.find((s) => s.id === chemicalForm.supplierId);
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.chemicalRegisterEntries.map((e) => e.registerNumber);
+      const payload: Omit<ChemicalRegisterEntry, 'id' | 'registerNumber' | 'createdAt'> = {
+        chemicalName: chemicalForm.chemicalName.trim(),
+        tradeName: chemicalForm.tradeName.trim(),
+        supplierId: chemicalForm.supplierId,
+        supplierName: supplier?.name || '',
+        casNumber: chemicalForm.casNumber.trim(),
+        unNumber: chemicalForm.unNumber.trim(),
+        state: chemicalForm.state,
+        ghsPictograms: chemicalForm.ghsPictograms,
+        hazardStatements: chemicalForm.hazardStatements,
+        precautionaryStatements: chemicalForm.precautionaryStatements,
+        storageLocation: chemicalForm.storageLocation.trim(),
+        maxOnSiteQuantity: Number(chemicalForm.maxOnSiteQuantity || 0),
+        currentOnSiteQuantity: Number(chemicalForm.currentOnSiteQuantity || 0),
+        quantityUnit: chemicalForm.quantityUnit,
+        msdsDocumentUrl: chemicalForm.msdsDocumentUrl.trim(),
+        msdsLastReviewedDate: chemicalForm.msdsLastReviewedDate,
+        msdsReviewIntervalMonths: Number(chemicalForm.msdsReviewIntervalMonths || 12),
+        emergencyProcedure: chemicalForm.emergencyProcedure,
+        requiredPPE: chemicalForm.requiredPPE,
+        fireSuppressionType: chemicalForm.fireSuppressionType,
+        notes: chemicalForm.notes,
+        archived: chemicalForm.archived,
+      };
+      if (chemicalEditingId) {
+        return {
+          ...current,
+          chemicalRegisterEntries: current.chemicalRegisterEntries.map((e) =>
+            e.id === chemicalEditingId ? { ...e, ...payload } : e,
+          ),
+        };
+      }
+      const newId = `chem-${Date.now().toString(36)}`;
+      const registerNumber = generateCode('CHEM', existingNumbers, today);
+      const newEntry: ChemicalRegisterEntry = {
+        id: newId,
+        registerNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, chemicalRegisterEntries: [newEntry, ...current.chemicalRegisterEntries] };
+    });
+    setChemicalMessage(chemicalEditingId ? 'Chemical updated.' : 'Chemical added to register.');
+    resetChemicalEditor();
+  }
+
+  function handleArchiveChemicalToggle(entry: ChemicalRegisterEntry) {
+    setData((current) => ({
+      ...current,
+      chemicalRegisterEntries: current.chemicalRegisterEntries.map((e) =>
+        e.id === entry.id ? { ...e, archived: !e.archived } : e,
+      ),
+    }));
+  }
+
+  function editFoodSafeMaterial(m: FoodSafeMaterial) {
+    setFoodSafeMaterialEditingId(m.id);
+    setFoodSafeMaterialForm({
+      materialName: m.materialName,
+      category: m.category,
+      supplierId: m.supplierId,
+      supplierSku: m.supplierSku,
+      directContactApproved: m.directContactApproved,
+      indirectContactApproved: m.indirectContactApproved,
+      externalPrintOnly: m.externalPrintOnly,
+      foodSafeDeclarationUrl: m.foodSafeDeclarationUrl,
+      msdsUrl: m.msdsUrl,
+      certificateOfAnalysisUrl: m.certificateOfAnalysisUrl,
+      supplierBatchNumber: m.supplierBatchNumber,
+      internalBatchNumber: m.internalBatchNumber,
+      storageLocation: m.storageLocation,
+      status: m.status,
+      approvalDate: m.approvalDate,
+      reviewDate: m.reviewDate,
+      expiryDate: m.expiryDate,
+      notes: m.notes,
+    });
+    setView('foodSafeMaterials');
+  }
+
+  function handleSaveFoodSafeMaterial() {
+    if (!foodSafeMaterialForm.materialName.trim()) {
+      setFoodSafeMaterialMessage('Material name is required.');
+      return;
+    }
+    if (!foodSafeMaterialForm.supplierId) {
+      setFoodSafeMaterialMessage('Supplier is required.');
+      return;
+    }
+    const supplier = data.suppliers.find((s) => s.id === foodSafeMaterialForm.supplierId);
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.foodSafeMaterials.map((m) => m.materialNumber);
+      const internalBatch = foodSafeMaterialForm.internalBatchNumber.trim()
+        || generateCode('FSB', current.foodSafeMaterials.map((m) => m.internalBatchNumber).filter(Boolean), today);
+      const payload: Omit<FoodSafeMaterial, 'id' | 'materialNumber' | 'createdAt'> = {
+        materialName: foodSafeMaterialForm.materialName.trim(),
+        category: foodSafeMaterialForm.category,
+        supplierId: foodSafeMaterialForm.supplierId,
+        supplierName: supplier?.name || '',
+        supplierSku: foodSafeMaterialForm.supplierSku.trim(),
+        directContactApproved: foodSafeMaterialForm.directContactApproved,
+        indirectContactApproved: foodSafeMaterialForm.indirectContactApproved,
+        externalPrintOnly: foodSafeMaterialForm.externalPrintOnly,
+        foodSafeDeclarationUrl: foodSafeMaterialForm.foodSafeDeclarationUrl.trim(),
+        msdsUrl: foodSafeMaterialForm.msdsUrl.trim(),
+        certificateOfAnalysisUrl: foodSafeMaterialForm.certificateOfAnalysisUrl.trim(),
+        supplierBatchNumber: foodSafeMaterialForm.supplierBatchNumber.trim(),
+        internalBatchNumber: internalBatch,
+        storageLocation: foodSafeMaterialForm.storageLocation.trim(),
+        status: foodSafeMaterialForm.status,
+        approvalDate: foodSafeMaterialForm.approvalDate,
+        reviewDate: foodSafeMaterialForm.reviewDate,
+        expiryDate: foodSafeMaterialForm.expiryDate,
+        notes: foodSafeMaterialForm.notes,
+      };
+      if (foodSafeMaterialEditingId) {
+        return {
+          ...current,
+          foodSafeMaterials: current.foodSafeMaterials.map((m) =>
+            m.id === foodSafeMaterialEditingId ? { ...m, ...payload } : m,
+          ),
+        };
+      }
+      const newId = `fsm-${Date.now().toString(36)}`;
+      const materialNumber = generateCode('FSM', existingNumbers, today);
+      const newMaterial: FoodSafeMaterial = {
+        id: newId,
+        materialNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, foodSafeMaterials: [newMaterial, ...current.foodSafeMaterials] };
+    });
+    setFoodSafeMaterialMessage(foodSafeMaterialEditingId ? 'Material updated.' : 'Material added to the approved register.');
+    resetFoodSafeMaterialEditor();
+  }
+
+  function handleFoodSafeMaterialStatusChange(m: FoodSafeMaterial, status: FoodSafetyApprovalStatus) {
+    setData((current) => ({
+      ...current,
+      foodSafeMaterials: current.foodSafeMaterials.map((existing) =>
+        existing.id === m.id ? { ...existing, status } : existing,
+      ),
+    }));
+  }
+
+  function editCleaningLog(log: CleaningLogEntry) {
+    setCleaningLogEditingId(log.id);
+    setCleaningLogForm({
+      area: log.area,
+      areaDetail: log.areaDetail,
+      machineId: log.machineId,
+      cleaningType: log.cleaningType,
+      performedAt: log.performedAt,
+      performedByName: log.performedByName,
+      chemicalRegisterId: log.chemicalRegisterId,
+      chemicalName: log.chemicalName,
+      result: log.result,
+      supervisorSignOffName: log.supervisorSignOffName,
+      supervisorSignOffAt: log.supervisorSignOffAt,
+      correctiveAction: log.correctiveAction,
+      beforePhotoUrl: log.beforePhotoUrl,
+      afterPhotoUrl: log.afterPhotoUrl,
+      notes: log.notes,
+    });
+    setView('cleaningLogs');
+  }
+
+  function handleSaveCleaningLog() {
+    if (!cleaningLogForm.performedAt) {
+      setCleaningLogMessage('Performed at datetime is required.');
+      return;
+    }
+    if (!cleaningLogForm.performedByName.trim()) {
+      setCleaningLogMessage('Performed by name is required.');
+      return;
+    }
+    if (cleaningLogForm.result === 'Fail' && !cleaningLogForm.correctiveAction.trim()) {
+      setCleaningLogMessage('A Fail result needs a corrective action.');
+      return;
+    }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.cleaningLogs.map((l) => l.logNumber);
+      const payload: Omit<CleaningLogEntry, 'id' | 'logNumber' | 'createdAt'> = {
+        area: cleaningLogForm.area,
+        areaDetail: cleaningLogForm.areaDetail.trim(),
+        machineId: cleaningLogForm.machineId,
+        cleaningType: cleaningLogForm.cleaningType,
+        performedAt: cleaningLogForm.performedAt,
+        performedByName: cleaningLogForm.performedByName.trim(),
+        chemicalRegisterId: cleaningLogForm.chemicalRegisterId,
+        chemicalName: cleaningLogForm.chemicalName.trim(),
+        result: cleaningLogForm.result,
+        supervisorSignOffName: cleaningLogForm.supervisorSignOffName.trim(),
+        supervisorSignOffAt: cleaningLogForm.supervisorSignOffAt,
+        correctiveAction: cleaningLogForm.correctiveAction,
+        beforePhotoUrl: cleaningLogForm.beforePhotoUrl.trim(),
+        afterPhotoUrl: cleaningLogForm.afterPhotoUrl.trim(),
+        notes: cleaningLogForm.notes,
+      };
+      if (cleaningLogEditingId) {
+        return {
+          ...current,
+          cleaningLogs: current.cleaningLogs.map((l) => l.id === cleaningLogEditingId ? { ...l, ...payload } : l),
+        };
+      }
+      const newId = `cln-${Date.now().toString(36)}`;
+      const logNumber = generateCode('CLN', existingNumbers, today);
+      const newLog: CleaningLogEntry = {
+        id: newId,
+        logNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, cleaningLogs: [newLog, ...current.cleaningLogs] };
+    });
+    setCleaningLogMessage(cleaningLogEditingId ? 'Cleaning log updated.' : 'Cleaning log saved.');
+    resetCleaningLogEditor();
+  }
+
+  /**
+   * Set the food-safety hold status on a finished-goods batch. Only roles in
+   * FOOD_SAFETY_RELEASE_ROLES (admin / ops) can move a batch to Released or
+   * Dispatched. Anyone can mark a batch as On Hold / Rejected / Reworked.
+   */
+  function editComplaint(c: CustomerComplaint) {
+    setComplaintEditingId(c.id);
+    setComplaintForm({
+      complaintDate: c.complaintDate,
+      clientId: c.clientId,
+      reportedByName: c.reportedByName,
+      reportedByContact: c.reportedByContact,
+      productId: c.productId,
+      finishedGoodsStockId: c.finishedGoodsStockId,
+      jobId: c.jobId,
+      deliveryNoteId: c.deliveryNoteId,
+      invoiceId: c.invoiceId,
+      complaintType: c.complaintType,
+      severity: c.severity,
+      description: c.description,
+      quantityAffected: String(c.quantityAffected ?? ''),
+      quantityUnit: c.quantityUnit,
+      quantityWithCustomer: String(c.quantityWithCustomer ?? ''),
+      quantityInternalStock: String(c.quantityInternalStock ?? ''),
+      photoUrls: [...c.photoUrls],
+      status: c.status,
+      investigationNotes: c.investigationNotes,
+      rootCauseAnalysis: c.rootCauseAnalysis,
+      immediateAction: c.immediateAction,
+      correctiveAction: c.correctiveAction,
+      preventiveAction: c.preventiveAction,
+      outcome: c.outcome,
+      outcomeNotes: c.outcomeNotes,
+      closedByName: c.closedByName,
+      recallTriggered: c.recallTriggered,
+      recallScope: c.recallScope,
+    });
+    setView('complaints');
+  }
+
+  function handleSaveComplaint() {
+    if (!complaintForm.complaintDate) {
+      setComplaintMessage('Complaint date is required.');
+      return;
+    }
+    if (!complaintForm.clientId) {
+      setComplaintMessage('Client is required.');
+      return;
+    }
+    if (!complaintForm.description.trim()) {
+      setComplaintMessage('Description is required.');
+      return;
+    }
+    const client = data.clients.find((c) => c.id === complaintForm.clientId);
+    const product = complaintForm.productId ? data.products.find((p) => p.id === complaintForm.productId) : undefined;
+    const fg = complaintForm.finishedGoodsStockId ? data.finishedGoodsStock.find((f) => f.id === complaintForm.finishedGoodsStockId) : undefined;
+    const job = complaintForm.jobId ? data.jobs.find((j) => j.id === complaintForm.jobId) : undefined;
+    const dn = complaintForm.deliveryNoteId ? data.deliveryNotes.find((d) => d.id === complaintForm.deliveryNoteId) : undefined;
+    const inv = complaintForm.invoiceId ? data.invoices.find((i) => i.id === complaintForm.invoiceId) : undefined;
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.customerComplaints.map((c) => c.complaintNumber);
+      // Auto-elevate status to Recall Triggered when the recall flag is on.
+      const finalStatus: ComplaintStatus = complaintForm.recallTriggered ? 'Recall Triggered' : complaintForm.status;
+      // Auto-stamp closure if closed-by-name is set and status is Closed/Resolved.
+      const closedAt = (finalStatus === 'Closed' || finalStatus === 'Resolved') && complaintForm.closedByName.trim()
+        ? new Date().toISOString()
+        : '';
+      const payload: Omit<CustomerComplaint, 'id' | 'complaintNumber' | 'createdAt'> = {
+        complaintDate: complaintForm.complaintDate,
+        clientId: complaintForm.clientId,
+        clientName: client?.name || '',
+        reportedByName: complaintForm.reportedByName.trim(),
+        reportedByContact: complaintForm.reportedByContact.trim(),
+        productId: complaintForm.productId,
+        productName: product?.name || '',
+        finishedGoodsStockId: complaintForm.finishedGoodsStockId,
+        finishedGoodsStockNumber: fg?.stockNumber || '',
+        jobId: complaintForm.jobId || (fg?.jobId ?? ''),
+        jobNumber: job?.jobNumber || fg?.jobNumber || '',
+        internalBatchNumber: job?.internalBatchNumber || '',
+        deliveryNoteId: complaintForm.deliveryNoteId,
+        deliveryNoteNumber: dn?.deliveryNoteNumber || '',
+        invoiceId: complaintForm.invoiceId,
+        invoiceNumber: inv?.invoiceNumber || '',
+        complaintType: complaintForm.complaintType,
+        severity: complaintForm.severity,
+        description: complaintForm.description.trim(),
+        quantityAffected: Number(complaintForm.quantityAffected || 0),
+        quantityUnit: complaintForm.quantityUnit,
+        quantityWithCustomer: Number(complaintForm.quantityWithCustomer || 0),
+        quantityInternalStock: Number(complaintForm.quantityInternalStock || 0),
+        photoUrls: complaintForm.photoUrls,
+        status: finalStatus,
+        investigationNotes: complaintForm.investigationNotes,
+        rootCauseAnalysis: complaintForm.rootCauseAnalysis,
+        immediateAction: complaintForm.immediateAction,
+        correctiveAction: complaintForm.correctiveAction,
+        preventiveAction: complaintForm.preventiveAction,
+        outcome: complaintForm.outcome,
+        outcomeNotes: complaintForm.outcomeNotes,
+        closedByName: complaintForm.closedByName.trim(),
+        closedAt,
+        recallTriggered: complaintForm.recallTriggered,
+        recallScope: complaintForm.recallScope,
+      };
+      if (complaintEditingId) {
+        return {
+          ...current,
+          customerComplaints: current.customerComplaints.map((c) =>
+            c.id === complaintEditingId ? { ...c, ...payload } : c,
+          ),
+        };
+      }
+      const newId = `cmp-${Date.now().toString(36)}`;
+      const complaintNumber = generateCode('CMP', existingNumbers, today);
+      const newComplaint: CustomerComplaint = {
+        id: newId,
+        complaintNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, customerComplaints: [newComplaint, ...current.customerComplaints] };
+    });
+    setComplaintMessage(complaintEditingId ? 'Complaint updated.' : 'Complaint logged.');
+    resetComplaintEditor();
+  }
+
+  function editHaccpHazard(h: HaccpHazard) {
+    setHaccpEditingId(h.id);
+    setHaccpForm({
+      processStep: h.processStep,
+      hazardType: h.hazardType,
+      hazardName: h.hazardName,
+      description: h.description,
+      likelihood: String(h.likelihood),
+      severity: String(h.severity),
+      controlMeasure: h.controlMeasure,
+      isCCP: h.isCCP,
+      monitoringMethod: h.monitoringMethod,
+      monitoringFrequency: h.monitoringFrequency,
+      criticalLimits: h.criticalLimits,
+      correctiveAction: h.correctiveAction,
+      verificationMethod: h.verificationMethod,
+      responsiblePerson: h.responsiblePerson,
+      reviewIntervalMonths: String(h.reviewIntervalMonths),
+      lastReviewedDate: h.lastReviewedDate,
+      notes: h.notes,
+    });
+    setView('haccpRegister');
+  }
+
+  function handleSaveHaccpHazard() {
+    if (!haccpForm.hazardName.trim()) {
+      setHaccpMessage('Hazard name is required.');
+      return;
+    }
+    if (!haccpForm.controlMeasure.trim()) {
+      setHaccpMessage('Control measure is required.');
+      return;
+    }
+    const likelihood = Number(haccpForm.likelihood || 0);
+    const severity = Number(haccpForm.severity || 0);
+    const riskLevel = computeHaccpRiskLevel(likelihood, severity);
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.haccpHazards.map((h) => h.hazardNumber);
+      const payload: Omit<HaccpHazard, 'id' | 'hazardNumber' | 'createdAt'> = {
+        processStep: haccpForm.processStep,
+        hazardType: haccpForm.hazardType,
+        hazardName: haccpForm.hazardName.trim(),
+        description: haccpForm.description,
+        likelihood,
+        severity,
+        riskLevel,
+        controlMeasure: haccpForm.controlMeasure,
+        isCCP: haccpForm.isCCP,
+        monitoringMethod: haccpForm.monitoringMethod,
+        monitoringFrequency: haccpForm.monitoringFrequency,
+        criticalLimits: haccpForm.criticalLimits,
+        correctiveAction: haccpForm.correctiveAction,
+        verificationMethod: haccpForm.verificationMethod,
+        responsiblePerson: haccpForm.responsiblePerson.trim(),
+        reviewIntervalMonths: Number(haccpForm.reviewIntervalMonths || 12),
+        lastReviewedDate: haccpForm.lastReviewedDate,
+        notes: haccpForm.notes,
+      };
+      if (haccpEditingId) {
+        return {
+          ...current,
+          haccpHazards: current.haccpHazards.map((h) =>
+            h.id === haccpEditingId ? { ...h, ...payload } : h,
+          ),
+        };
+      }
+      const newId = `haz-${Date.now().toString(36)}`;
+      const hazardNumber = generateCode('HAZ', existingNumbers, today);
+      const newHazard: HaccpHazard = {
+        id: newId,
+        hazardNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, haccpHazards: [newHazard, ...current.haccpHazards] };
+    });
+    setHaccpMessage(haccpEditingId ? 'Hazard updated.' : 'Hazard added to register.');
+    resetHaccpEditor();
+  }
+
+  function editNcr(n: NonConformance) {
+    setNcrEditingId(n.id);
+    setNcrForm({
+      issueDate: n.issueDate,
+      area: n.area,
+      areaDetail: n.areaDetail,
+      issueType: n.issueType,
+      severity: n.severity,
+      description: n.description,
+      jobId: n.jobId,
+      finishedGoodsStockId: n.finishedGoodsStockId,
+      cleaningLogId: n.cleaningLogId,
+      reportedByName: n.reportedByName,
+      immediateAction: n.immediateAction,
+      rootCauseAnalysis: n.rootCauseAnalysis,
+      correctiveAction: n.correctiveAction,
+      preventiveAction: n.preventiveAction,
+      responsiblePersonName: n.responsiblePersonName,
+      dueDate: n.dueDate,
+      evidencePhotoUrls: [...n.evidencePhotoUrls],
+      status: n.status,
+      verifiedByName: n.verifiedByName,
+      closedByName: n.closedByName,
+      closureNotes: n.closureNotes,
+    });
+    setView('nonConformance');
+  }
+
+  function handleSaveNcr() {
+    if (!ncrForm.issueDate) {
+      setNcrMessage('Issue date is required.');
+      return;
+    }
+    if (!ncrForm.description.trim()) {
+      setNcrMessage('Description is required.');
+      return;
+    }
+    if (!ncrForm.reportedByName.trim()) {
+      setNcrMessage('Reported-by name is required.');
+      return;
+    }
+    const job = ncrForm.jobId ? data.jobs.find((j) => j.id === ncrForm.jobId) : undefined;
+    const fg = ncrForm.finishedGoodsStockId ? data.finishedGoodsStock.find((f) => f.id === ncrForm.finishedGoodsStockId) : undefined;
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.nonConformances.map((n) => n.ncrNumber);
+      // Auto-stamp closure timestamp if status is Closed and closedByName is set.
+      const closedAt = ncrForm.status === 'Closed' && ncrForm.closedByName.trim()
+        ? new Date().toISOString()
+        : '';
+      const verifiedAt = ncrForm.verifiedByName.trim() ? new Date().toISOString() : '';
+      const payload: Omit<NonConformance, 'id' | 'ncrNumber' | 'createdAt'> = {
+        issueDate: ncrForm.issueDate,
+        area: ncrForm.area,
+        areaDetail: ncrForm.areaDetail.trim(),
+        issueType: ncrForm.issueType,
+        severity: ncrForm.severity,
+        description: ncrForm.description.trim(),
+        jobId: ncrForm.jobId,
+        jobNumber: job?.jobNumber || '',
+        internalBatchNumber: job?.internalBatchNumber || '',
+        finishedGoodsStockId: ncrForm.finishedGoodsStockId,
+        finishedGoodsStockNumber: fg?.stockNumber || '',
+        cleaningLogId: ncrForm.cleaningLogId,
+        reportedByName: ncrForm.reportedByName.trim(),
+        immediateAction: ncrForm.immediateAction,
+        rootCauseAnalysis: ncrForm.rootCauseAnalysis,
+        correctiveAction: ncrForm.correctiveAction,
+        preventiveAction: ncrForm.preventiveAction,
+        responsiblePersonName: ncrForm.responsiblePersonName.trim(),
+        dueDate: ncrForm.dueDate,
+        evidencePhotoUrls: ncrForm.evidencePhotoUrls,
+        status: ncrForm.status,
+        verifiedByName: ncrForm.verifiedByName.trim(),
+        verifiedAt,
+        closedByName: ncrForm.closedByName.trim(),
+        closedAt,
+        closureNotes: ncrForm.closureNotes,
+      };
+      if (ncrEditingId) {
+        return {
+          ...current,
+          nonConformances: current.nonConformances.map((n) => n.id === ncrEditingId ? { ...n, ...payload } : n),
+        };
+      }
+      const newId = `ncr-${Date.now().toString(36)}`;
+      const ncrNumber = generateCode('NCR', existingNumbers, today);
+      const newNcr: NonConformance = {
+        id: newId,
+        ncrNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, nonConformances: [newNcr, ...current.nonConformances] };
+    });
+    setNcrMessage(ncrEditingId ? 'NCR updated.' : 'NCR logged.');
+    resetNcrEditor();
+  }
+
+  // ----- Phase 4: Staff training -----
+  function editTraining(r: StaffTrainingRecord) {
+    setTrainingEditingId(r.id);
+    setTrainingForm({
+      staffName: r.staffName, staffRole: r.staffRole, topic: r.topic,
+      trainingDate: r.trainingDate, trainerName: r.trainerName, method: r.method,
+      acknowledged: r.acknowledged, acknowledgedDate: r.acknowledgedDate,
+      refresherIntervalMonths: String(r.refresherIntervalMonths),
+      certificateUrl: r.certificateUrl, notes: r.notes,
+    });
+    setView('staffTraining');
+  }
+  function handleSaveTraining() {
+    if (!trainingForm.staffName.trim()) { setTrainingMessage('Staff name is required.'); return; }
+    if (!trainingForm.trainingDate) { setTrainingMessage('Training date is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.staffTrainingRecords.map((r) => r.recordNumber);
+      const interval = Number(trainingForm.refresherIntervalMonths || 12);
+      const nextRefresher = trainingForm.trainingDate
+        ? new Date(new Date(trainingForm.trainingDate).getTime() + interval * 30 * 86400000).toISOString().slice(0, 10)
+        : '';
+      const payload: Omit<StaffTrainingRecord, 'id' | 'recordNumber' | 'createdAt'> = {
+        staffName: trainingForm.staffName.trim(),
+        staffRole: trainingForm.staffRole.trim(),
+        topic: trainingForm.topic,
+        trainingDate: trainingForm.trainingDate,
+        trainerName: trainingForm.trainerName.trim(),
+        method: trainingForm.method.trim(),
+        acknowledged: trainingForm.acknowledged,
+        acknowledgedDate: trainingForm.acknowledgedDate,
+        refresherIntervalMonths: interval,
+        nextRefresherDate: nextRefresher,
+        certificateUrl: trainingForm.certificateUrl.trim(),
+        notes: trainingForm.notes,
+      };
+      if (trainingEditingId) {
+        return { ...current, staffTrainingRecords: current.staffTrainingRecords.map((r) => r.id === trainingEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: StaffTrainingRecord = {
+        id: `trn-${Date.now().toString(36)}`,
+        recordNumber: generateCode('TRN', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, staffTrainingRecords: [newRec, ...current.staffTrainingRecords] };
+    });
+    setTrainingMessage(trainingEditingId ? 'Training record updated.' : 'Training logged.');
+    resetTrainingEditor();
+  }
+
+  // ----- Phase 4: PPE issue -----
+  function editPpe(r: PpeIssueRecord) {
+    setPpeEditingId(r.id);
+    setPpeForm({
+      staffName: r.staffName, staffRole: r.staffRole, itemType: r.itemType,
+      itemDescription: r.itemDescription, quantity: String(r.quantity),
+      issuedByName: r.issuedByName, issuedDate: r.issuedDate, status: r.status,
+      returnDate: r.returnDate, replacementDueDate: r.replacementDueDate, notes: r.notes,
+    });
+    setView('ppeControl');
+  }
+  function handleSavePpe() {
+    if (!ppeForm.staffName.trim()) { setPpeMessage('Staff name is required.'); return; }
+    if (!ppeForm.issuedDate) { setPpeMessage('Issue date is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.ppeIssueRecords.map((r) => r.issueNumber);
+      const payload: Omit<PpeIssueRecord, 'id' | 'issueNumber' | 'createdAt'> = {
+        staffName: ppeForm.staffName.trim(),
+        staffRole: ppeForm.staffRole.trim(),
+        itemType: ppeForm.itemType,
+        itemDescription: ppeForm.itemDescription.trim(),
+        quantity: Number(ppeForm.quantity || 1),
+        issuedByName: ppeForm.issuedByName.trim(),
+        issuedDate: ppeForm.issuedDate,
+        status: ppeForm.status,
+        returnDate: ppeForm.returnDate,
+        replacementDueDate: ppeForm.replacementDueDate,
+        notes: ppeForm.notes,
+      };
+      if (ppeEditingId) {
+        return { ...current, ppeIssueRecords: current.ppeIssueRecords.map((r) => r.id === ppeEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: PpeIssueRecord = {
+        id: `ppe-${Date.now().toString(36)}`,
+        issueNumber: generateCode('PPE', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, ppeIssueRecords: [newRec, ...current.ppeIssueRecords] };
+    });
+    setPpeMessage(ppeEditingId ? 'PPE record updated.' : 'PPE record saved.');
+    resetPpeEditor();
+  }
+
+  // ----- Phase 4: Pest control -----
+  function editPest(r: PestControlRecord) {
+    setPestEditingId(r.id);
+    setPestForm({
+      serviceDate: r.serviceDate, providerName: r.providerName, technicianName: r.technicianName,
+      nextServiceDate: r.nextServiceDate, activityType: r.activityType, pestType: r.pestType,
+      findings: r.findings, correctiveActions: r.correctiveActions,
+      productAffected: r.productAffected, stockOnHold: r.stockOnHold,
+      reportUrls: [...r.reportUrls], baitStationMapUrl: r.baitStationMapUrl, notes: r.notes,
+    });
+    setView('pestControl');
+  }
+  function handleSavePest() {
+    if (!pestForm.serviceDate) { setPestMessage('Service date is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.pestControlRecords.map((r) => r.recordNumber);
+      const payload: Omit<PestControlRecord, 'id' | 'recordNumber' | 'createdAt'> = {
+        serviceDate: pestForm.serviceDate,
+        providerName: pestForm.providerName.trim(),
+        technicianName: pestForm.technicianName.trim(),
+        nextServiceDate: pestForm.nextServiceDate,
+        activityType: pestForm.activityType,
+        pestType: pestForm.pestType,
+        findings: pestForm.findings,
+        correctiveActions: pestForm.correctiveActions,
+        productAffected: pestForm.productAffected,
+        stockOnHold: pestForm.stockOnHold,
+        reportUrls: pestForm.reportUrls,
+        baitStationMapUrl: pestForm.baitStationMapUrl.trim(),
+        notes: pestForm.notes,
+      };
+      if (pestEditingId) {
+        return { ...current, pestControlRecords: current.pestControlRecords.map((r) => r.id === pestEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: PestControlRecord = {
+        id: `pest-${Date.now().toString(36)}`,
+        recordNumber: generateCode('PEST', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, pestControlRecords: [newRec, ...current.pestControlRecords] };
+    });
+    setPestMessage(pestEditingId ? 'Pest entry updated.' : 'Pest entry logged.');
+    resetPestEditor();
+  }
+
+  // ----- Phase 4: Foreign object -----
+  function editForeignObject(r: ForeignObjectRecord) {
+    setForeignObjectEditingId(r.id);
+    setForeignObjectForm({
+      area: r.area, material: r.material, description: r.description,
+      recordType: r.recordType, inspectionDate: r.inspectionDate,
+      inspectedByName: r.inspectedByName, status: r.status,
+      controlMeasure: r.controlMeasure, linkedNcrId: r.linkedNcrId,
+      photoUrls: [...r.photoUrls], notes: r.notes,
+    });
+    setView('foreignObjectControl');
+  }
+  function handleSaveForeignObject() {
+    if (!foreignObjectForm.description.trim()) { setForeignObjectMessage('Description is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.foreignObjectRecords.map((r) => r.recordNumber);
+      const payload: Omit<ForeignObjectRecord, 'id' | 'recordNumber' | 'createdAt'> = {
+        area: foreignObjectForm.area,
+        material: foreignObjectForm.material,
+        description: foreignObjectForm.description.trim(),
+        recordType: foreignObjectForm.recordType,
+        inspectionDate: foreignObjectForm.inspectionDate,
+        inspectedByName: foreignObjectForm.inspectedByName.trim(),
+        status: foreignObjectForm.status,
+        controlMeasure: foreignObjectForm.controlMeasure,
+        linkedNcrId: foreignObjectForm.linkedNcrId,
+        photoUrls: foreignObjectForm.photoUrls,
+        notes: foreignObjectForm.notes,
+      };
+      if (foreignObjectEditingId) {
+        return { ...current, foreignObjectRecords: current.foreignObjectRecords.map((r) => r.id === foreignObjectEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: ForeignObjectRecord = {
+        id: `for-${Date.now().toString(36)}`,
+        recordNumber: generateCode('FOR', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, foreignObjectRecords: [newRec, ...current.foreignObjectRecords] };
+    });
+    setForeignObjectMessage(foreignObjectEditingId ? 'FO record updated.' : 'FO record saved.');
+    resetForeignObjectEditor();
+  }
+
+  // ----- Phase 4: Tool / blade -----
+  function editToolBlade(r: ToolBladeRecord) {
+    setToolBladeEditingId(r.id);
+    setToolBladeForm({
+      itemType: r.itemType, serialNumber: r.serialNumber, description: r.description,
+      homeLocation: r.homeLocation, currentHolderName: r.currentHolderName,
+      issuedToName: r.issuedToName, issuedDate: r.issuedDate,
+      expectedReturnDate: r.expectedReturnDate, returnedDate: r.returnedDate,
+      status: r.status, isCritical: r.isCritical, linkedNcrId: r.linkedNcrId, notes: r.notes,
+    });
+    setView('toolBladeControl');
+  }
+  function handleSaveToolBlade() {
+    if (!toolBladeForm.serialNumber.trim()) { setToolBladeMessage('Serial number is required.'); return; }
+    if (!toolBladeForm.description.trim()) { setToolBladeMessage('Description is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.toolBladeRecords.map((r) => r.recordNumber);
+      const payload: Omit<ToolBladeRecord, 'id' | 'recordNumber' | 'createdAt'> = {
+        itemType: toolBladeForm.itemType,
+        serialNumber: toolBladeForm.serialNumber.trim(),
+        description: toolBladeForm.description.trim(),
+        homeLocation: toolBladeForm.homeLocation.trim(),
+        currentHolderName: toolBladeForm.currentHolderName.trim(),
+        issuedToName: toolBladeForm.issuedToName.trim(),
+        issuedDate: toolBladeForm.issuedDate,
+        expectedReturnDate: toolBladeForm.expectedReturnDate,
+        returnedDate: toolBladeForm.returnedDate,
+        status: toolBladeForm.status,
+        isCritical: toolBladeForm.isCritical,
+        linkedNcrId: toolBladeForm.linkedNcrId,
+        notes: toolBladeForm.notes,
+      };
+      if (toolBladeEditingId) {
+        return { ...current, toolBladeRecords: current.toolBladeRecords.map((r) => r.id === toolBladeEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: ToolBladeRecord = {
+        id: `tlb-${Date.now().toString(36)}`,
+        recordNumber: generateCode('TLB', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, toolBladeRecords: [newRec, ...current.toolBladeRecords] };
+    });
+    setToolBladeMessage(toolBladeEditingId ? 'Tool record updated.' : 'Tool record saved.');
+    resetToolBladeEditor();
+  }
+
+  // ----- Phase 4: Visitor log -----
+  function editVisitor(r: VisitorLogEntry) {
+    setVisitorEditingId(r.id);
+    setVisitorForm({
+      visitDate: r.visitDate, visitorName: r.visitorName, visitorType: r.visitorType,
+      company: r.company, hostName: r.hostName, purpose: r.purpose,
+      areasVisited: [...r.areasVisited], timeIn: r.timeIn, timeOut: r.timeOut,
+      hygieneAcknowledged: r.hygieneAcknowledged, ppeIssued: r.ppeIssued,
+      enteredFoodContactArea: r.enteredFoodContactArea, notes: r.notes,
+    });
+    setView('visitorLog');
+  }
+  function handleSaveVisitor() {
+    if (!visitorForm.visitDate) { setVisitorMessage('Visit date is required.'); return; }
+    if (!visitorForm.visitorName.trim()) { setVisitorMessage('Visitor name is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.visitorLogEntries.map((r) => r.visitNumber);
+      const payload: Omit<VisitorLogEntry, 'id' | 'visitNumber' | 'createdAt'> = {
+        visitDate: visitorForm.visitDate,
+        visitorName: visitorForm.visitorName.trim(),
+        visitorType: visitorForm.visitorType,
+        company: visitorForm.company.trim(),
+        hostName: visitorForm.hostName.trim(),
+        purpose: visitorForm.purpose,
+        areasVisited: visitorForm.areasVisited,
+        timeIn: visitorForm.timeIn,
+        timeOut: visitorForm.timeOut,
+        hygieneAcknowledged: visitorForm.hygieneAcknowledged,
+        ppeIssued: visitorForm.ppeIssued.trim(),
+        enteredFoodContactArea: visitorForm.enteredFoodContactArea,
+        notes: visitorForm.notes,
+      };
+      if (visitorEditingId) {
+        return { ...current, visitorLogEntries: current.visitorLogEntries.map((r) => r.id === visitorEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: VisitorLogEntry = {
+        id: `vis-${Date.now().toString(36)}`,
+        visitNumber: generateCode('VIS', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, visitorLogEntries: [newRec, ...current.visitorLogEntries] };
+    });
+    setVisitorMessage(visitorEditingId ? 'Visitor entry updated.' : 'Visitor logged.');
+    resetVisitorEditor();
+  }
+
+  // ----- Phase 5.6: SOPs -----
+  function editSop(d: SopDocument) {
+    setSopEditingId(d.id);
+    setSopForm({
+      title: d.title, category: d.category, version: d.version,
+      ownerName: d.ownerName, approvedByName: d.approvedByName, approvedDate: d.approvedDate,
+      reviewDate: d.reviewDate, documentUrl: d.documentUrl, summary: d.summary,
+      status: d.status, acknowledgements: [...d.acknowledgements],
+      supersedesId: d.supersedesId, notes: d.notes,
+    });
+    setView('sopRegister');
+  }
+  function handleSaveSop() {
+    if (!sopForm.title.trim()) { setSopMessage('Title is required.'); return; }
+    if (!sopForm.version.trim()) { setSopMessage('Version is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existingNumbers = current.sopDocuments.map((d) => d.documentNumber);
+      const payload: Omit<SopDocument, 'id' | 'documentNumber' | 'createdAt'> = {
+        title: sopForm.title.trim(),
+        category: sopForm.category,
+        version: sopForm.version.trim(),
+        ownerName: sopForm.ownerName.trim(),
+        approvedByName: sopForm.approvedByName.trim(),
+        approvedDate: sopForm.approvedDate,
+        reviewDate: sopForm.reviewDate,
+        documentUrl: sopForm.documentUrl.trim(),
+        summary: sopForm.summary,
+        status: sopForm.status,
+        acknowledgements: sopForm.acknowledgements.filter((a) => a.staffName.trim()),
+        supersedesId: sopForm.supersedesId,
+        notes: sopForm.notes,
+      };
+      let nextDocs = current.sopDocuments;
+      if (sopEditingId) {
+        nextDocs = nextDocs.map((d) => d.id === sopEditingId ? { ...d, ...payload } : d);
+      } else {
+        const newDoc: SopDocument = {
+          id: `sop-${Date.now().toString(36)}`,
+          documentNumber: generateCode('SOP', existingNumbers, today),
+          createdAt: new Date().toISOString(),
+          ...payload,
+        };
+        // If this new doc supersedes an existing one, mark the predecessor as Superseded.
+        if (newDoc.supersedesId) {
+          nextDocs = nextDocs.map((d) => d.id === newDoc.supersedesId ? { ...d, status: 'Superseded' as const } : d);
+        }
+        nextDocs = [newDoc, ...nextDocs];
+      }
+      return { ...current, sopDocuments: nextDocs };
+    });
+    setSopMessage(sopEditingId ? 'SOP updated.' : 'SOP saved.');
+    resetSopEditor();
+  }
+  function handleCreateNewSopVersion(predecessor: SopDocument) {
+    // Bump the version (semantic-ish: x.y → x.(y+1), or major bump if integer).
+    const parts = predecessor.version.split('.');
+    let nextVersion = predecessor.version + '.1';
+    if (parts.length >= 2) {
+      const minor = parseInt(parts[parts.length - 1], 10);
+      if (!Number.isNaN(minor)) {
+        parts[parts.length - 1] = String(minor + 1);
+        nextVersion = parts.join('.');
+      }
+    } else {
+      const major = parseInt(predecessor.version, 10);
+      nextVersion = Number.isNaN(major) ? predecessor.version + '.1' : `${major + 1}.0`;
+    }
+    setSopEditingId(null);
+    setSopForm({
+      title: predecessor.title,
+      category: predecessor.category,
+      version: nextVersion,
+      ownerName: predecessor.ownerName,
+      approvedByName: '',
+      approvedDate: '',
+      reviewDate: '',
+      documentUrl: predecessor.documentUrl,
+      summary: `Supersedes ${predecessor.documentNumber} (${predecessor.version}). Changes: `,
+      status: 'Draft',
+      acknowledgements: [],
+      supersedesId: predecessor.id,
+      notes: '',
+    });
+    setSopMessage(`Drafting new version of ${predecessor.documentNumber}. Save to mark the previous version as Superseded.`);
+    setView('sopRegister');
+  }
+
+  function handleOpenTraceabilityFromComplaint(c: CustomerComplaint) {
+    // Pick the most-specific identifier the complaint carries.
+    if (c.finishedGoodsStockNumber) {
+      setTraceabilitySeed({ type: 'finishedGoodsStock', query: c.finishedGoodsStockNumber });
+    } else if (c.internalBatchNumber) {
+      setTraceabilitySeed({ type: 'internalBatch', query: c.internalBatchNumber });
+    } else if (c.jobNumber) {
+      setTraceabilitySeed({ type: 'jobNumber', query: c.jobNumber });
+    } else if (c.clientName) {
+      setTraceabilitySeed({ type: 'customer', query: c.clientName });
+    }
+    setView('traceability');
+  }
+
+  function handleFoodSafetyHoldChange(stockId: string, nextStatus: FoodSafetyHoldStatus, reason?: string) {
+    const role = profile?.role ?? 'production';
+    if ((nextStatus === 'Released' || nextStatus === 'Dispatched') && !canUserReleaseFoodSafetyBatch(role)) {
+      return;
+    }
+    setData((current) => ({
+      ...current,
+      finishedGoodsStock: current.finishedGoodsStock.map((item) => {
+        if (item.id !== stockId) return item;
+        return {
+          ...item,
+          foodSafetyHoldStatus: nextStatus,
+          releasedByName: nextStatus === 'Released' || nextStatus === 'Dispatched'
+            ? (profile?.email || 'Unknown')
+            : item.releasedByName,
+          releasedAt: nextStatus === 'Released' || nextStatus === 'Dispatched'
+            ? new Date().toISOString()
+            : item.releasedAt,
+          holdReason: nextStatus === 'On Hold' ? (reason ?? item.holdReason) : item.holdReason,
+        };
+      }),
+    }));
   }
 
   function editTier(tier: PricingTier) {
@@ -4357,6 +6982,49 @@ function App() {
     setView('quotes');
   }
 
+  /**
+   * Promote a Quote to a new Job. Eliminates retyping by pre-filling the job
+   * form from the quote + the linked Product master. Auto-marks the quote as
+   * Won when the job is saved (handled in handleSaveJob's existing flow when
+   * `quoteId` is set on the form).
+   *
+   * UX: switches the view to 'jobs' with the form pre-populated. The user
+   * just confirms / tweaks dates and hits Save.
+   */
+  function handleConvertQuoteToJob(quote: QuoteEstimate) {
+    const product = data.products.find((p) => p.id === quote.productId);
+    const client = data.clients.find((c) => c.id === quote.clientId);
+    setJobEditingId(null);
+    setJobForm({
+      ...createInitialJobForm(),
+      jobDate: getToday(),
+      dueDate: quote.quoteDate || getToday(),
+      leadId: quote.linkedLeadId || '',
+      leadNumber: quote.linkedLeadNumber || '',
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      quickbooksEstimateNumber: quote.quickbooksEstimateNumber,
+      orderValue: String(quote.totalQuote),
+      clientId: quote.clientId,
+      pricingTierId: quote.pricingTierId,
+      productId: quote.productId,
+      productCategory: product?.category ?? 'Paper Bags',
+      customerName: client?.name ?? quote.clientName,
+      productName: quote.productName,
+      sizeSpec: quote.sizeSpec,
+      paperType: product?.defaultPaperType ?? '',
+      gsm: product?.defaultGsm ?? '',
+      printRequired: quote.printMethod !== 'Plain',
+      printMethod: quote.printMethod,
+      colorCount: String(quote.colors),
+      quantityPlanned: String(quote.quantity),
+      status: 'Draft',
+      notes: quote.notes,
+    });
+    setJobMessage(`Pre-filled from quote ${quote.quoteNumber}. Confirm dates + tier and save.`);
+    setView('jobs');
+  }
+
   function editLead(lead: Lead) {
     setLeadEditingId(lead.id);
     setLeadForm({
@@ -4375,6 +7043,10 @@ function App() {
       quickbooksEstimateNumber: lead.quickbooksEstimateNumber,
       linkedQuoteId: lead.linkedQuoteId,
       notes: lead.notes,
+      nextFollowUpDate: lead.nextFollowUpDate ?? '',
+      activities: lead.activities ? [...lead.activities] : [],
+      lostReason: lead.lostReason ?? '',
+      estimatedValue: String(lead.estimatedValue ?? ''),
     });
     setView('leads');
   }
@@ -4630,6 +7302,55 @@ function App() {
     setView('deliveryNotes');
   }
 
+  /**
+   * Promote a Job to a new Delivery Note. Pre-fills the delivery note form
+   * from the job's client, product and quantity. The user picks the dispatch
+   * record (filtered to this job by the existing form filter logic) and
+   * confirms recipient details.
+   *
+   * On save, downstream handler logic flips the job's `dispatchStatus` and
+   * `readyForDispatchDate` so the production board reflects the move.
+   */
+  function handleCreateDeliveryFromJob(job: JobCard) {
+    const client = data.clients.find((c) => c.id === job.clientId);
+    const deliveryAddress = client
+      ? [client.deliveryAddressLine1, client.deliveryAddressLine2, client.deliveryCity, client.deliveryState, client.deliveryPostalCode, client.deliveryCountry]
+          .filter(Boolean)
+          .join(', ')
+      : '';
+    setDeliveryNoteEditingId(null);
+    setDeliveryNoteForm({
+      ...createInitialDeliveryNoteForm(),
+      noteDate: getToday(),
+      clientId: job.clientId,
+      clientContactName: client?.contactName ?? '',
+      clientContactPhone: client?.phoneNumber ?? client?.mobileNumber ?? '',
+      clientEmail: client?.contactEmail ?? '',
+      clientAddress: deliveryAddress,
+      companyName: data.appSettings.company.name,
+      companyPhone: data.appSettings.company.phone,
+      companyEmail: data.appSettings.company.email,
+      companyAddress: `${data.appSettings.company.addressLine1}\n${data.appSettings.company.addressLine2}`,
+      jobId: job.id,
+      // Seed a single line item for this job. The user can append dispatch
+      // records on top via the form's existing picker.
+      lineItems: [
+        {
+          id: `dl-${Date.now().toString(36)}`,
+          productName: job.productName,
+          stockNumber: '',
+          description: job.description || job.sizeSpec || '',
+          quantity: Math.max(job.quantityCompleted || job.quantityPlanned, 0),
+          quantityUnit: 'units' as const,
+          dispatchRecordId: '',
+          customerStockReleaseId: '',
+        },
+      ],
+    });
+    setDeliveryNoteMessage(`Pre-filled from job ${job.jobNumber}. Confirm recipient details and save.`);
+    setView('deliveryNotes');
+  }
+
   function editInvoice(invoice: Invoice) {
     setInvoiceEditingId(invoice.id);
     setInvoiceForm({
@@ -4669,6 +7390,72 @@ function App() {
       stockHoldingMaxDays: String(invoice.stockHoldingMaxDays ?? ''),
       clientVisible: invoice.clientVisible,
     });
+    setView('invoices');
+  }
+
+  /**
+   * Promote a Job directly to an Invoice (skip the delivery note step). Used
+   * when the client is direct-billed: invoice goes out, then dispatch follows.
+   * Pre-fills the invoice form with one line item from the job.
+   */
+  function handleCreateInvoiceFromJob(job: JobCard) {
+    const linkedQuote = job.quoteId ? data.quoteEstimates.find((q) => q.id === job.quoteId) : undefined;
+    const unitPrice = linkedQuote?.quotedUnitPrice ?? (job.orderValue && job.quantityPlanned ? job.orderValue / job.quantityPlanned : 0);
+    setInvoiceEditingId(null);
+    setInvoiceForm({
+      ...createInitialInvoiceForm(),
+      invoiceDate: getToday(),
+      clientId: job.clientId,
+      jobId: job.id,
+      quoteId: job.quoteId || '',
+      customerReference: job.customerReference || '',
+      lineItems: [
+        {
+          id: `il-${Date.now().toString(36)}`,
+          productId: job.productId,
+          productName: job.productName,
+          description: job.description || job.sizeSpec || '',
+          quantity: String(job.quantityCompleted || job.quantityPlanned || ''),
+          quantityUnit: 'units' as const,
+          unitPriceExclVat: String(unitPrice || ''),
+          vatRatePercent: '15',
+        },
+      ],
+    });
+    setInvoiceMessage(`Pre-filled from job ${job.jobNumber}. Confirm pricing and save.`);
+    setView('invoices');
+  }
+
+  /**
+   * Promote a Delivery Note to an Invoice. Pre-fills the invoice with one
+   * line item per delivery line (qty + product), and seeds the link via
+   * `jobId` so the parent job is referenced.
+   */
+  function handleCreateInvoiceFromDeliveryNote(note: DeliveryNote) {
+    const linkedJob = note.jobId ? data.jobs.find((j) => j.id === note.jobId) : undefined;
+    const linkedQuote = linkedJob?.quoteId
+      ? data.quoteEstimates.find((q) => q.id === linkedJob.quoteId)
+      : undefined;
+    const unitPrice = linkedQuote?.quotedUnitPrice ?? 0;
+    setInvoiceEditingId(null);
+    setInvoiceForm({
+      ...createInitialInvoiceForm(),
+      invoiceDate: getToday(),
+      clientId: note.clientId,
+      jobId: note.jobId || '',
+      quoteId: linkedJob?.quoteId || '',
+      lineItems: note.lineItems.map((line, idx) => ({
+        id: `il-${Date.now().toString(36)}-${idx}`,
+        productId: '',
+        productName: line.productName,
+        description: line.description,
+        quantity: String(line.quantity || ''),
+        quantityUnit: line.quantityUnit,
+        unitPriceExclVat: String(unitPrice || ''),
+        vatRatePercent: '15',
+      })),
+    });
+    setInvoiceMessage(`Pre-filled from delivery note ${note.deliveryNoteNumber}. Confirm pricing and save.`);
     setView('invoices');
   }
 
@@ -4733,7 +7520,8 @@ function App() {
   }
 
   return (
-    authLoading ? (
+    <>
+    {authLoading ? (
       <div className="login-shell">
         <div className="login-card">
           <p className="muted">Loading access...</p>
@@ -4748,6 +7536,7 @@ function App() {
       navItems={navItems}
       profile={profile}
       onSignOut={handleSignOut}
+      topbarAction={topbarAction}
       topbarSummary={topbarSummary}
     >
       {loading && (
@@ -4782,6 +7571,13 @@ function App() {
           dashboardWasteByReason={dashboardWasteByReason}
           dashboardTopPaper={dashboardTopPaper}
           visibleWidgets={profile?.dashboardWidgets ?? []}
+          leads={data.leads}
+          onOpenLead={(id) => {
+            const lead = data.leads.find((l) => l.id === id);
+            if (lead) {
+              editLead(lead);
+            }
+          }}
         />
       )}
 
@@ -4814,6 +7610,8 @@ function App() {
           setLeadFilters={setLeadFilters}
           filteredLeads={filteredLeads}
           onEdit={editLead}
+          onQuickAdd={handleQuickAddLead}
+          onBulkReassign={handleBulkReassignLeads}
         />
       )}
 
@@ -4825,8 +7623,80 @@ function App() {
           pricingTiers={data.pricingTiers}
           paperRates={data.paperRates}
           costProfiles={data.costProfiles}
-          quoteForm={calculatorQuoteForm}
-          setQuoteForm={setCalculatorQuoteForm}
+          leads={data.leads}
+          state={calculatorState}
+          setState={setCalculatorState}
+          onSaveAsQuote={handleSaveCalculatorAsQuote}
+        />
+      )}
+
+      {view === 'workTicket' && (
+        <WorkTicketPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          products={data.products}
+          pricingTiers={data.pricingTiers}
+          paperRates={data.paperRates}
+          inkRates={data.inkRates}
+          finishingOperations={data.finishingOperations}
+          pressRates={data.pressRates}
+          plateCosts={data.plateCosts}
+          machines={data.machines}
+          workTickets={data.workTickets}
+          workTicketForm={workTicketForm}
+          setWorkTicketForm={setWorkTicketForm}
+          workTicketEditingId={workTicketEditingId}
+          workTicketMessage={workTicketMessage}
+          onSave={handleSaveWorkTicket}
+          onReset={resetWorkTicketEditor}
+          onPrint={(ticket) => setWorkTicketPrintTarget(ticket)}
+          workTicketFilters={workTicketFilters}
+          setWorkTicketFilters={setWorkTicketFilters}
+          filteredWorkTickets={filteredWorkTickets}
+          onEdit={editWorkTicket}
+        />
+      )}
+
+      {view === 'costMasters' && canManageCostInputs && (
+        <CostMastersPage
+          inkRates={data.inkRates}
+          finishingOperations={data.finishingOperations}
+          pressRates={data.pressRates}
+          plateCosts={data.plateCosts}
+          suppliers={data.suppliers}
+          machines={data.machines}
+          inkRateForm={inkRateForm}
+          setInkRateForm={setInkRateForm}
+          inkRateEditingId={inkRateEditingId}
+          inkRateMessage={inkRateMessage}
+          onSaveInkRate={handleSaveInkRate}
+          onResetInkRate={resetInkRateEditor}
+          onEditInkRate={editInkRate}
+          onDeleteInkRate={handleDeleteInkRate}
+          finishingForm={finishingForm}
+          setFinishingForm={setFinishingForm}
+          finishingEditingId={finishingEditingId}
+          finishingMessage={finishingMessage}
+          onSaveFinishing={handleSaveFinishingOp}
+          onResetFinishing={resetFinishingEditor}
+          onEditFinishing={editFinishingOp}
+          onDeleteFinishing={handleDeleteFinishingOp}
+          pressRateForm={pressRateForm}
+          setPressRateForm={setPressRateForm}
+          pressRateEditingId={pressRateEditingId}
+          pressRateMessage={pressRateMessage}
+          onSavePressRate={handleSavePressRate}
+          onResetPressRate={resetPressRateEditor}
+          onEditPressRate={editPressRate}
+          onDeletePressRate={handleDeletePressRate}
+          plateCostForm={plateCostForm}
+          setPlateCostForm={setPlateCostForm}
+          plateCostEditingId={plateCostEditingId}
+          plateCostMessage={plateCostMessage}
+          onSavePlateCost={handleSavePlateCost}
+          onResetPlateCost={resetPlateCostEditor}
+          onEditPlateCost={editPlateCost}
+          onDeletePlateCost={handleDeletePlateCost}
         />
       )}
 
@@ -4864,6 +7734,17 @@ function App() {
           loading={profilesLoading}
           onSave={saveProfile}
           onCreateUser={createUser}
+        />
+      )}
+
+      {view === 'settings' && allowedViews.has('settings') && (
+        <SettingsPage
+          settings={data.appSettings}
+          settingsForm={settingsForm}
+          setSettingsForm={setSettingsForm}
+          onSave={handleSaveSettings}
+          onReset={resetSettingsEditor}
+          saveMessage={settingsMessage}
         />
       )}
 
@@ -4920,6 +7801,8 @@ function App() {
           setQuoteFilters={setQuoteFilters}
           filteredQuotes={filteredQuoteEstimates}
           onEdit={editQuote}
+          onConvertToJob={handleConvertQuoteToJob}
+          onPrint={(quote) => setQuotePrintTarget(quote)}
         />
       )}
 
@@ -4980,6 +7863,8 @@ function App() {
           setDeliveryNoteFilters={setDeliveryNoteFilters}
           filteredDeliveryNotes={filteredDeliveryNotes}
           onEdit={editDeliveryNote}
+          onCreateInvoice={handleCreateInvoiceFromDeliveryNote}
+          onPrint={(note) => setDeliveryNotePrintTarget(note)}
         />
       )}
 
@@ -4992,6 +7877,7 @@ function App() {
           productionSpecs={data.productionSpecs}
           products={data.products}
           deliveryNotes={data.deliveryNotes}
+          settings={data.appSettings}
           invoiceForm={invoiceForm}
           setInvoiceForm={setInvoiceForm}
           invoiceEditingId={invoiceEditingId}
@@ -5002,6 +7888,7 @@ function App() {
           setInvoiceFilters={setInvoiceFilters}
           filteredInvoices={filteredInvoices}
           onEdit={editInvoice}
+          currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
         />
       )}
 
@@ -5010,6 +7897,7 @@ function App() {
           clients={data.clients}
           products={data.products}
           jobs={data.jobs}
+          settings={data.appSettings}
           productionSpecForm={productionSpecForm}
           setProductionSpecForm={setProductionSpecForm}
           productionSpecEditingId={productionSpecEditingId}
@@ -5054,6 +7942,16 @@ function App() {
           onQuickAddWaste={quickAddWaste}
           onQuickAddPaper={quickAddPaper}
           onQuickAddDispatch={quickAddDispatch}
+          onOpenHistory={openHistory}
+          userId={profile?.id || 'default'}
+          onCreateDelivery={handleCreateDeliveryFromJob}
+          onCreateInvoice={handleCreateInvoiceFromJob}
+          foodSafeMaterials={data.foodSafeMaterials}
+          machines={data.machines}
+          cleaningLogs={data.cleaningLogs}
+          onPrintFoodSafeCertificate={(job) => setFoodSafeCertificateJob(job)}
+          onPrintJobCard={(job) => setJobCardPrintTarget(job)}
+          currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
         />
       )}
 
@@ -5091,6 +7989,7 @@ function App() {
           setClientFilters={setClientFilters}
           filteredClients={filteredClients}
           onEdit={editClient}
+          currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
         />
       )}
 
@@ -5126,6 +8025,8 @@ function App() {
           stockChangeLogs={data.stockChangeLogs}
           onEdit={editFinishedStock}
           onDelete={handleDeleteCurrentFinishedStock}
+          onFoodSafetyHoldChange={handleFoodSafetyHoldChange}
+          canReleaseFoodSafetyBatches={canUserReleaseFoodSafetyBatch(profile?.role ?? 'production')}
         />
       )}
 
@@ -5133,6 +8034,7 @@ function App() {
         <SparePartsPage
           machines={data.machines}
           suppliers={data.suppliers}
+          jobs={data.jobs}
           spareForm={spareForm}
           setSpareForm={setSpareForm}
           spareEditingId={spareEditingId}
@@ -5143,6 +8045,25 @@ function App() {
           setSpareFilters={setSpareFilters}
           filteredSpares={filteredSpareParts}
           onEdit={editSparePart}
+          stockIssues={data.stockIssues}
+          filteredStockIssues={filteredStockIssues}
+          stockIssueForm={stockIssueForm}
+          setStockIssueForm={setStockIssueForm}
+          stockIssueMessage={stockIssueMessage}
+          stockIssueFilters={stockIssueFilters}
+          setStockIssueFilters={setStockIssueFilters}
+          onStartIssue={startStockIssue}
+          onSaveStockIssue={handleSaveStockIssue}
+          onCancelStockIssue={resetStockIssueForm}
+          onReturnTool={handleReturnTool}
+          stockCounts={data.stockCounts}
+          stockCountForm={stockCountForm}
+          setStockCountForm={setStockCountForm}
+          stockCountMessage={stockCountMessage}
+          onSaveStockCount={handleSaveStockCount}
+          onCancelStockCount={resetStockCountForm}
+          onReconcileStockCount={handleReconcileStockCount}
+          isAdmin={profile?.role === 'admin'}
         />
       )}
 
@@ -5168,6 +8089,379 @@ function App() {
           inventoryMovements={data.inventoryMovements}
           onInventoryScanAction={handleInventoryScanAction}
           onEdit={editMaterial}
+        />
+      )}
+
+      {view === 'chemicalRegister' && (
+        <ChemicalRegisterPage
+          entries={data.chemicalRegisterEntries}
+          suppliers={data.suppliers}
+          filters={chemicalFilters}
+          setFilters={setChemicalFilters}
+          form={chemicalForm}
+          setForm={setChemicalForm}
+          editingId={chemicalEditingId}
+          message={chemicalMessage}
+          onSave={handleSaveChemical}
+          onReset={resetChemicalEditor}
+          onEdit={editChemical}
+          onArchiveToggle={handleArchiveChemicalToggle}
+        />
+      )}
+
+      {view === 'foodSafeMaterials' && (
+        <FoodSafeMaterialsPage
+          materials={data.foodSafeMaterials}
+          suppliers={data.suppliers}
+          filters={foodSafeMaterialFilters}
+          setFilters={setFoodSafeMaterialFilters}
+          form={foodSafeMaterialForm}
+          setForm={setFoodSafeMaterialForm}
+          editingId={foodSafeMaterialEditingId}
+          message={foodSafeMaterialMessage}
+          onSave={handleSaveFoodSafeMaterial}
+          onReset={resetFoodSafeMaterialEditor}
+          onEdit={editFoodSafeMaterial}
+          onStatusChange={handleFoodSafeMaterialStatusChange}
+        />
+      )}
+
+      {view === 'agedDebtors' && (
+        <AgedDebtorsPage
+          invoices={data.invoices}
+          clients={data.clients}
+          onOpenInvoice={(id) => {
+            const invoice = data.invoices.find((inv) => inv.id === id);
+            if (invoice) {
+              editInvoice(invoice);
+            }
+          }}
+        />
+      )}
+
+      {view === 'productionSchedule' && (
+        <ProductionSchedulePage
+          jobs={data.jobs}
+          machines={data.machines}
+          onReschedule={handleRescheduleJob}
+          onOpenJob={(id) => {
+            const job = data.jobs.find((j) => j.id === id);
+            if (job) editJob(job);
+          }}
+        />
+      )}
+
+      {view === 'materialRequirements' && (
+        <MaterialRequirementsPage
+          jobs={data.jobs}
+          materialReceipts={data.materialReceipts}
+        />
+      )}
+
+      {view === 'cashFlow' && (
+        <CashFlowPage
+          invoices={data.invoices}
+          jobs={data.jobs}
+        />
+      )}
+
+      {view === 'morningDigest' && (
+        <MorningDigestPage data={data} company={data.appSettings.company} />
+      )}
+
+      {view === 'leadAnalytics' && (
+        <LeadAnalyticsPage leads={data.leads} />
+      )}
+
+      {view === 'reorderReminders' && (
+        <ReorderRemindersPage
+          finishedGoodsStock={data.finishedGoodsStock}
+          customerStockReleases={data.customerStockReleases}
+          clients={data.clients}
+          products={data.products}
+          onNavigate={(v) => setView(v)}
+        />
+      )}
+
+      {view === 'driverPod' && (
+        <DriverPodPage
+          dispatches={data.dispatchRecords}
+          proofOfDeliveries={data.proofOfDeliveries}
+          clients={data.clients}
+          profile={profile}
+          onPodCaptured={(pod: ProofOfDelivery) => {
+            setData((current) => ({
+              ...current,
+              proofOfDeliveries: [pod, ...current.proofOfDeliveries.filter((p) => p.id !== pod.id)],
+            }));
+            // Best-effort: try to sync immediately. If offline, the queue
+            // listener will pick it up when the device reconnects.
+            void flushPodQueue().then(({ synced, failed }) => {
+              if (synced.length === 0 && failed.length === 0) return;
+              setData((current) => {
+                const byId = new Map(current.proofOfDeliveries.map((p) => [p.id, p]));
+                for (const p of [...synced, ...failed]) byId.set(p.id, p);
+                return { ...current, proofOfDeliveries: Array.from(byId.values()) };
+              });
+            });
+          }}
+        />
+      )}
+
+      {view === 'invoiceInbox' && (
+        <InvoiceInboxPage
+          items={data.invoiceInboxItems}
+          suppliers={data.suppliers}
+          onSave={(item: InvoiceInboxItem) => {
+            setData((current) => {
+              const exists = current.invoiceInboxItems.some((it) => it.id === item.id);
+              return {
+                ...current,
+                invoiceInboxItems: exists
+                  ? current.invoiceInboxItems.map((it) => (it.id === item.id ? item : it))
+                  : [item, ...current.invoiceInboxItems],
+              };
+            });
+          }}
+          onRunOcr={async (item: InvoiceInboxItem): Promise<InvoiceExtraction> => {
+            return runOcrOnInboxItem(item);
+          }}
+          onUploadFile={(file, inboxItemId) => uploadInvoiceInboxFile(file, inboxItemId)}
+          onPostToMaterialReceipt={(item: InvoiceInboxItem) => {
+            // Pre-fill the materials receiving form with what we extracted,
+            // jump there. Marking the inbox item posted happens once the
+            // receipt is actually saved (out of scope for this stub).
+            const ex = item.extractedJson;
+            if (ex) {
+              setMaterialForm((prev) => ({
+                ...prev,
+                supplierId: ex.matchedSupplierId || prev.supplierId,
+                supplierName: ex.supplierGuess || prev.supplierName,
+                invoiceReference: ex.invoiceNumber || prev.invoiceReference,
+                receivedDate: ex.invoiceDate || prev.receivedDate,
+              }));
+            }
+            setView('materials');
+            setData((current) => ({
+              ...current,
+              invoiceInboxItems: current.invoiceInboxItems.map((it) =>
+                it.id === item.id
+                  ? { ...it, status: 'posted', postedAt: new Date().toISOString() }
+                  : it,
+              ),
+            }));
+          }}
+        />
+      )}
+
+      {view === 'salesPipeline' && (
+        <SalesPipelinePage
+          leads={data.leads}
+          quotes={data.quoteEstimates}
+          jobs={data.jobs}
+          invoices={data.invoices}
+          clients={data.clients}
+          onNavigate={(v) => setView(v)}
+        />
+      )}
+
+      {view === 'profitability' && (
+        <ProfitabilityPage
+          jobs={data.jobs}
+          workTickets={data.workTickets}
+          invoices={data.invoices}
+          quoteEstimates={data.quoteEstimates}
+          products={data.products}
+        />
+      )}
+
+      {view === 'foodSafetyControlCentre' && (
+        <FoodSafetyControlCentrePage data={data} onNavigate={(v) => setView(v)} />
+      )}
+
+      {view === 'nonConformance' && (
+        <NonConformancePage
+          ncrs={data.nonConformances}
+          jobs={data.jobs}
+          finishedGoodsStock={data.finishedGoodsStock}
+          cleaningLogs={data.cleaningLogs}
+          filters={ncrFilters}
+          setFilters={setNcrFilters}
+          form={ncrForm}
+          setForm={setNcrForm}
+          editingId={ncrEditingId}
+          message={ncrMessage}
+          onSave={handleSaveNcr}
+          onReset={resetNcrEditor}
+          onEdit={editNcr}
+        />
+      )}
+
+      {view === 'sopRegister' && (
+        <SopRegisterPage
+          documents={data.sopDocuments}
+          filters={sopFilters}
+          setFilters={setSopFilters}
+          form={sopForm}
+          setForm={setSopForm}
+          editingId={sopEditingId}
+          message={sopMessage}
+          onSave={handleSaveSop}
+          onReset={resetSopEditor}
+          onEdit={editSop}
+          onCreateNewVersion={handleCreateNewSopVersion}
+        />
+      )}
+
+      {view === 'staffTraining' && (
+        <StaffTrainingPage
+          records={data.staffTrainingRecords}
+          filters={trainingFilters}
+          setFilters={setTrainingFilters}
+          form={trainingForm}
+          setForm={setTrainingForm}
+          editingId={trainingEditingId}
+          message={trainingMessage}
+          onSave={handleSaveTraining}
+          onReset={resetTrainingEditor}
+          onEdit={editTraining}
+        />
+      )}
+
+      {view === 'ppeControl' && (
+        <PpeIssuePage
+          records={data.ppeIssueRecords}
+          filters={ppeFilters}
+          setFilters={setPpeFilters}
+          form={ppeForm}
+          setForm={setPpeForm}
+          editingId={ppeEditingId}
+          message={ppeMessage}
+          onSave={handleSavePpe}
+          onReset={resetPpeEditor}
+          onEdit={editPpe}
+        />
+      )}
+
+      {view === 'pestControl' && (
+        <PestControlPage
+          records={data.pestControlRecords}
+          filters={pestFilters}
+          setFilters={setPestFilters}
+          form={pestForm}
+          setForm={setPestForm}
+          editingId={pestEditingId}
+          message={pestMessage}
+          onSave={handleSavePest}
+          onReset={resetPestEditor}
+          onEdit={editPest}
+        />
+      )}
+
+      {view === 'foreignObjectControl' && (
+        <ForeignObjectPage
+          records={data.foreignObjectRecords}
+          filters={foreignObjectFilters}
+          setFilters={setForeignObjectFilters}
+          form={foreignObjectForm}
+          setForm={setForeignObjectForm}
+          editingId={foreignObjectEditingId}
+          message={foreignObjectMessage}
+          onSave={handleSaveForeignObject}
+          onReset={resetForeignObjectEditor}
+          onEdit={editForeignObject}
+        />
+      )}
+
+      {view === 'toolBladeControl' && (
+        <ToolBladePage
+          records={data.toolBladeRecords}
+          filters={toolBladeFilters}
+          setFilters={setToolBladeFilters}
+          form={toolBladeForm}
+          setForm={setToolBladeForm}
+          editingId={toolBladeEditingId}
+          message={toolBladeMessage}
+          onSave={handleSaveToolBlade}
+          onReset={resetToolBladeEditor}
+          onEdit={editToolBlade}
+        />
+      )}
+
+      {view === 'visitorLog' && (
+        <VisitorLogPage
+          records={data.visitorLogEntries}
+          filters={visitorFilters}
+          setFilters={setVisitorFilters}
+          form={visitorForm}
+          setForm={setVisitorForm}
+          editingId={visitorEditingId}
+          message={visitorMessage}
+          onSave={handleSaveVisitor}
+          onReset={resetVisitorEditor}
+          onEdit={editVisitor}
+        />
+      )}
+
+      {view === 'haccpRegister' && (
+        <HaccpRegisterPage
+          hazards={data.haccpHazards}
+          filters={haccpFilters}
+          setFilters={setHaccpFilters}
+          form={haccpForm}
+          setForm={setHaccpForm}
+          editingId={haccpEditingId}
+          message={haccpMessage}
+          onSave={handleSaveHaccpHazard}
+          onReset={resetHaccpEditor}
+          onEdit={editHaccpHazard}
+        />
+      )}
+
+      {view === 'traceability' && (
+        <TraceabilityPage
+          data={data}
+          seed={traceabilitySeed}
+          onSeedConsumed={() => setTraceabilitySeed(null)}
+        />
+      )}
+
+      {view === 'complaints' && (
+        <ComplaintsPage
+          complaints={data.customerComplaints}
+          clients={data.clients}
+          products={data.products}
+          jobs={data.jobs}
+          finishedGoodsStock={data.finishedGoodsStock}
+          deliveryNotes={data.deliveryNotes}
+          invoices={data.invoices}
+          filters={complaintFilters}
+          setFilters={setComplaintFilters}
+          form={complaintForm}
+          setForm={setComplaintForm}
+          editingId={complaintEditingId}
+          message={complaintMessage}
+          onSave={handleSaveComplaint}
+          onReset={resetComplaintEditor}
+          onEdit={editComplaint}
+          onOpenTraceability={handleOpenTraceabilityFromComplaint}
+        />
+      )}
+
+      {view === 'cleaningLogs' && (
+        <CleaningLogsPage
+          logs={data.cleaningLogs}
+          machines={data.machines}
+          chemicals={data.chemicalRegisterEntries}
+          filters={cleaningLogFilters}
+          setFilters={setCleaningLogFilters}
+          form={cleaningLogForm}
+          setForm={setCleaningLogForm}
+          editingId={cleaningLogEditingId}
+          message={cleaningLogMessage}
+          onSave={handleSaveCleaningLog}
+          onReset={resetCleaningLogEditor}
+          onEdit={editCleaningLog}
         />
       )}
 
@@ -5278,7 +8572,79 @@ function App() {
         </>
       )}
     </AppLayout>
-    )
+    )}
+    {undoToast ? (
+      <UndoToast
+        id={undoToast.id}
+        message={undoToast.message}
+        onUndo={undoToast.onUndo}
+        durationMs={undoToast.durationMs}
+        onDismiss={() => setUndoToast(null)}
+      />
+    ) : null}
+    {historyTarget ? (
+      <HistoryDrawer
+        target={historyTarget}
+        onClose={() => setHistoryTarget(null)}
+      />
+    ) : null}
+    <CommandPalette
+      open={paletteOpen}
+      onClose={() => setPaletteOpen(false)}
+      jobs={data.jobs}
+      clients={data.clients}
+      products={data.products}
+      spareParts={data.spareParts}
+      invoices={data.invoices}
+      leads={data.leads}
+      setView={setView}
+      setSelectedJobId={setSelectedJobId}
+    />
+    {workTicketPrintTarget ? (
+      <WorkTicketPrint
+        ticket={workTicketPrintTarget}
+        company={data.appSettings.company}
+        onClose={() => setWorkTicketPrintTarget(null)}
+      />
+    ) : null}
+    {foodSafeCertificateJob ? (
+      <FoodSafeCertificatePrint
+        job={foodSafeCertificateJob}
+        approvedMaterials={data.foodSafeMaterials}
+        company={data.appSettings.company}
+        onClose={() => setFoodSafeCertificateJob(null)}
+      />
+    ) : null}
+    {quotePrintTarget ? (
+      <QuotePrint
+        quote={quotePrintTarget}
+        client={data.clients.find((c) => c.id === quotePrintTarget.clientId)}
+        company={data.appSettings.company}
+        onClose={() => setQuotePrintTarget(null)}
+      />
+    ) : null}
+    {jobCardPrintTarget ? (
+      <JobCardPrint
+        job={jobCardPrintTarget}
+        company={data.appSettings.company}
+        machineName={data.machines.find((m) => m.id === jobCardPrintTarget.assignedMachineId)?.name}
+        onClose={() => setJobCardPrintTarget(null)}
+      />
+    ) : null}
+    {deliveryNotePrintTarget ? (
+      <DeliveryNotePrint
+        note={deliveryNotePrintTarget}
+        parentInvoice={
+          deliveryNotePrintTarget.parentInvoiceId
+            ? data.invoices.find((inv) => inv.id === deliveryNotePrintTarget.parentInvoiceId)
+            : undefined
+        }
+        allDeliveryNotes={data.deliveryNotes}
+        company={data.appSettings.company}
+        onClose={() => setDeliveryNotePrintTarget(null)}
+      />
+    ) : null}
+    </>
   );
 }
 

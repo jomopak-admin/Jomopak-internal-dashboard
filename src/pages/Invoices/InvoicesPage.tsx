@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Combobox, ComboboxOption } from '../../components/Combobox';
+import { EditFormGuard } from '../../components/EditFormGuard';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import {
@@ -8,6 +9,7 @@ import {
 } from '../../components/PrintableDocument';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  AppSettings,
   Client,
   DeliveryNote,
   Invoice,
@@ -35,6 +37,8 @@ interface InvoicesPageProps {
   productionSpecs: ProductionSpec[];
   products: Product[];
   deliveryNotes: DeliveryNote[];
+  /** App-wide branding + template defaults from Settings → Templates / Branding. */
+  settings: AppSettings;
   invoiceForm: InvoiceFormState;
   setInvoiceForm: (value: InvoiceFormState) => void;
   invoiceEditingId: string | null;
@@ -45,6 +49,8 @@ interface InvoicesPageProps {
   setInvoiceFilters: (value: InvoiceFilters) => void;
   filteredInvoices: Invoice[];
   onEdit: (invoice: Invoice) => void;
+  /** Current authed user — used for the edit-lock presence banner. */
+  currentUser?: { id?: string; name?: string };
 }
 
 function makeBlankLine(): InvoiceLineItemFormState {
@@ -88,6 +94,7 @@ export function InvoicesPage({
   productionSpecs,
   products,
   deliveryNotes,
+  settings,
   invoiceForm,
   setInvoiceForm,
   invoiceEditingId,
@@ -98,6 +105,7 @@ export function InvoicesPage({
   setInvoiceFilters,
   filteredInvoices,
   onEdit,
+  currentUser,
 }: InvoicesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
@@ -203,6 +211,21 @@ export function InvoicesPage({
     (line) => Number(line.quantity || 0) > 0 && Number(line.unitPriceExclVat || 0) > 0,
   );
 
+  // Stock-holding is opt-in at the client level. If the selected client
+  // doesn't have it enabled, hide all the stock-holding UI and force the
+  // toggle off so users don't accidentally tick a flag that has no meaning.
+  const selectedClient = invoiceForm.clientId
+    ? clients.find((c) => c.id === invoiceForm.clientId)
+    : undefined;
+  const clientAllowsStockHolding = !!selectedClient?.stockHoldingEnabled;
+  // Auto-clear stockHoldingApplies if the user switches to a non-holding client.
+  useEffect(() => {
+    if (selectedClient && !clientAllowsStockHolding && invoiceForm.stockHoldingApplies) {
+      setInvoiceForm({ ...invoiceForm, stockHoldingApplies: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id, clientAllowsStockHolding]);
+
   const sections: FormWizardSection[] = [
     {
       key: 'header',
@@ -271,21 +294,29 @@ export function InvoicesPage({
     {
       key: 'stockHolding',
       title: 'Stock-holding agreement',
-      subtitle: 'Tick this if the customer pays in full but draws stock from our warehouse over time.',
-      contextActive: invoiceForm.stockHoldingApplies,
-      contextPrompt: (
+      subtitle: clientAllowsStockHolding
+        ? 'Tick this if the customer pays in full but draws stock from our warehouse over time.'
+        : 'Stock-holding is opt-in per client. Enable it on the client record first to use it here.',
+      contextActive: clientAllowsStockHolding && invoiceForm.stockHoldingApplies,
+      contextPrompt: clientAllowsStockHolding ? (
         <label className="inline-toggle">
           <input type="checkbox" checked={invoiceForm.stockHoldingApplies} onChange={(e) => setInvoiceForm({ ...invoiceForm, stockHoldingApplies: e.target.checked })} />
           <span>Track this invoice as a stock-holding order</span>
         </label>
+      ) : (
+        <p className="muted">
+          {selectedClient
+            ? `${selectedClient.name} is not currently on a stock-holding agreement. Open the client and tick "Enable stock holding" to use this on their invoices.`
+            : 'Pick a client first.'}
+        </p>
       ),
-      body: (
+      body: clientAllowsStockHolding ? (
         <div className="form-grid">
           <label><span>Storage start date</span><input type="date" value={invoiceForm.stockHoldingStartDate} onChange={(e) => setInvoiceForm({ ...invoiceForm, stockHoldingStartDate: e.target.value })} /></label>
           <label><span>Max storage period (days, 0 = no cap)</span><input type="number" min="0" value={invoiceForm.stockHoldingMaxDays} onChange={(e) => setInvoiceForm({ ...invoiceForm, stockHoldingMaxDays: e.target.value })} /></label>
           <label className="full-span inline-toggle"><input type="checkbox" checked={invoiceForm.stockHoldingApplies} onChange={(e) => setInvoiceForm({ ...invoiceForm, stockHoldingApplies: e.target.checked })} /><span>Stock-holding active</span></label>
         </div>
-      ),
+      ) : null,
     },
     {
       key: 'terms',
@@ -344,18 +375,28 @@ export function InvoicesPage({
       />
 
       {mode === 'form' ? (
-        <FormWizard
-          title={invoiceEditingId ? 'Edit invoice' : 'New invoice'}
-          subtitle="Lines snapshot the rates at the time of issue. Stock-holding section only counts if you opt in."
-          message={invoiceMessage || undefined}
-          sections={sections}
-          onSave={onSave}
-          onCancel={handleBackToList}
-          isEditing={!!invoiceEditingId}
-          saveLabel="Save Invoice"
-        />
+        <>
+          {currentUser && (
+            <EditFormGuard
+              table="invoices"
+              recordId={invoiceEditingId}
+              recordLabel={invoiceEditingId ? `Invoice ${invoiceEditingId}` : undefined}
+              currentUser={currentUser}
+            />
+          )}
+          <FormWizard
+            title={invoiceEditingId ? 'Edit invoice' : 'New invoice'}
+            subtitle="Lines snapshot the rates at the time of issue. Stock-holding section only counts if you opt in."
+            message={invoiceMessage || undefined}
+            sections={sections}
+            onSave={onSave}
+            onCancel={handleBackToList}
+            isEditing={!!invoiceEditingId}
+            saveLabel="Save Invoice"
+          />
+        </>
       ) : previewInvoice ? (
-        <InvoicePreview invoice={previewInvoice} deliveryNotes={deliveryNotes} onClose={() => setPreviewInvoiceId(null)} onEdit={() => { onEdit(previewInvoice); setMode('form'); }} />
+        <InvoicePreview invoice={previewInvoice} deliveryNotes={deliveryNotes} settings={settings} onClose={() => setPreviewInvoiceId(null)} onEdit={() => { onEdit(previewInvoice); setMode('form'); }} />
       ) : (
         <section className="card">
           <SectionTitle title="Invoice register" subtitle={`${filteredInvoices.length} invoice(s) shown`} />
@@ -406,11 +447,12 @@ export function InvoicesPage({
 interface InvoicePreviewProps {
   invoice: Invoice;
   deliveryNotes: DeliveryNote[];
+  settings: AppSettings;
   onClose: () => void;
   onEdit: () => void;
 }
 
-function InvoicePreview({ invoice, deliveryNotes, onClose, onEdit }: InvoicePreviewProps) {
+function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit }: InvoicePreviewProps) {
   const stockSummary = invoice.stockHoldingApplies
     ? summariseInvoiceStockHolding(invoice, deliveryNotes)
     : null;
@@ -438,6 +480,8 @@ function InvoicePreview({ invoice, deliveryNotes, onClose, onEdit }: InvoicePrev
 
       <PrintableDocument
         documentTitle="Invoice"
+        company={settings.company}
+        defaultFooterLines={settings.templates.invoiceFooterLines}
         meta={[
           { label: 'INVOICE', value: invoice.invoiceNumber },
           { label: 'DATE', value: invoice.invoiceDate ? formatDate(invoice.invoiceDate) : '—' },

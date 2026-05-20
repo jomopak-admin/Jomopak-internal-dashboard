@@ -37,6 +37,8 @@ interface DeliveryNotesPageProps {
   setDeliveryNoteFilters: (value: DeliveryNoteFilters) => void;
   filteredDeliveryNotes: DeliveryNote[];
   onEdit: (note: DeliveryNote) => void;
+  onCreateInvoice?: (note: DeliveryNote) => void;
+  onPrint?: (note: DeliveryNote) => void;
 }
 
 export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
@@ -61,6 +63,8 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
     setDeliveryNoteFilters,
     filteredDeliveryNotes,
     onEdit,
+    onCreateInvoice,
+    onPrint,
   } = props;
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -69,6 +73,22 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
       setMode('form');
     }
   }, [deliveryNoteEditingId]);
+
+  // Stock-holding gate: a client must have stockHoldingEnabled before we
+  // surface any of the parent-invoice / running-balance UI on their notes.
+  const selectedClient = useMemo(
+    () => (deliveryNoteForm.clientId ? clients.find((c) => c.id === deliveryNoteForm.clientId) : undefined),
+    [clients, deliveryNoteForm.clientId],
+  );
+  // If the user switches to a non-holding client, clear any lingering parent
+  // invoice link so the printable doesn't render a stock-holding panel
+  // against a client who isn't on the agreement.
+  useEffect(() => {
+    if (selectedClient && !selectedClient.stockHoldingEnabled && deliveryNoteForm.parentInvoiceId) {
+      setDeliveryNoteForm({ ...deliveryNoteForm, parentInvoiceId: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id]);
 
   const visibleDispatches = useMemo(
     () => dispatchRecords.filter((record) => !deliveryNoteForm.clientId || record.customerName === clients.find((client) => client.id === deliveryNoteForm.clientId)?.name),
@@ -272,7 +292,7 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
         </div>
       ),
     },
-    {
+    ...(selectedClient?.stockHoldingEnabled ? [{
       key: 'stock-holding-link',
       title: 'Stock-holding link',
       subtitle: 'If this delivery draws against a paid-in-advance invoice, link it here so remaining stock stays in sync.',
@@ -289,7 +309,7 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
           ) : null}
         </div>
       ),
-    },
+    } as FormWizardSection] : []),
     {
       key: 'receipt',
       title: 'Proof of receipt',
@@ -388,7 +408,23 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
                       <td>{note.lineItems.length}</td>
                       <td>{note.status}</td>
                       <td>{note.clientVisible ? 'Client visible' : 'Internal only'}</td>
-                      <td><button className="table-button" onClick={() => handleStartEdit(note)}>Edit</button></td>
+                      <td>
+                        <div className="inline-actions">
+                          <button className="table-button" onClick={() => handleStartEdit(note)}>Edit</button>
+                          {onPrint ? (
+                            <button className="table-button" onClick={() => onPrint(note)} title="Open printable delivery note">Print</button>
+                          ) : null}
+                          {onCreateInvoice && note.status !== 'Draft' ? (
+                            <button
+                              className="table-button table-button-promote"
+                              onClick={() => onCreateInvoice(note)}
+                              title="Create an invoice from this delivery note"
+                            >
+                              → Invoice
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

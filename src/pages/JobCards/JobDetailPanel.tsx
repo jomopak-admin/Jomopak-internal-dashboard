@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FlagBadge, StatusBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { HistoryDrawerTarget } from '../../components/HistoryDrawer';
 import { SectionTitle } from '../../components/SectionTitle';
 import { DispatchRecord, JobCard, MaterialReceipt, PaperLog, ProductionLogEntry, WasteEntry } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
@@ -18,6 +19,7 @@ interface JobDetailPanelProps {
   onQuickAddWaste: (job: JobCard) => void;
   onQuickAddPaper: (job: JobCard) => void;
   onQuickAddDispatch: (job: JobCard) => void;
+  onOpenHistory?: (target: HistoryDrawerTarget) => void;
 }
 
 const TABS: Array<{ key: JobDetailTab; label: string }> = [
@@ -40,6 +42,7 @@ export function JobDetailPanel({
   onQuickAddWaste,
   onQuickAddPaper,
   onQuickAddDispatch,
+  onOpenHistory,
 }: JobDetailPanelProps) {
   const [tab, setTab] = useState<JobDetailTab>('overview');
 
@@ -58,6 +61,21 @@ export function JobDetailPanel({
             <button className="ghost-button" onClick={() => onQuickAddWaste(job)}>Add Waste</button>
             <button className="ghost-button" onClick={() => onQuickAddPaper(job)}>Add Paper Usage</button>
             <button className="ghost-button" onClick={() => onQuickAddDispatch(job)}>Add Dispatch</button>
+            {onOpenHistory ? (
+              <button
+                type="button"
+                className="history-trigger"
+                onClick={() => onOpenHistory({
+                  sourceTable: 'jobs',
+                  sourceRecordId: job.id,
+                  label: `Job ${job.jobNumber}`,
+                  subtitle: `${job.customerName} • ${job.productName}`,
+                })}
+                title="Show audit timeline for this job"
+              >
+                History
+              </button>
+            ) : null}
           </div>
         }
       />

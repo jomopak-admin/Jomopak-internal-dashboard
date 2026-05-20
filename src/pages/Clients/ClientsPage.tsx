@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CommercialFlags, isClientOverCredit } from '../../components/Badge';
+import { EditFormGuard } from '../../components/EditFormGuard';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
@@ -23,6 +24,8 @@ interface ClientsPageProps {
   setClientFilters: (value: ClientFilters) => void;
   filteredClients: Client[];
   onEdit: (client: Client) => void;
+  /** Current authed user — used for the edit-lock presence banner. */
+  currentUser?: { id?: string; name?: string };
 }
 
 export function ClientsPage({
@@ -40,6 +43,7 @@ export function ClientsPage({
   setClientFilters,
   filteredClients,
   onEdit,
+  currentUser,
 }: ClientsPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -339,16 +343,26 @@ export function ClientsPage({
           }
         />
       ) : mode === 'form' ? (
-        <FormWizard
-          title={clientEditingId ? 'Edit client' : 'New client'}
-          subtitle="Required fields are marked. Save unlocks once each active section is complete."
-          message={clientMessage}
-          sections={sections}
-          isEditing={Boolean(clientEditingId)}
-          saveLabel="Save Client"
-          onSave={onSave}
-          onCancel={handleBackToList}
-        />
+        <>
+          {currentUser && (
+            <EditFormGuard
+              table="clients"
+              recordId={clientEditingId}
+              recordLabel={clientEditingId ? (clientForm.companyName || clientForm.name || 'Client') : undefined}
+              currentUser={currentUser}
+            />
+          )}
+          <FormWizard
+            title={clientEditingId ? 'Edit client' : 'New client'}
+            subtitle="Required fields are marked. Save unlocks once each active section is complete."
+            message={clientMessage}
+            sections={sections}
+            isEditing={Boolean(clientEditingId)}
+            saveLabel="Save Client"
+            onSave={onSave}
+            onCancel={handleBackToList}
+          />
+        </>
       ) : (
         <>
           {stockHoldingOverviews.length ? (

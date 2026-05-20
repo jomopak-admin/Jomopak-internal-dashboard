@@ -5,6 +5,7 @@ import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/
 import { PrintableDocument } from '../../components/PrintableDocument';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  AppSettings,
   Client,
   HandleType,
   JobCard,
@@ -22,6 +23,8 @@ interface ProductionSpecsPageProps {
   clients: Client[];
   products: Product[];
   jobs: JobCard[];
+  /** App-wide branding + template defaults from Settings → Templates / Branding. */
+  settings: AppSettings;
   productionSpecForm: ProductionSpecFormState;
   setProductionSpecForm: (value: ProductionSpecFormState) => void;
   productionSpecEditingId: string | null;
@@ -38,6 +41,7 @@ export function ProductionSpecsPage({
   clients,
   products,
   jobs,
+  settings,
   productionSpecForm,
   setProductionSpecForm,
   productionSpecEditingId,
@@ -176,7 +180,7 @@ export function ProductionSpecsPage({
           saveLabel="Save Spec"
         />
       ) : previewSpec ? (
-        <ProductionSpecPreview spec={previewSpec} onClose={() => setPreviewSpecId(null)} onEdit={() => { onEdit(previewSpec); setMode('form'); }} />
+        <ProductionSpecPreview spec={previewSpec} settings={settings} onClose={() => setPreviewSpecId(null)} onEdit={() => { onEdit(previewSpec); setMode('form'); }} />
       ) : (
         <section className="card">
           <SectionTitle title="Production specs" subtitle={`${filteredProductionSpecs.length} spec(s) shown`} />
@@ -217,14 +221,17 @@ export function ProductionSpecsPage({
 
 interface ProductionSpecPreviewProps {
   spec: ProductionSpec;
+  settings: AppSettings;
   onClose: () => void;
   onEdit: () => void;
 }
 
-function ProductionSpecPreview({ spec, onClose, onEdit }: ProductionSpecPreviewProps) {
+function ProductionSpecPreview({ spec, settings, onClose, onEdit }: ProductionSpecPreviewProps) {
   return (
     <PrintableDocument
       documentTitle="Production Spec"
+      company={settings.company}
+      defaultFooterLines={settings.templates.productionSpecFooterLines}
       meta={[
         { label: 'SPEC NO', value: spec.specNumber },
         { label: 'DATE', value: spec.specDate ? formatDate(spec.specDate) : '—' },

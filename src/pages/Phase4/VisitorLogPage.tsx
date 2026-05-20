@@ -1,0 +1,191 @@
+/**
+ * Visitor & Contractor Hygiene Control log.
+ *
+ * One row per visit. Captures host, areas visited, PPE issued, hygiene
+ * acknowledgement, and a flag for entry into food-contact areas
+ * (auditors check this).
+ */
+
+import { useMemo, useState } from 'react';
+import { EmptyState } from '../../components/EmptyState';
+import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { SectionTitle } from '../../components/SectionTitle';
+import {
+  FACTORY_AREAS,
+  FactoryArea,
+  VisitorLogEntry,
+  VisitorLogFilters,
+  VisitorLogFormState,
+  VisitorType,
+} from '../../types';
+import { formatDate } from '../../utils/calculations';
+
+interface VisitorLogPageProps {
+  records: VisitorLogEntry[];
+  filters: VisitorLogFilters;
+  setFilters: (v: VisitorLogFilters) => void;
+  form: VisitorLogFormState;
+  setForm: (v: VisitorLogFormState) => void;
+  editingId: string | null;
+  message: string;
+  onSave: () => void;
+  onReset: () => void;
+  onEdit: (r: VisitorLogEntry) => void;
+}
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+const VISITOR_TYPES: VisitorType[] = ['Customer', 'Supplier', 'Contractor', 'Auditor', 'Maintenance', 'Pest Control', 'Other'];
+
+export function VisitorLogPage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit }: VisitorLogPageProps) {
+  const [mode, setMode] = useState<'list' | 'form'>('list');
+
+  const filtered = useMemo(() => records.filter((r) => {
+    const q = filters.search.trim().toLowerCase();
+    if (q) {
+      const hay = [r.visitorName, r.company, r.hostName, r.purpose].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (filters.visitorType && r.visitorType !== filters.visitorType) return false;
+    if (filters.dateWindow !== 'all') {
+      const t = new Date(r.visitDate).getTime();
+      const age = Date.now() - t;
+      if (filters.dateWindow === 'today' && new Date(r.visitDate).toDateString() !== new Date().toDateString()) return false;
+      if (filters.dateWindow === '7d' && age > 7 * DAY_MS) return false;
+      if (filters.dateWindow === '30d' && age > 30 * DAY_MS) return false;
+    }
+    return true;
+  }), [records, filters]);
+
+  const stats = useMemo(() => {
+    const today = records.filter((r) => new Date(r.visitDate).toDateString() === new Date().toDateString()).length;
+    const food = records.filter((r) => r.enteredFoodContactArea).length;
+    const ackMissing = records.filter((r) => !r.hygieneAcknowledged).length;
+    return { total: records.length, today, food, ackMissing };
+  }, [records]);
+
+  function toggleArea(a: FactoryArea) {
+    const next = form.areasVisited.includes(a) ? form.areasVisited.filter((x) => x !== a) : [...form.areasVisited, a];
+    setForm({ ...form, areasVisited: next });
+  }
+
+  const sections: FormWizardSection[] = [
+    {
+      key: 'visitor', title: 'Visitor',
+      missingRequired: [
+        ...(form.visitDate ? [] : ['Visit date']),
+        ...(form.visitorName.trim() ? [] : ['Visitor name']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label><span>Visit date <RequiredMarker /></span><input type="date" value={form.visitDate} onChange={(e) => setForm({ ...form, visitDate: e.target.value })} /></label>
+          <label><span>Visitor type</span>
+            <select value={form.visitorType} onChange={(e) => setForm({ ...form, visitorType: e.target.value as VisitorType })}>
+              {VISITOR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label><span>Visitor name <RequiredMarker /></span><input value={form.visitorName} onChange={(e) => setForm({ ...form, visitorName: e.target.value })} /></label>
+          <label><span>Company</span><input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></label>
+          <label><span>Host (Jomopak)</span><input value={form.hostName} onChange={(e) => setForm({ ...form, hostName: e.target.value })} /></label>
+          <label className="full-span"><span>Purpose</span><input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></label>
+          <label><span>Time in</span><input type="time" value={form.timeIn} onChange={(e) => setForm({ ...form, timeIn: e.target.value })} /></label>
+          <label><span>Time out</span><input type="time" value={form.timeOut} onChange={(e) => setForm({ ...form, timeOut: e.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'hygiene', title: 'Hygiene & areas',
+      body: (
+        <div className="form-grid">
+          <label className="checkbox-row full-span"><input type="checkbox" checked={form.hygieneAcknowledged} onChange={(e) => setForm({ ...form, hygieneAcknowledged: e.target.checked })} />Hygiene protocol acknowledged</label>
+          <label className="checkbox-row full-span"><input type="checkbox" checked={form.enteredFoodContactArea} onChange={(e) => setForm({ ...form, enteredFoodContactArea: e.target.checked })} />Entered food-contact area</label>
+          <label className="full-span"><span>PPE issued</span><input value={form.ppeIssued} onChange={(e) => setForm({ ...form, ppeIssued: e.target.value })} placeholder="Hairnet, coat, shoe covers..." /></label>
+          <div className="full-span">
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', display: 'block', marginBottom: 8 }}>Areas visited</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {FACTORY_AREAS.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => toggleArea(a)}
+                  className={`chem-pictogram-pill${form.areasVisited.includes(a) ? ' chem-pictogram-pill-on' : ''}`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="full-span"><span>Notes</span><textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <SectionTitle action={mode === 'list'
+        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Log visitor</button>
+        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
+      />
+      {mode === 'form' ? (
+        <FormWizard
+          title={editingId ? 'Edit visitor entry' : 'New visitor entry'}
+          subtitle="Every external visitor signing in. Required for audits."
+          message={message || undefined}
+          sections={sections}
+          onSave={onSave}
+          onCancel={() => { onReset(); setMode('list'); }}
+          isEditing={!!editingId}
+          saveLabel="Save entry"
+        />
+      ) : (
+        <section className="card">
+          <SectionTitle title="Visitor & Contractor Log" subtitle={`${filtered.length} of ${records.length} entry(ies) shown`} />
+          <div className="food-safety-stats">
+            <div className="food-safety-stat"><span>Total</span><strong>{stats.total}</strong></div>
+            <div className="food-safety-stat"><span>Today</span><strong>{stats.today}</strong></div>
+            <div className="food-safety-stat"><span>Entered food-contact area</span><strong>{stats.food}</strong></div>
+            <div className={`food-safety-stat${stats.ackMissing > 0 ? ' food-safety-stat-alert' : ''}`}><span>Missing hygiene ack</span><strong>{stats.ackMissing}</strong></div>
+          </div>
+          <div className="filters-grid">
+            <label><span>Search</span><input value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} placeholder="Name, company, host" /></label>
+            <label><span>Type</span>
+              <select value={filters.visitorType} onChange={(e) => setFilters({ ...filters, visitorType: e.target.value })}>
+                <option value="">All</option>
+                {VISITOR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label><span>Window</span>
+              <select value={filters.dateWindow} onChange={(e) => setFilters({ ...filters, dateWindow: e.target.value as VisitorLogFilters['dateWindow'] })}>
+                <option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="all">All</option>
+              </select>
+            </label>
+          </div>
+          {filtered.length === 0 ? (
+            <EmptyState title="No visitor entries" body="Log every external visitor entering the factory — auditors, contractors, customers, suppliers." />
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Date</th><th>Visitor</th><th>Type</th><th>Host</th><th>Time</th><th>Food area</th><th>Ack</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {filtered.map((r) => (
+                    <tr key={r.id}>
+                      <td><strong>{r.visitNumber}</strong></td>
+                      <td>{formatDate(r.visitDate)}</td>
+                      <td>{r.visitorName}<div className="table-subtext">{r.company}</div></td>
+                      <td>{r.visitorType}</td>
+                      <td>{r.hostName || '—'}</td>
+                      <td>{r.timeIn || '—'} – {r.timeOut || '—'}</td>
+                      <td>{r.enteredFoodContactArea ? <span className="badge badge-warning">Yes</span> : <span className="muted">No</span>}</td>
+                      <td>{r.hygieneAcknowledged ? <span className="badge badge-success">Signed</span> : <span className="badge badge-danger">Missing</span>}</td>
+                      <td><button className="table-button" onClick={() => { onEdit(r); setMode('form'); }}>Edit</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}

@@ -1,14 +1,56 @@
+/**
+ * Calculator v2 — multi-line quote builder.
+ *
+ * Two-zone layout:
+ *
+ *   ┌─ Shared header ──────────────────────────────────────────────┐
+ *   │ Client · Lead · Pricing tier · Paper rate · Cost profile     │
+ *   │ Margin override · Quote date · Sales owner · Notes           │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ *   ┌─ Line items (one card each) ─────────────────────────────────┐
+ *   │ Product · Description                                        │
+ *   │ Bag W / H / Gusset · Quantity                                │
+ *   │ Handle · Print method · Colors · Margin override             │
+ *   │ Per-line breakdown (paper / handle / print / etc.)           │
+ *   │ [Duplicate] [Remove]                                         │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ *   ┌─ Totals + Actions ───────────────────────────────────────────┐
+ *   │ Total qty · Total cost · Total quoted · Blended margin       │
+ *   │ [+ Add line]  [Reset]  [Save as Quote]                       │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ * Live computation: every keystroke re-runs computeQuote() and the
+ * per-line + rollup figures update instantly.
+ *
+ * "Save as Quote" calls back into App.tsx which writes one QuoteEstimate
+ * per line (the existing data model is single-SKU-per-quote; we honour
+ * that by emitting N quotes that share a common quoteNumber prefix).
+ */
+
+import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
+import { EmptyState } from '../../components/EmptyState';
 import {
-  CalculatorQuoteFormState,
+  CalculatorState,
+  CalculatorLineItem,
   Client,
   CostProfile,
   HandleType,
+  Lead,
   PaperRate,
   PricingTier,
+  PrintMethod,
   Product,
 } from '../../types';
 import { formatNumber } from '../../utils/calculations';
+import {
+  computeQuote,
+  emptyCalculatorLine,
+  emptyCalculatorState,
+  LineResult,
+} from '../../utils/calculatorEngine';
 
 interface CalculatorPageProps {
   canViewInternalCosts: boolean;
@@ -17,9 +59,18 @@ interface CalculatorPageProps {
   pricingTiers: PricingTier[];
   paperRates: PaperRate[];
   costProfiles: CostProfile[];
-  quoteForm: CalculatorQuoteFormState;
-  setQuoteForm: (value: CalculatorQuoteFormState) => void;
+  leads?: Lead[];
+  state: CalculatorState;
+  setState: (next: CalculatorState) => void;
+  /** Callback wired in App.tsx — receives the calculator state. The host
+   *  is responsible for translating it into one or more QuoteEstimate
+   *  records and persisting them. Should return the new quote number(s)
+   *  so we can show a confirmation. */
+  onSaveAsQuote?: (state: CalculatorState) => Promise<{ quoteNumbers: string[] }> | { quoteNumbers: string[] };
 }
+
+const HANDLE_OPTIONS: HandleType[] = ['None', 'Flat Handle', 'Rope Handle', 'Roll Handle'];
+const PRINT_OPTIONS: PrintMethod[] = ['Auto', 'Plain', 'Screen Print', 'Flexo'];
 
 export function CalculatorPage({
   canViewInternalCosts,
@@ -28,160 +79,414 @@ export function CalculatorPage({
   pricingTiers,
   paperRates,
   costProfiles,
-  quoteForm,
-  setQuoteForm,
+  leads = [],
+  state,
+  setState,
+  onSaveAsQuote,
 }: CalculatorPageProps) {
-  const selectedClient = clients.find((client) => client.id === quoteForm.clientId);
-  const selectedTier = pricingTiers.find((tier) => tier.id === (quoteForm.pricingTierId || selectedClient?.pricingTierId));
-  const selectedPaperRate = paperRates.find((rate) => rate.id === quoteForm.paperRateId);
-  const selectedProfile = costProfiles.find((profile) => profile.id === quoteForm.costProfileId);
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
 
-  const quantity = Number(quoteForm.quantity || 0);
-  const bagWidth = Number(quoteForm.bagWidthMm || 0);
-  const bagHeight = Number(quoteForm.bagHeightMm || 0);
-  const gusset = Number(quoteForm.gussetMm || 0);
-  const colors = Number(quoteForm.colors || 0);
-  const marginPercent = Number(quoteForm.customMarginPercent || selectedTier?.defaultMarginPercent || selectedProfile?.defaultMarginPercent || 0);
+  // Live computation runs on every render. Pure function — no perf cost.
+  const computation = useMemo(
+    () => computeQuote(state, { clients, pricingTiers, paperRates, costProfiles }),
+    [state, clients, pricingTiers, paperRates, costProfiles],
+  );
 
-  const recommendedPaperWidth = selectedProfile ? (bagWidth * 2) + (gusset * 2) + selectedProfile.sideSeamAllowanceMm : 0;
-  const recommendedSheetHeight = selectedProfile ? bagHeight + gusset + selectedProfile.topFoldAllowanceMm + selectedProfile.bottomFoldAllowanceMm : 0;
-  const areaPerBagSqM = (recommendedPaperWidth / 1000) * (recommendedSheetHeight / 1000);
-  const paperWeightKgPerBag = areaPerBagSqM * (Number(selectedPaperRate?.gsm || 0) / 1000);
-  const paperWeightWithWasteKgPerBag = selectedProfile ? paperWeightKgPerBag * (1 + selectedProfile.wastagePercent / 100) : 0;
-  const paperCostPerBag = selectedPaperRate ? paperWeightWithWasteKgPerBag * (selectedPaperRate.pricePerTon / 1000) : 0;
+  const selectedClient = clients.find((c) => c.id === state.shared.clientId);
+  const clientLeads = leads.filter((l) => !state.shared.clientId || l.clientId === state.shared.clientId);
 
-  const handleCostPerBag = selectedProfile ? ({
-    'None': 0,
-    'Flat Handle': selectedProfile.flatHandleCostPerBag + selectedProfile.hotMeltCostPerBag,
-    'Rope Handle': selectedProfile.ropeHandleCostPerBag + selectedProfile.hotMeltCostPerBag,
-    'Roll Handle': selectedProfile.rollHandleCostPerBag + selectedProfile.hotMeltCostPerBag,
-  } as Record<HandleType, number>)[quoteForm.handleType] : 0;
+  function updateShared<K extends keyof CalculatorState['shared']>(key: K, value: CalculatorState['shared'][K]) {
+    setState({ ...state, shared: { ...state.shared, [key]: value } });
+  }
 
-  const printMethod =
-    quoteForm.printMethod === 'Auto'
-      ? quantity >= Number(selectedProfile?.flexoThresholdQty || 0)
-        ? 'Flexo'
-        : colors > 0
-          ? 'Screen Print'
-          : 'Plain'
-      : quoteForm.printMethod;
+  function updateLine(id: string, patch: Partial<CalculatorLineItem>) {
+    setState({
+      ...state,
+      lines: state.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    });
+  }
 
-  const screenPrintCostPerBag = selectedProfile && quantity > 0 && printMethod === 'Screen Print'
-    ? (selectedProfile.screenPrintSetupCost + (selectedProfile.screenPrintCostPerColor * colors)) / quantity
-    : 0;
+  function addLine() {
+    const newId = `line-${Date.now()}-${state.lines.length + 1}`;
+    setState({ ...state, lines: [...state.lines, emptyCalculatorLine(newId)] });
+  }
 
-  const flexoPrintCostPerBag = selectedProfile && printMethod === 'Flexo'
-    ? ((selectedProfile.flexoInkCostPer1000PerColor * colors) / 1000) +
-      (quantity > 0 ? (selectedProfile.plateCostPerColor * colors) / quantity : 0)
-    : 0;
+  function duplicateLine(id: string) {
+    const src = state.lines.find((l) => l.id === id);
+    if (!src) return;
+    const newId = `line-${Date.now()}-${state.lines.length + 1}`;
+    setState({ ...state, lines: [...state.lines, { ...src, id: newId }] });
+  }
 
-  const glueCostPerBag = selectedProfile?.baseGlueCostPerBag ?? 0;
-  const labourCostPerBag = selectedProfile ? selectedProfile.labourCostPer1000 / 1000 : 0;
-  const packagingCostPerBag = selectedProfile ? selectedProfile.packagingCostPer1000 / 1000 : 0;
-  const transportCostPerBag = selectedProfile && quantity > 0 ? selectedProfile.transportCostPerJob / quantity : 0;
+  function removeLine(id: string) {
+    if (state.lines.length === 1) {
+      // Don't allow removing the last line — reset it instead.
+      setState({ ...state, lines: [emptyCalculatorLine(`line-${Date.now()}-1`)] });
+      return;
+    }
+    setState({ ...state, lines: state.lines.filter((l) => l.id !== id) });
+  }
 
-  const unitCost = paperCostPerBag + handleCostPerBag + glueCostPerBag + labourCostPerBag + packagingCostPerBag + transportCostPerBag + screenPrintCostPerBag + flexoPrintCostPerBag;
-  const quotedUnitPrice = unitCost * (1 + marginPercent / 100);
-  const quotedTotal = quotedUnitPrice * quantity;
+  function reset() {
+    setState(emptyCalculatorState(new Date().toISOString().slice(0, 10)));
+    setSavedMessage('');
+  }
+
+  async function handleSaveAsQuote() {
+    if (!onSaveAsQuote) return;
+    if (!state.shared.clientId) {
+      setSavedMessage('Pick a client before saving.');
+      return;
+    }
+    if (computation.rollup.totalQuantity === 0) {
+      setSavedMessage('Add at least one line with a quantity.');
+      return;
+    }
+    setSaving(true);
+    setSavedMessage('Saving…');
+    try {
+      const result = await onSaveAsQuote(state);
+      setSavedMessage(`Saved quote${result.quoteNumbers.length > 1 ? 's' : ''}: ${result.quoteNumbers.join(', ')}`);
+    } catch (e: any) {
+      setSavedMessage(`Save failed: ${e?.message || 'unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const blockingIssues: string[] = [];
+  if (!state.shared.clientId) blockingIssues.push('Pick a client');
+  if (!state.shared.paperRateId) blockingIssues.push('Pick a paper rate');
+  if (!state.shared.costProfileId) blockingIssues.push('Pick a cost profile');
+  if (computation.rollup.totalQuantity === 0) blockingIssues.push('Add at least one line quantity');
 
   return (
-    <>
-      <div className="calculator-shell">
-      <section className="card calculator-quote-card">
-        <SectionTitle title="Quote Calculator" subtitle={canViewInternalCosts ? 'This quote engine uses the current approved internal cost inputs and also shows internal costing diagnostics.' : 'This quote engine uses the latest approved internal cost inputs and only shows the customer-facing quote output.'} />
-        <div className="calculator-quote-layout">
-          <div className="calculator-input-sections">
-            <section className="calculator-input-group">
-              <h3>Quote Setup</h3>
-              <div className="calculator-grid calculator-grid-3">
-                <label><span>Client</span><select value={quoteForm.clientId} onChange={(event) => setQuoteForm({ ...quoteForm, clientId: event.target.value })}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
-                <label><span>Product</span><select value={quoteForm.productId} onChange={(event) => setQuoteForm({ ...quoteForm, productId: event.target.value })}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-                <label><span>Pricing tier</span><select value={quoteForm.pricingTierId} onChange={(event) => setQuoteForm({ ...quoteForm, pricingTierId: event.target.value })}><option value="">Use client default</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
-                <label><span>Paper rate</span><select value={quoteForm.paperRateId} onChange={(event) => setQuoteForm({ ...quoteForm, paperRateId: event.target.value })}><option value="">Select paper rate</option>{paperRates.filter((rate) => rate.active).map((rate) => <option key={rate.id} value={rate.id}>{rate.name} · {rate.pricePerTon}/ton</option>)}</select></label>
-                <label><span>Cost profile</span><select value={quoteForm.costProfileId} onChange={(event) => setQuoteForm({ ...quoteForm, costProfileId: event.target.value })}><option value="">Select profile</option>{costProfiles.filter((profile) => profile.active).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
-                <label><span>Margin % override</span><input type="number" min="0" step="0.1" value={quoteForm.customMarginPercent} onChange={(event) => setQuoteForm({ ...quoteForm, customMarginPercent: event.target.value })} placeholder="Leave blank for default" /></label>
-              </div>
-            </section>
+    <div className="calculator2-shell">
+      <SectionTitle
+        title="Quote Calculator"
+        subtitle="Build a multi-line quote. Pick the shared header once, then add a card per SKU. Live costing updates as you type."
+      />
 
-            <section className="calculator-input-group">
-              <h3>Bag Specification</h3>
-              <div className="calculator-grid calculator-grid-4">
-                <label><span>Bag width mm</span><input type="number" min="0" value={quoteForm.bagWidthMm} onChange={(event) => setQuoteForm({ ...quoteForm, bagWidthMm: event.target.value })} /></label>
-                <label><span>Bag height mm</span><input type="number" min="0" value={quoteForm.bagHeightMm} onChange={(event) => setQuoteForm({ ...quoteForm, bagHeightMm: event.target.value })} /></label>
-                <label><span>Gusset mm</span><input type="number" min="0" value={quoteForm.gussetMm} onChange={(event) => setQuoteForm({ ...quoteForm, gussetMm: event.target.value })} /></label>
-                <label><span>Quantity</span><input type="number" min="0" value={quoteForm.quantity} onChange={(event) => setQuoteForm({ ...quoteForm, quantity: event.target.value })} /></label>
-                <label><span>Handle type</span><select value={quoteForm.handleType} onChange={(event) => setQuoteForm({ ...quoteForm, handleType: event.target.value as HandleType })}><option>None</option><option>Flat Handle</option><option>Rope Handle</option><option>Roll Handle</option></select></label>
-                <label><span>Print method</span><select value={quoteForm.printMethod} onChange={(event) => setQuoteForm({ ...quoteForm, printMethod: event.target.value as CalculatorQuoteFormState['printMethod'] })}><option>Auto</option><option>Plain</option><option>Screen Print</option><option>Flexo</option></select></label>
-                <label><span>Colors</span><input type="number" min="0" value={quoteForm.colors} onChange={(event) => setQuoteForm({ ...quoteForm, colors: event.target.value })} /></label>
-              </div>
-            </section>
-          </div>
-
-          <div className="calculator-output-sidebar">
-            <div className="summary-strip calculator-summary-strip">
-              <div className="summary-chip"><span>Recommended paper width</span><strong>{formatNumber(recommendedPaperWidth, 2)} mm</strong></div>
-              <div className="summary-chip"><span>Recommended sheet height</span><strong>{formatNumber(recommendedSheetHeight, 2)} mm</strong></div>
-              <div className="summary-chip"><span>Print method used</span><strong>{printMethod}</strong></div>
-              {canViewInternalCosts ? (
-                <div className="summary-chip"><span>Margin applied</span><strong>{formatNumber(marginPercent, 2)}%</strong></div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="calculator-results-grid">
-          {canViewInternalCosts ? (
-            <section className="card calculator-result-card">
-              <SectionTitle title="Cost Breakdown" />
-              <div className="ranking-list">
-                <div className="ranking-item"><span>Paper cost / bag</span><strong>{formatNumber(paperCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Glue cost / bag</span><strong>{formatNumber(glueCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Handle cost / bag</span><strong>{formatNumber(handleCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Print cost / bag</span><strong>{formatNumber(screenPrintCostPerBag + flexoPrintCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Labour cost / bag</span><strong>{formatNumber(labourCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Packaging cost / bag</span><strong>{formatNumber(packagingCostPerBag, 4)}</strong></div>
-                <div className="ranking-item"><span>Transport cost / bag</span><strong>{formatNumber(transportCostPerBag, 4)}</strong></div>
-              </div>
-            </section>
-          ) : null}
-          {canViewInternalCosts ? (
-            <section className="card calculator-result-card">
-              <SectionTitle title="Pricing Variables" />
-              <div className="ranking-list">
-                <div className="ranking-item"><span>Paper rate used</span><strong>{selectedPaperRate ? `${formatNumber(selectedPaperRate.pricePerTon, 2)}/ton` : 'Not set'}</strong></div>
-                <div className="ranking-item"><span>Paper type</span><strong>{selectedPaperRate?.paperType || 'Not set'}</strong></div>
-                <div className="ranking-item"><span>Wastage applied</span><strong>{selectedProfile ? `${formatNumber(selectedProfile.wastagePercent, 2)}%` : 'Not set'}</strong></div>
-                <div className="ranking-item"><span>Handle rule</span><strong>{quoteForm.handleType}</strong></div>
-                <div className="ranking-item"><span>Labour / 1000</span><strong>{selectedProfile ? formatNumber(selectedProfile.labourCostPer1000, 2) : 'Not set'}</strong></div>
-                <div className="ranking-item"><span>Transport / job</span><strong>{selectedProfile ? formatNumber(selectedProfile.transportCostPerJob, 2) : 'Not set'}</strong></div>
-                <div className="ranking-item"><span>Cost profile</span><strong>{selectedProfile?.name || 'Not set'}</strong></div>
-              </div>
-            </section>
-          ) : null}
-          <section className="card calculator-result-card">
-            <SectionTitle title={canViewInternalCosts ? 'Quote Output' : 'Quote Price'} />
-            <div className="ranking-list">
-              {canViewInternalCosts ? (
-                <div className="ranking-item"><span>Unit cost</span><strong>{formatNumber(unitCost, 4)}</strong></div>
-              ) : null}
-              <div className="ranking-item"><span>Quoted unit price</span><strong>{formatNumber(quotedUnitPrice, 4)}</strong></div>
-              <div className="ranking-item"><span>Total quote</span><strong>{formatNumber(quotedTotal, 2)}</strong></div>
-              {canViewInternalCosts ? (
-                <>
-                  <div className="ranking-item"><span>Paper kg / bag</span><strong>{formatNumber(paperWeightWithWasteKgPerBag, 6)}</strong></div>
-                  <div className="ranking-item"><span>Total estimated paper kg</span><strong>{formatNumber(paperWeightWithWasteKgPerBag * quantity, 2)}</strong></div>
-                </>
-              ) : (
-                <>
-                  <div className="ranking-item"><span>Quantity quoted</span><strong>{formatNumber(quantity)}</strong></div>
-                  <div className="ranking-item"><span>Print method</span><strong>{printMethod}</strong></div>
-                </>
-              )}
-            </div>
-          </section>
+      {/* Shared header --------------------------------------------------- */}
+      <section className="card calculator2-shared">
+        <h3>Quote header</h3>
+        <div className="calculator2-shared-grid">
+          <label>
+            <span>Client *</span>
+            <select value={state.shared.clientId} onChange={(e) => updateShared('clientId', e.target.value)}>
+              <option value="">Select client</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Lead (optional)</span>
+            <select value={state.shared.leadId} onChange={(e) => updateShared('leadId', e.target.value)}>
+              <option value="">No lead linked</option>
+              {clientLeads.map((l) => <option key={l.id} value={l.id}>{l.leadNumber} · {l.companyName || l.contactName}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Pricing tier</span>
+            <select value={state.shared.pricingTierId} onChange={(e) => updateShared('pricingTierId', e.target.value)}>
+              <option value="">{selectedClient ? `Client default (${pricingTiers.find((t) => t.id === selectedClient.pricingTierId)?.name || 'none'})` : 'Use client default'}</option>
+              {pricingTiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Paper rate *</span>
+            <select value={state.shared.paperRateId} onChange={(e) => updateShared('paperRateId', e.target.value)}>
+              <option value="">Select paper rate</option>
+              {paperRates.filter((r) => r.active).map((r) => (
+                <option key={r.id} value={r.id}>{r.name} · {r.gsm}gsm · {r.pricePerTon}/t</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Cost profile *</span>
+            <select value={state.shared.costProfileId} onChange={(e) => updateShared('costProfileId', e.target.value)}>
+              <option value="">Select profile</option>
+              {costProfiles.filter((p) => p.active).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Quote-level margin %</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={state.shared.customMarginPercent}
+              onChange={(e) => updateShared('customMarginPercent', e.target.value)}
+              placeholder="Blank = tier/profile default"
+            />
+          </label>
+          <label>
+            <span>Quote date</span>
+            <input type="date" value={state.shared.quoteDate} onChange={(e) => updateShared('quoteDate', e.target.value)} />
+          </label>
+          <label>
+            <span>Sales owner</span>
+            <input value={state.shared.salesOwnerName} onChange={(e) => updateShared('salesOwnerName', e.target.value)} placeholder="Your name" />
+          </label>
+          <label className="calculator2-shared-notes">
+            <span>Quote notes (printed)</span>
+            <textarea
+              rows={2}
+              value={state.shared.notes}
+              onChange={(e) => updateShared('notes', e.target.value)}
+              placeholder="e.g. Lead time 14 days · prices valid 30 days · ex-works"
+            />
+          </label>
         </div>
       </section>
+
+      {/* Line items ------------------------------------------------------ */}
+      <section className="calculator2-lines">
+        {state.lines.map((line, idx) => (
+          <LineCard
+            key={line.id}
+            line={line}
+            index={idx + 1}
+            result={computation.lines[idx]}
+            products={products}
+            paperRates={paperRates}
+            costProfiles={costProfiles}
+            canViewInternalCosts={canViewInternalCosts}
+            onChange={(patch) => updateLine(line.id, patch)}
+            onDuplicate={() => duplicateLine(line.id)}
+            onRemove={() => removeLine(line.id)}
+          />
+        ))}
+        <button type="button" className="ghost-button calculator2-add-line" onClick={addLine}>
+          + Add another SKU
+        </button>
+      </section>
+
+      {/* Totals + actions ------------------------------------------------ */}
+      <section className="card calculator2-totals">
+        <h3>Totals</h3>
+        <div className="calculator2-totals-grid">
+          <div><span>Lines</span><strong>{computation.rollup.lineCount}</strong></div>
+          <div><span>Total bags</span><strong>{formatNumber(computation.rollup.totalQuantity)}</strong></div>
+          {canViewInternalCosts && (
+            <div><span>Total cost</span><strong>{formatNumber(computation.rollup.totalCost, 2)}</strong></div>
+          )}
+          <div><span>Total quoted</span><strong>{formatNumber(computation.rollup.totalQuoted, 2)}</strong></div>
+          {canViewInternalCosts && (
+            <div><span>Blended margin</span><strong>{formatNumber(computation.rollup.blendedMarginPercent, 2)}%</strong></div>
+          )}
+          {canViewInternalCosts && (
+            <div><span>Total paper kg</span><strong>{formatNumber(computation.rollup.totalPaperKg, 2)}</strong></div>
+          )}
+        </div>
+
+        {blockingIssues.length > 0 && (
+          <p className="muted calculator2-block-list">
+            Before saving: {blockingIssues.join(' · ')}
+          </p>
+        )}
+        {savedMessage && (
+          <p className={savedMessage.startsWith('Save failed') ? 'callout error' : 'muted'}>{savedMessage}</p>
+        )}
+
+        <div className="calculator2-actions">
+          <button type="button" className="ghost-button" onClick={reset} disabled={saving}>Reset</button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={handleSaveAsQuote}
+            disabled={saving || blockingIssues.length > 0 || !onSaveAsQuote}
+          >
+            {saving ? 'Saving…' : 'Save as Quote'}
+          </button>
+        </div>
+      </section>
+
+      {/* If the form is empty / no products, give the user a nudge. */}
+      {clients.length === 0 || paperRates.length === 0 || costProfiles.length === 0 ? (
+        <EmptyState
+          title="Set up your masters first"
+          body="The calculator needs at least one client, one active paper rate, and one active cost profile to produce a number."
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/* ─── Line card ───────────────────────────────────────────────────────── */
+
+interface LineCardProps {
+  line: CalculatorLineItem;
+  index: number;
+  result: LineResult;
+  products: Product[];
+  paperRates: PaperRate[];
+  costProfiles: CostProfile[];
+  canViewInternalCosts: boolean;
+  onChange: (patch: Partial<CalculatorLineItem>) => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+}
+
+function LineCard({
+  line,
+  index,
+  result,
+  products,
+  paperRates,
+  costProfiles,
+  canViewInternalCosts,
+  onChange,
+  onDuplicate,
+  onRemove,
+}: LineCardProps) {
+  const [showOverrides, setShowOverrides] = useState(false);
+
+  return (
+    <div className="card calculator2-line-card">
+      <header className="calculator2-line-header">
+        <h4>SKU {index}{line.productName ? ` — ${line.productName}` : ''}</h4>
+        <div className="calculator2-line-actions">
+          <button type="button" className="link-button" onClick={onDuplicate}>Duplicate</button>
+          <button type="button" className="link-button calculator2-remove" onClick={onRemove}>Remove</button>
+        </div>
+      </header>
+
+      <div className="calculator2-line-grid">
+        <label>
+          <span>Product</span>
+          <select
+            value={line.productId}
+            onChange={(e) => {
+              const product = products.find((p) => p.id === e.target.value);
+              onChange({
+                productId: e.target.value,
+                productName: product?.name || line.productName,
+              });
+            }}
+          >
+            <option value="">— pick or type below —</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>SKU name / description</span>
+          <input
+            value={line.productName}
+            onChange={(e) => onChange({ productName: e.target.value })}
+            placeholder="e.g. SOS Brown 70gsm 12x7x22"
+          />
+        </label>
+        <label className="calculator2-grid-span-2">
+          <span>Description (printed on quote)</span>
+          <input
+            value={line.description}
+            onChange={(e) => onChange({ description: e.target.value })}
+            placeholder="Free-text line shown to the customer"
+          />
+        </label>
+
+        <label>
+          <span>Bag width (mm)</span>
+          <input type="number" inputMode="decimal" min="0" value={line.bagWidthMm} onChange={(e) => onChange({ bagWidthMm: e.target.value })} />
+        </label>
+        <label>
+          <span>Bag height (mm)</span>
+          <input type="number" inputMode="decimal" min="0" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
+        </label>
+        <label>
+          <span>Gusset (mm)</span>
+          <input type="number" inputMode="decimal" min="0" value={line.gussetMm} onChange={(e) => onChange({ gussetMm: e.target.value })} />
+        </label>
+        <label>
+          <span>Quantity</span>
+          <input type="number" inputMode="numeric" min="0" value={line.quantity} onChange={(e) => onChange({ quantity: e.target.value })} />
+        </label>
+
+        <label>
+          <span>Handle</span>
+          <select value={line.handleType} onChange={(e) => onChange({ handleType: e.target.value as HandleType })}>
+            {HANDLE_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Print method</span>
+          <select value={line.printMethod} onChange={(e) => onChange({ printMethod: e.target.value as PrintMethod })}>
+            {PRINT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Colors</span>
+          <input type="number" inputMode="numeric" min="0" value={line.colors} onChange={(e) => onChange({ colors: e.target.value })} />
+        </label>
+        <label>
+          <span>Per-line margin %</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.1"
+            value={line.customMarginPercent}
+            onChange={(e) => onChange({ customMarginPercent: e.target.value })}
+            placeholder="Inherit"
+          />
+        </label>
       </div>
-    </>
+
+      <button
+        type="button"
+        className="link-button calculator2-overrides-toggle"
+        onClick={() => setShowOverrides((v) => !v)}
+      >
+        {showOverrides ? 'Hide' : 'Show'} per-line paper / profile overrides
+      </button>
+      {showOverrides && (
+        <div className="calculator2-line-grid">
+          <label>
+            <span>Paper rate (override)</span>
+            <select value={line.paperRateIdOverride} onChange={(e) => onChange({ paperRateIdOverride: e.target.value })}>
+              <option value="">Inherit from header</option>
+              {paperRates.filter((r) => r.active).map((r) => (
+                <option key={r.id} value={r.id}>{r.name} · {r.gsm}gsm</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Cost profile (override)</span>
+            <select value={line.costProfileIdOverride} onChange={(e) => onChange({ costProfileIdOverride: e.target.value })}>
+              <option value="">Inherit from header</option>
+              {costProfiles.filter((p) => p.active).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {/* Live per-line numbers ----------------------------------------- */}
+      <div className="calculator2-line-result">
+        <div><span>Print resolved</span><strong>{result.resolvedPrintMethod}</strong></div>
+        <div><span>Paper width</span><strong>{formatNumber(result.recommendedPaperWidthMm, 1)}mm</strong></div>
+        <div><span>Sheet height</span><strong>{formatNumber(result.recommendedSheetHeightMm, 1)}mm</strong></div>
+        {canViewInternalCosts && (
+          <>
+            <div><span>Paper / bag</span><strong>{formatNumber(result.paperPerBag, 4)}</strong></div>
+            <div><span>Handle / bag</span><strong>{formatNumber(result.handlePerBag, 4)}</strong></div>
+            <div><span>Print / bag</span><strong>{formatNumber(result.printPerBag, 4)}</strong></div>
+            <div><span>Glue / bag</span><strong>{formatNumber(result.glueOnlyPerBag, 4)}</strong></div>
+            <div><span>Labour / bag</span><strong>{formatNumber(result.labourPerBag, 4)}</strong></div>
+            <div><span>Pack / bag</span><strong>{formatNumber(result.packagingPerBag, 4)}</strong></div>
+            <div><span>Transport / bag</span><strong>{formatNumber(result.transportPerBag, 4)}</strong></div>
+            <div><span>Unit cost</span><strong>{formatNumber(result.unitCost, 4)}</strong></div>
+            <div><span>Margin %</span><strong>{formatNumber(result.marginPercent, 2)}%</strong></div>
+          </>
+        )}
+        <div className="calculator2-line-price"><span>Quoted unit price</span><strong>{formatNumber(result.quotedUnitPrice, 4)}</strong></div>
+        <div className="calculator2-line-price"><span>Line total</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
+      </div>
+    </div>
   );
 }

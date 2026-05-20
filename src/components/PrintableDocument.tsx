@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { AppSettingsCompany, DEFAULT_APP_SETTINGS } from '../types';
 
 /**
  * Shared printable document layout. Used by Invoice, Delivery Note, and
@@ -7,18 +8,14 @@ import { ReactNode } from 'react';
  * The component renders both inline (preview) and as a print-only wrapper
  * (`printable-doc` class) — see styles.css for the @media print rules that
  * hide the surrounding app chrome and force A4 sizing.
+ *
+ * Company details + footer lines are passed in via props so that the Settings
+ * page can edit them once and have every doc reflect the change. The legacy
+ * `JOMOPAK_COMPANY_DETAILS` constant is kept as a fallback for any caller that
+ * hasn't been wired through yet.
  */
 
-export const JOMOPAK_COMPANY_DETAILS = {
-  name: 'JomoPak',
-  legalName: 'SAVA ONLINE T/A JomoPak Pty Ltd',
-  addressLine1: '52A 4th Street Brentwood Park',
-  addressLine2: 'Benoni, Gauteng 1501',
-  phone: '+27663049951',
-  email: 'aman@jomopak.co.za',
-  vatNumber: '4930295326',
-  footerNote: '',
-};
+export const JOMOPAK_COMPANY_DETAILS: AppSettingsCompany = DEFAULT_APP_SETTINGS.company;
 
 export interface PrintableDocumentMeta {
   /** Field/value pairs shown on the right of the header (e.g. INVOICE #, DATE). */
@@ -37,10 +34,22 @@ interface PrintableDocumentProps {
   shipTo?: ReactNode;
   /** Main document body — line items table, signatures, etc. */
   children: ReactNode;
-  /** Optional override of the standard footer note. */
+  /**
+   * Optional override of the standard footer note. If omitted the component
+   * uses `defaultFooterLines` (from Settings) and falls back to a baked-in
+   * default if neither is provided.
+   */
   footer?: ReactNode;
+  /** Default footer copy from Settings → Templates, used when `footer` is omitted. */
+  defaultFooterLines?: string[];
   /** Toolbar shown above the doc in the app (Print button, Close, etc). */
   toolbar?: ReactNode;
+  /**
+   * Editable company details from Settings → Branding. Falls back to the
+   * legacy hardcoded `JOMOPAK_COMPANY_DETAILS` so callers that haven't been
+   * updated still render correctly.
+   */
+  company?: AppSettingsCompany;
 }
 
 export function PrintableDocument({
@@ -50,25 +59,34 @@ export function PrintableDocument({
   shipTo,
   children,
   footer,
+  defaultFooterLines,
   toolbar,
+  company,
 }: PrintableDocumentProps) {
+  const branded = company ?? JOMOPAK_COMPANY_DETAILS;
   return (
     <div className="printable-doc-wrap">
       {toolbar ? <div className="printable-doc-toolbar no-print">{toolbar}</div> : null}
       <article className="printable-doc">
         <header className="printable-doc-header">
           <div className="printable-doc-company">
-            <strong>{JOMOPAK_COMPANY_DETAILS.name}</strong>
-            <div>{JOMOPAK_COMPANY_DETAILS.addressLine1}</div>
-            <div>{JOMOPAK_COMPANY_DETAILS.addressLine2}</div>
-            <div>{JOMOPAK_COMPANY_DETAILS.phone}</div>
-            <div>{JOMOPAK_COMPANY_DETAILS.email}</div>
-            <div>VAT Registration No. {JOMOPAK_COMPANY_DETAILS.vatNumber}</div>
+            <strong>{branded.name}</strong>
+            <div>{branded.addressLine1}</div>
+            <div>{branded.addressLine2}</div>
+            <div>{branded.phone}</div>
+            <div>{branded.email}</div>
+            <div>VAT Registration No. {branded.vatNumber}</div>
           </div>
-          <div className="printable-doc-brand-mark" aria-hidden>
-            <span className="brand-mark-bag">JomoPak</span>
-            <span className="brand-mark-tag">PAPER BAGS</span>
-          </div>
+          {branded.logoUrl ? (
+            <div className="printable-doc-logo-wrap" aria-hidden>
+              <img src={branded.logoUrl} alt={`${branded.name} logo`} className="printable-doc-logo" />
+            </div>
+          ) : (
+            <div className="printable-doc-brand-mark" aria-hidden>
+              <span className="brand-mark-bag">{branded.name || 'JomoPak'}</span>
+              <span className="brand-mark-tag">PAPER BAGS</span>
+            </div>
+          )}
         </header>
 
         <h1 className="printable-doc-title">{documentTitle}</h1>
@@ -99,12 +117,19 @@ export function PrintableDocument({
         <footer className="printable-doc-footer">
           {footer ?? (
             <>
-              <p>50% deposit to be made to secure your stock and balance of payment upon receipt of full order.</p>
-              <p>Please send POP when payment is made.</p>
-              <p>Limited Stock available.</p>
+              {(defaultFooterLines && defaultFooterLines.length > 0
+                ? defaultFooterLines
+                : [
+                    '50% deposit to be made to secure your stock and balance of payment upon receipt of full order.',
+                    'Please send POP when payment is made.',
+                    'Limited Stock available.',
+                  ]
+              ).map((line, idx) => (
+                <p key={idx}>{line}</p>
+              ))}
             </>
           )}
-          <p className="printable-doc-footer-legal">{JOMOPAK_COMPANY_DETAILS.legalName}</p>
+          <p className="printable-doc-footer-legal">{branded.legalName}</p>
         </footer>
       </article>
     </div>

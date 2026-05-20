@@ -5,19 +5,49 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
+import { BulkActionsBar } from '../../components/BulkActionsBar';
+import { HistoryDrawerTarget } from '../../components/HistoryDrawer';
+import { EditFormGuard } from '../../components/EditFormGuard';
+import { SavedViewsBar } from '../../components/SavedViewsBar';
+import { SavedView, useSavedViews } from '../../hooks/useSavedViews';
+import { downloadCsv } from '../../utils/csvExport';
 import { JobDetailPanel } from './JobDetailPanel';
 import {
+  buildBlankChangeoverChecklist,
+  buildBlankQcPlan,
+  CHANGEOVER_CHECKLIST_KEYS,
+  CHANGEOVER_CHECKLIST_LABELS,
+  ChangeoverChecklistItem,
   Client,
+  CleaningLogEntry,
   DispatchRecord,
   FinishedGoodsStock,
+  FoodContactLevel,
+  FoodSafeMaterial,
+  FOOD_CONTACT_LEVEL_LABELS,
+  getLatestPassingClean,
+  isChangeoverComplete,
+  isFoodPackagingLevel,
+  isQcStagePassed,
   JobCard,
   JobFilters,
   JobFormState,
+  Machine,
   MaterialReceipt,
   PaperLog,
   PricingTier,
   Product,
   ProductionLogEntry,
+  QC_CHECK_KEYS,
+  QC_CHECK_LABELS,
+  QC_STAGES,
+  QC_STAGE_LABELS,
+  QcCheckKey,
+  QcCheckResult,
+  QcStage,
+  QcStageRecord,
+  requiresDirectContactApproval,
+  validateJobFoodSafety,
   WasteEntry,
 } from '../../types';
 import { JOB_STATUSES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -58,6 +88,38 @@ interface JobCardsPageProps {
   onQuickAddWaste: (job: JobCard) => void;
   onQuickAddPaper: (job: JobCard) => void;
   onQuickAddDispatch: (job: JobCard) => void;
+  /**
+   * Optional. When provided, the detail panel renders a "History" pill that
+   * opens the global HistoryDrawer for this record.
+   */
+  onOpenHistory?: (target: HistoryDrawerTarget) => void;
+  /** Used to namespace saved views per user in localStorage. Optional. */
+  userId?: string;
+  /** Current authed user — used for the edit-lock presence banner. */
+  currentUser?: { id?: string; name?: string };
+  /**
+   * Promote this job to a Delivery Note. Caller pre-fills the delivery note
+   * form with client + product + quantity from the job and switches view.
+   */
+  onCreateDelivery?: (job: JobCard) => void;
+  /**
+   * Promote this job directly to an Invoice (skip delivery note). Used for
+   * direct-billed clients where dispatch happens after invoicing.
+   */
+  onCreateInvoice?: (job: JobCard) => void;
+  /**
+   * Approved food-safe materials available to select on the job. Optional so
+   * the page renders correctly during the food-safety rollout.
+   */
+  foodSafeMaterials?: FoodSafeMaterial[];
+  /** Machines available for assignment. Optional. */
+  machines?: Machine[];
+  /** Recent cleaning logs — used by the food-safety section to display the gate state. */
+  cleaningLogs?: CleaningLogEntry[];
+  /** Open the printable Food-Safe Certificate overlay for a job. Optional. */
+  onPrintFoodSafeCertificate?: (job: JobCard) => void;
+  /** Open the printable Job Card overlay for the foreman. Optional. */
+  onPrintJobCard?: (job: JobCard) => void;
 }
 
 export function JobCardsPage(props: JobCardsPageProps) {
@@ -91,6 +153,16 @@ export function JobCardsPage(props: JobCardsPageProps) {
     onQuickAddWaste,
     onQuickAddPaper,
     onQuickAddDispatch,
+    onOpenHistory,
+    userId,
+    onCreateDelivery,
+    onCreateInvoice,
+    foodSafeMaterials = [],
+    machines = [],
+    cleaningLogs = [],
+    onPrintFoodSafeCertificate,
+    onPrintJobCard,
+    currentUser,
   } = props;
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
   // Tracks which client we last auto-filled defaults from in Quick Add, so we
@@ -98,6 +170,73 @@ export function JobCardsPage(props: JobCardsPageProps) {
   const [lastPrefilledClientId, setLastPrefilledClientId] = useState<string>('');
 
   const selectedJob = filteredJobs.find((job) => job.id === selectedJobId) ?? null;
+
+  // Saved views — built-ins ship with sensible presets. Users can add their own
+  // via the "+ Save current" button. See useSavedViews / SavedViewsBar.
+  const builtInJobViews: SavedView<JobFilters>[] = useMemo(
+    () => [
+      { id: 'jobs:builtin:all', name: 'All', filters: { search: '', month: '', status: '', customer: '', fsc: 'all' }, createdAt: '1970-01-01', builtIn: true },
+      { id: 'jobs:builtin:in-production', name: 'In production', filters: { search: '', month: '', status: 'In Production', customer: '', fsc: 'all' }, createdAt: '1970-01-01', builtIn: true },
+      { id: 'jobs:builtin:awaiting-approval', name: 'Awaiting approval', filters: { search: '', month: '', status: 'Awaiting Approval', customer: '', fsc: 'all' }, createdAt: '1970-01-01', builtIn: true },
+      { id: 'jobs:builtin:fsc', name: 'FSC only', filters: { search: '', month: '', status: '', customer: '', fsc: 'yes' }, createdAt: '1970-01-01', builtIn: true },
+    ],
+    [],
+  );
+  const { views: jobViews, saveView: saveJobView, deleteView: deleteJobView } = useSavedViews<JobFilters>(
+    'jobs',
+    userId || 'default',
+    builtInJobViews,
+  );
+  const isViewActive = (view: SavedView<JobFilters>) =>
+    JSON.stringify(view.filters) === JSON.stringify(jobFilters);
+
+  // Bulk-select state — kept local to the page so the surrounding App tree
+  // doesn't have to know about it. We store as a Set for O(1) toggle, and
+  // convert to a plain array when surfacing actions.
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
+  const allFilteredSelected = filteredJobs.length > 0 && filteredJobs.every((job) => selectedRowIds.has(job.id));
+  function toggleRow(id: string) {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAllFiltered() {
+    setSelectedRowIds((prev) => {
+      if (allFilteredSelected) {
+        // Deselect anything currently in the filtered view, leaving any
+        // selections from previous filter states alone.
+        const next = new Set(prev);
+        for (const job of filteredJobs) next.delete(job.id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const job of filteredJobs) next.add(job.id);
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedRowIds(new Set()); }
+  function exportSelectedCsv() {
+    const rows = filteredJobs
+      .filter((job) => selectedRowIds.has(job.id))
+      .map((job) => ({
+        Job: job.jobNumber,
+        Customer: job.customerName,
+        Product: job.productName,
+        Status: job.status,
+        Stock: job.stockReservationStatus,
+        Proofing: job.approvalStatus,
+        Dispatch: job.dispatchStatus,
+        Planned: job.quantityPlanned,
+        Completed: job.quantityCompleted,
+        FSC: job.fscRelated ? 'Yes' : 'No',
+        DueDate: job.dueDate || '',
+      }));
+    if (rows.length === 0) return;
+    downloadCsv(`jobs-export-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  }
 
   useEffect(() => {
     if (jobEditingId) {
@@ -163,6 +302,8 @@ export function JobCardsPage(props: JobCardsPageProps) {
       paperType: lastJob?.paperType || jobForm.paperType,
       gsm: lastJob?.gsm ? String(lastJob.gsm) : jobForm.gsm,
       fscRelated: lastJob ? lastJob.fscRelated : jobForm.fscRelated,
+      foodContactLevel: lastJob ? lastJob.foodContactLevel ?? 'NonFood' : jobForm.foodContactLevel,
+      foodSafeMaterialIds: lastJob ? lastJob.foodSafeMaterialIds ?? [] : jobForm.foodSafeMaterialIds,
       printRequired: lastJob ? lastJob.printRequired : jobForm.printRequired,
       printMethod: (lastJob?.printMethod as JobFormState['printMethod']) || jobForm.printMethod,
       colorCount: lastJob?.colorCount != null ? String(lastJob.colorCount) : jobForm.colorCount,
@@ -479,6 +620,274 @@ export function JobCardsPage(props: JobCardsPageProps) {
         </div>
       ),
     },
+    {
+      key: 'food-safety',
+      title: 'Food safety',
+      subtitle: 'Classify this job. Food-packaging jobs lock to the Approved Food-Safe Material Register and cannot start with missing approvals.',
+      contextActive: isFoodPackagingLevel(jobForm.foodContactLevel),
+      body: (() => {
+        const isFood = isFoodPackagingLevel(jobForm.foodContactLevel);
+        const needsDirect = requiresDirectContactApproval(jobForm.foodContactLevel);
+        const eligibleMaterials = foodSafeMaterials.filter((m) =>
+          needsDirect ? m.directContactApproved : (m.directContactApproved || m.indirectContactApproved),
+        );
+        const blocks = isFood
+          ? validateJobFoodSafety(jobForm.foodContactLevel, jobForm.foodSafeMaterialIds, foodSafeMaterials)
+          : [];
+        function toggleMaterial(id: string) {
+          const next = jobForm.foodSafeMaterialIds.includes(id)
+            ? jobForm.foodSafeMaterialIds.filter((existing) => existing !== id)
+            : [...jobForm.foodSafeMaterialIds, id];
+          setJobForm({ ...jobForm, foodSafeMaterialIds: next });
+        }
+        return (
+          <div className="form-grid">
+            <label className="full-span"><span>Food-contact classification</span>
+              <select
+                value={jobForm.foodContactLevel}
+                onChange={(e) => setJobForm({ ...jobForm, foodContactLevel: e.target.value as FoodContactLevel })}
+              >
+                {(Object.keys(FOOD_CONTACT_LEVEL_LABELS) as FoodContactLevel[]).map((lvl) => (
+                  <option key={lvl} value={lvl}>{FOOD_CONTACT_LEVEL_LABELS[lvl]}</option>
+                ))}
+              </select>
+            </label>
+            {isFood ? (
+              <>
+                <label><span>Internal batch number (auto if blank)</span><input value={jobForm.internalBatchNumber} onChange={(e) => setJobForm({ ...jobForm, internalBatchNumber: e.target.value })} placeholder="Generated on save" /></label>
+                <label className="full-span"><span>Food safety notes (intended food use, customer rules)</span><textarea rows={2} value={jobForm.foodSafetyNotes} onChange={(e) => setJobForm({ ...jobForm, foodSafetyNotes: e.target.value })} /></label>
+                <div className="full-span">
+                  <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', display: 'block', marginBottom: 8 }}>
+                    Approved materials for this job ({eligibleMaterials.length} eligible at this level)
+                  </span>
+                  {eligibleMaterials.length === 0 ? (
+                    <div className="food-safety-block-panel">
+                      <strong>No materials approved for this food-contact level.</strong>
+                      Add and approve at least one material on the Approved Food-Safe Material Register before this job can be released.
+                    </div>
+                  ) : (
+                    <div className="chem-pictogram-grid">
+                      {eligibleMaterials.map((m) => {
+                        const on = jobForm.foodSafeMaterialIds.includes(m.id);
+                        const approvedNow = m.status === 'Approved';
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => toggleMaterial(m.id)}
+                            disabled={!approvedNow}
+                            className={`chem-pictogram-pill${on ? ' chem-pictogram-pill-on' : ''}`}
+                            title={approvedNow ? '' : `Status: ${m.status}`}
+                          >
+                            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                              <strong>{m.materialName}</strong>
+                              <span style={{ fontSize: 10, opacity: 0.8 }}>
+                                {m.supplierName} · {m.status}
+                                {m.directContactApproved ? ' · Direct OK' : m.indirectContactApproved ? ' · Indirect OK' : ''}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {blocks.length > 0 ? (
+                  <div className="full-span food-safety-block-panel">
+                    <strong>Food safety blocks (must clear before release):</strong>
+                    <ul>
+                      {blocks.map((b, idx) => <li key={idx}>{b.reason}</li>)}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="full-span food-safety-pass-panel">All food safety checks passing for this job.</div>
+                )}
+              </>
+            ) : (
+              <p className="muted full-span">Non-food packaging job — food-safety gate disabled.</p>
+            )}
+          </div>
+        );
+      })(),
+    },
+    {
+      key: 'machine-cleaning',
+      title: 'Machine & cleaning gate',
+      subtitle: 'A food-packaging job needs an assigned machine with a passing cleaning log in the last 24 hours.',
+      contextActive: !!jobForm.assignedMachineId,
+      body: (() => {
+        const isFood = isFoodPackagingLevel(jobForm.foodContactLevel);
+        const clean = jobForm.assignedMachineId
+          ? getLatestPassingClean(jobForm.assignedMachineId, cleaningLogs)
+          : null;
+        return (
+          <div className="form-grid">
+            <label className="full-span"><span>Assigned machine</span>
+              <select value={jobForm.assignedMachineId} onChange={(e) => setJobForm({ ...jobForm, assignedMachineId: e.target.value })}>
+                <option value="">No machine assigned</option>
+                {machines.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </label>
+            {!isFood ? (
+              <p className="muted full-span">Non-food packaging job — cleaning gate disabled.</p>
+            ) : !jobForm.assignedMachineId ? (
+              <div className="full-span food-safety-block-panel">
+                <strong>Pick a machine.</strong>
+                Without an assigned machine the cleaning gate can't be evaluated and the job can't be cleared.
+              </div>
+            ) : clean ? (
+              <div className="full-span food-safety-pass-panel">
+                Last passing cleaning log: <strong>{clean.logNumber}</strong> · {clean.cleaningType} · by {clean.performedByName} ({new Date(clean.performedAt).toLocaleString()})
+              </div>
+            ) : (
+              <div className="full-span food-safety-block-panel">
+                <strong>No passing cleaning log within the last 24 hours.</strong>
+                Open Cleaning Logs and record a Pass for this machine before the job can be cleared.
+              </div>
+            )}
+          </div>
+        );
+      })(),
+    },
+    {
+      key: 'changeover',
+      title: 'Product changeover checklist',
+      subtitle: 'Required when moving from one job to another, especially non-food → food.',
+      contextActive: isChangeoverComplete(jobForm.changeoverChecklist),
+      body: (() => {
+        const isFood = isFoodPackagingLevel(jobForm.foodContactLevel);
+        const items = jobForm.changeoverChecklist.length === 9
+          ? jobForm.changeoverChecklist
+          : buildBlankChangeoverChecklist();
+        function toggleItem(key: ChangeoverChecklistItem['key']) {
+          const next = items.map((it) => it.key === key
+            ? { ...it, completed: !it.completed, completedAt: !it.completed ? new Date().toISOString() : '', completedByName: !it.completed ? (it.completedByName || '') : '' }
+            : it);
+          setJobForm({ ...jobForm, changeoverChecklist: next });
+        }
+        function setItemBy(key: ChangeoverChecklistItem['key'], name: string) {
+          const next = items.map((it) => it.key === key ? { ...it, completedByName: name } : it);
+          setJobForm({ ...jobForm, changeoverChecklist: next });
+        }
+        const completedCount = items.filter((it) => it.completed).length;
+        return (
+          <div className="form-grid">
+            {!isFood ? (
+              <p className="muted full-span">Non-food packaging job — changeover checklist optional.</p>
+            ) : null}
+            <div className="full-span">
+              <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', display: 'block', marginBottom: 8 }}>
+                {completedCount} of {CHANGEOVER_CHECKLIST_KEYS.length} complete
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {CHANGEOVER_CHECKLIST_KEYS.map((key) => {
+                  const item = items.find((it) => it.key === key) ?? { key, completed: false, completedAt: '', completedByName: '' };
+                  return (
+                    <div key={key} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--jp-line)' }}>
+                      <input type="checkbox" checked={item.completed} onChange={() => toggleItem(key)} />
+                      <span style={{ textDecoration: item.completed ? 'line-through' : 'none', opacity: item.completed ? 0.7 : 1 }}>{CHANGEOVER_CHECKLIST_LABELS[key]}</span>
+                      <input
+                        type="text"
+                        placeholder="By name"
+                        value={item.completedByName}
+                        onChange={(e) => setItemBy(key, e.target.value)}
+                        disabled={!item.completed}
+                        style={{ maxWidth: 140 }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {isFood && !isChangeoverComplete(items) ? (
+              <div className="full-span food-safety-block-panel">
+                <strong>Changeover not complete.</strong>
+                All 9 items must be ticked before the job can be cleared for production.
+              </div>
+            ) : isFood ? (
+              <div className="full-span food-safety-pass-panel">Changeover complete.</div>
+            ) : null}
+          </div>
+        );
+      })(),
+    },
+    {
+      key: 'qc-plan',
+      title: 'Food-safety QC plan',
+      subtitle: 'Sign off each QC stage. First-off + Final are required before release.',
+      contextActive: jobForm.qcPlan.some(isQcStagePassed),
+      body: (() => {
+        const isFood = isFoodPackagingLevel(jobForm.foodContactLevel);
+        const stages: QcStageRecord[] = jobForm.qcPlan.length === 4 ? jobForm.qcPlan : buildBlankQcPlan();
+        function setStageCheck(stage: QcStage, key: QcCheckKey, result: QcCheckResult) {
+          const next = stages.map((s) => s.stage === stage
+            ? { ...s, checks: s.checks.map((c) => c.key === key ? { ...c, result } : c) }
+            : s);
+          setJobForm({ ...jobForm, qcPlan: next });
+        }
+        function setStageSignoff(stage: QcStage, name: string) {
+          const next = stages.map((s) => s.stage === stage
+            ? { ...s, signedOffByName: name, signedOffAt: name ? new Date().toISOString() : '' }
+            : s);
+          setJobForm({ ...jobForm, qcPlan: next });
+        }
+        function setStageNotes(stage: QcStage, notes: string) {
+          const next = stages.map((s) => s.stage === stage ? { ...s, notes } : s);
+          setJobForm({ ...jobForm, qcPlan: next });
+        }
+        return (
+          <div className="form-grid">
+            {!isFood ? <p className="muted full-span">Non-food packaging job — QC plan optional.</p> : null}
+            {QC_STAGES.map((stage) => {
+              const record = stages.find((s) => s.stage === stage) ?? stages[0];
+              const passed = isQcStagePassed(record);
+              const hasFail = record.checks.some((c) => c.result === 'Fail');
+              return (
+                <div key={stage} className="full-span" style={{
+                  border: '1px solid var(--jp-line)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  background: hasFail ? 'rgba(231,89,89,0.04)' : passed ? 'rgba(34,132,70,0.04)' : 'transparent',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                    <strong>{QC_STAGE_LABELS[stage]}</strong>
+                    <span style={{ fontSize: 11, color: hasFail ? '#b22b2b' : passed ? '#1d5c34' : '#64748b' }}>
+                      {hasFail ? 'Has FAIL items' : passed ? 'Signed off' : 'Pending'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: 4 }}>
+                    {QC_CHECK_KEYS.map((key) => {
+                      const check = record.checks.find((c) => c.key === key) ?? { key, result: 'Not Checked' as QcCheckResult };
+                      return (
+                        <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 }}>
+                          <span style={{ color: 'var(--jp-ink-3)' }}>{QC_CHECK_LABELS[key]}</span>
+                          <select value={check.result} onChange={(e) => setStageCheck(stage, key, e.target.value as QcCheckResult)}>
+                            <option value="Not Checked">— Not checked</option>
+                            <option value="Pass">Pass</option>
+                            <option value="Fail">Fail</option>
+                            <option value="N/A">N/A</option>
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 }}>
+                      <span style={{ color: 'var(--jp-ink-3)' }}>Signed off by</span>
+                      <input value={record.signedOffByName} onChange={(e) => setStageSignoff(stage, e.target.value)} placeholder="QC sign-off name" />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 }}>
+                      <span style={{ color: 'var(--jp-ink-3)' }}>Notes</span>
+                      <input value={record.notes} onChange={(e) => setStageNotes(stage, e.target.value)} placeholder="Findings / corrective action" />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })(),
+    },
   ];
 
   return (
@@ -579,20 +988,38 @@ export function JobCardsPage(props: JobCardsPageProps) {
           }
         />
       ) : mode === 'form' ? (
-        <FormWizard
-          title={jobEditingId ? 'Edit job card' : 'New job card'}
-          subtitle="Job numbers are generated when you save. Required fields are marked. Print, artwork, and stock-reservation sections only activate when relevant."
-          message={jobMessage}
-          sections={sections}
-          isEditing={Boolean(jobEditingId)}
-          saveLabel="Save Job Card"
-          onSave={onSave}
-          onCancel={handleBackToList}
-        />
+        <>
+          {currentUser && (
+            <EditFormGuard
+              table="jobs"
+              recordId={jobEditingId}
+              recordLabel={`Job ${jobEditingId}`}
+              currentUser={currentUser}
+            />
+          )}
+          <FormWizard
+            title={jobEditingId ? 'Edit job card' : 'New job card'}
+            subtitle="Job numbers are generated when you save. Required fields are marked. Print, artwork, and stock-reservation sections only activate when relevant."
+            message={jobMessage}
+            sections={sections}
+            isEditing={Boolean(jobEditingId)}
+            saveLabel="Save Job Card"
+            onSave={onSave}
+            onCancel={handleBackToList}
+          />
+        </>
       ) : (
         <>
         <section className="card">
           <SectionTitle title="Saved jobs" subtitle={`${filteredJobs.length} record(s) shown`} />
+
+          <SavedViewsBar<JobFilters>
+            views={jobViews}
+            isActive={isViewActive}
+            onApply={(view) => setJobFilters(view.filters)}
+            onSaveCurrent={(name) => saveJobView(name, jobFilters)}
+            onDelete={deleteJobView}
+          />
 
           <div className="filters-grid">
             <label>
@@ -632,6 +1059,14 @@ export function JobCardsPage(props: JobCardsPageProps) {
               <table>
                 <thead>
                   <tr>
+                    <th className="bulk-select-cell">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible jobs"
+                        checked={allFilteredSelected}
+                        onChange={toggleAllFiltered}
+                      />
+                    </th>
                     <th>Job</th>
                     <th>Date</th>
                     <th>Customer</th>
@@ -648,6 +1083,14 @@ export function JobCardsPage(props: JobCardsPageProps) {
                 <tbody>
                   {filteredJobs.map((job) => (
                     <tr key={job.id}>
+                      <td className="bulk-select-cell">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select job ${job.jobNumber}`}
+                          checked={selectedRowIds.has(job.id)}
+                          onChange={() => toggleRow(job.id)}
+                        />
+                      </td>
                       <td>
                         <strong>{job.jobNumber}</strong>
                         <div className="table-subtext">{job.productName}</div>
@@ -667,6 +1110,42 @@ export function JobCardsPage(props: JobCardsPageProps) {
                           <button className="table-button" onClick={() => handleStartEdit(job)}>Edit</button>
                           <button className="table-button" onClick={() => onDuplicate(job)}>Duplicate</button>
                           <button className="table-button" onClick={() => onQuickAddWaste(job)}>Log waste</button>
+                          {onCreateDelivery ? (
+                            <button
+                              className="table-button table-button-promote"
+                              onClick={() => onCreateDelivery(job)}
+                              title="Create a delivery note from this job"
+                            >
+                              → Delivery
+                            </button>
+                          ) : null}
+                          {onCreateInvoice ? (
+                            <button
+                              className="table-button table-button-promote"
+                              onClick={() => onCreateInvoice(job)}
+                              title="Create an invoice from this job"
+                            >
+                              → Invoice
+                            </button>
+                          ) : null}
+                          {onPrintJobCard ? (
+                            <button
+                              className="table-button"
+                              onClick={() => onPrintJobCard(job)}
+                              title="Print job card for the floor"
+                            >
+                              Print
+                            </button>
+                          ) : null}
+                          {onPrintFoodSafeCertificate && isFoodPackagingLevel(job.foodContactLevel ?? 'NonFood') ? (
+                            <button
+                              className="table-button"
+                              onClick={() => onPrintFoodSafeCertificate(job)}
+                              title="Print food-safe declaration / certificate for this batch"
+                            >
+                              FS Cert
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -690,8 +1169,26 @@ export function JobCardsPage(props: JobCardsPageProps) {
             onQuickAddWaste={onQuickAddWaste}
             onQuickAddPaper={onQuickAddPaper}
             onQuickAddDispatch={onQuickAddDispatch}
+            onOpenHistory={onOpenHistory}
           />
         ) : null}
+        <BulkActionsBar
+          selectedCount={selectedRowIds.size}
+          onClear={clearSelection}
+          label={selectedRowIds.size === 1 ? 'job selected' : 'jobs selected'}
+        >
+          <button type="button" className="secondary-button" onClick={exportSelectedCsv}>
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => window.print()}
+            title="Print the current view (browser print dialog)"
+          >
+            Print
+          </button>
+        </BulkActionsBar>
         </>
       )}
     </>

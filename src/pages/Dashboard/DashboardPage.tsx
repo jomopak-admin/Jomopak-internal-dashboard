@@ -3,7 +3,7 @@ import { FlagBadge, StatusBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
 import { StatCard } from '../../components/StatCard';
-import { Client, DashboardWidget, DispatchRecord, FinishedGoodsStock, JobCard, MaterialReceipt, PaperLog, ProductionLogEntry, SparePart, WasteEntry } from '../../types';
+import { Client, DashboardWidget, DispatchRecord, FinishedGoodsStock, JobCard, Lead, MaterialReceipt, PaperLog, ProductionLogEntry, SparePart, WasteEntry } from '../../types';
 import {
   calculateAverageWastePerCompletedJob,
   calculateAverageWastePerJob,
@@ -38,6 +38,10 @@ interface DashboardPageProps {
   dashboardWasteByReason: Array<{ label: string; value: number }>;
   dashboardTopPaper: Array<{ label: string; value: number }>;
   visibleWidgets: DashboardWidget[];
+  /** All leads — used by the Leads-attention widget. Optional. */
+  leads?: Lead[];
+  /** Open a lead by id in the Leads page (deep-link). Optional. */
+  onOpenLead?: (leadId: string) => void;
 }
 
 export function DashboardPage({
@@ -63,6 +67,8 @@ export function DashboardPage({
   dashboardWasteByReason,
   dashboardTopPaper,
   visibleWidgets,
+  leads = [],
+  onOpenLead,
 }: DashboardPageProps) {
   const [calculator, setCalculator] = useState({
     quantity: '10000',
@@ -241,6 +247,10 @@ export function DashboardPage({
           <EmptyState title="No active exceptions" body="The main operational exceptions list is currently clear." />
         )}
       </div>
+      ) : null}
+
+      {widgetSet.has('leadsAttention') ? (
+        <LeadsAttentionWidget leads={leads} onOpenLead={onOpenLead} />
       ) : null}
 
       {widgetSet.has('recentJobs') ? (
@@ -640,5 +650,84 @@ export function DashboardPage({
       </details>
       ) : null}
     </>
+  );
+}
+
+// ---- Leads needing attention widget ----
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function LeadsAttentionWidget({ leads, onOpenLead }: { leads: Lead[]; onOpenLead?: (id: string) => void }) {
+  const today = todayISO();
+
+  const overdue = useMemo(() => leads.filter((l) =>
+    l.status !== 'Won' && l.status !== 'Lost'
+    && !!l.nextFollowUpDate && l.nextFollowUpDate < today,
+  ), [leads, today]);
+
+  const dueToday = useMemo(() => leads.filter((l) =>
+    l.status !== 'Won' && l.status !== 'Lost'
+    && l.nextFollowUpDate === today,
+  ), [leads, today]);
+
+  const dueThisWeek = useMemo(() => leads.filter((l) => {
+    if (l.status === 'Won' || l.status === 'Lost') return false;
+    if (!l.nextFollowUpDate || l.nextFollowUpDate <= today) return false;
+    const t = new Date(l.nextFollowUpDate).getTime();
+    if (Number.isNaN(t)) return false;
+    return t - Date.now() < 7 * DAY_MS;
+  }), [leads, today]);
+
+  const unscheduled = useMemo(() => leads.filter((l) =>
+    l.status !== 'Won' && l.status !== 'Lost' && !l.nextFollowUpDate,
+  ), [leads]);
+
+  const headline = [...overdue, ...dueToday].slice(0, 8);
+
+  return (
+    <div className="card">
+      <SectionTitle title="Leads needing attention today" subtitle={`${overdue.length} overdue · ${dueToday.length} due today · ${dueThisWeek.length} this week · ${unscheduled.length} unscheduled`} />
+      {headline.length === 0 ? (
+        <EmptyState title="Nothing on the leads radar today" body="No overdue follow-ups and nothing due today. Either you're caught up, or new leads need a follow-up date set." />
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Contact</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Follow-up</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {headline.map((l) => {
+                const isOverdue = !!l.nextFollowUpDate && l.nextFollowUpDate < today;
+                const daysOverdue = isOverdue ? Math.floor((Date.now() - new Date(l.nextFollowUpDate!).getTime()) / DAY_MS) : 0;
+                return (
+                  <tr key={l.id}>
+                    <td><strong>{l.leadNumber}</strong><div className="table-subtext">{l.companyName}</div></td>
+                    <td>{l.contactName || '—'}<div className="table-subtext">{l.phone || l.email}</div></td>
+                    <td>{l.source}</td>
+                    <td>{l.status}</td>
+                    <td className={isOverdue ? 'cell-alert' : undefined}>
+                      {l.nextFollowUpDate ? formatDate(l.nextFollowUpDate) : '—'}
+                      {isOverdue ? <div className="table-subtext" style={{ color: '#b22b2b' }}>{daysOverdue}d overdue</div> : null}
+                    </td>
+                    <td>{onOpenLead ? <button className="table-button" onClick={() => onOpenLead(l.id)}>Open</button> : null}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
