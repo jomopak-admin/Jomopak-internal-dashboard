@@ -1521,10 +1521,14 @@ function App() {
   const dashboardDispatch = useMemo(() => data.dispatchRecords.filter((record) => getMonthKey(record.dispatchDate) === dashboardMonth), [dashboardMonth, data.dispatchRecords]);
   const dashboardFinishedStock = useMemo(() => data.finishedGoodsStock.filter((item) => getMonthKey(item.storedDate) === dashboardMonth), [dashboardMonth, data.finishedGoodsStock]);
 
-  // Phase 18 — subscribe to live Supabase changes on the high-traffic
-  // tables so two devices logged into the same account stay in sync
-  // without page reloads.
-  useRealtimeSync(setData, { selfUserId: profile?.id });
+  // Phase 18 realtime sync — TEMPORARILY DISABLED.
+  // The naive implementation created a write storm: a save fires a
+  // postgres_changes event, the hook merged it back into `data`, which
+  // re-triggered the auto-save effect in useProductionData, looping
+  // forever and deadlocking the `clients` table. Re-enable only once the
+  // hook tags remote-originated changes so they don't re-trigger a save.
+  // useRealtimeSync(setData, { selfUserId: profile?.id });
+  void useRealtimeSync;
 
   // Phase 16 — auto-derived notifications powering the topbar bell.
   const { notifications, unreadCount, markRead, markAllRead, isRead } = useNotifications(data);
