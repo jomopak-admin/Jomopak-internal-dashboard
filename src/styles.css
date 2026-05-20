@@ -110,14 +110,14 @@ p {
 
 .app-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  /* width:100% (NOT 100vw — 100vw includes the scrollbar and causes a
-     ~15px horizontal overflow that clips the right edge). overflow-x:clip
-     is a final safety net so nothing can ever bleed off-screen. */
+  /* Flexbox two-column shell. Sidebar is a fixed-width flex item that
+     never grows or shrinks; main content takes the rest and is allowed
+     to shrink (min-width:0) so wide children scroll inside it instead of
+     pushing the layout. This pattern cannot let content slide under the
+     sidebar. */
+  display: flex;
+  align-items: stretch;
   width: 100%;
-  max-width: 100%;
-  overflow-x: clip;
 }
 
 .login-shell {
@@ -143,16 +143,23 @@ p {
 }
 
 .sidebar {
+  /* Fixed 248px column — never grows, never shrinks. */
+  flex: 0 0 248px;
+  width: 248px;
+  max-width: 248px;
+  box-sizing: border-box;
   padding: 24px 18px;
   color: var(--jp-bone);
   background: var(--jp-ink);
   border-right: 1px solid rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
-  min-height: 100vh;
+  align-self: flex-start;
+  height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 18px;
+  overflow-y: auto;
 }
 
 .brand-block {
@@ -346,12 +353,12 @@ p {
 }
 
 .main-content {
-  padding: 24px 28px 40px;
+  /* Takes all remaining width; min-width:0 is the critical bit that lets
+     a flex item shrink below its content size, so wide tables scroll
+     inside here instead of pushing the whole layout sideways. */
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 100%;
-  /* If something inside is genuinely too wide (e.g. a big data table),
-     give the main column its own horizontal scroll instead of letting it
-     bleed across the sidebar / off the screen edge. */
+  padding: 24px 28px 40px;
   overflow-x: auto;
 }
 
@@ -2116,22 +2123,27 @@ th {
      Covers phones, tablets (incl. iPad landscape 1024), and narrow or
      zoomed desktop windows. */
   .app-shell {
-    grid-template-columns: 1fr;
+    display: block;
   }
   .sidebar {
+    /* Override the desktop flex sizing — become a fixed off-canvas drawer. */
+    flex: none;
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
+    height: 100vh;
     width: min(300px, 86vw);
+    max-width: 86vw;
     z-index: 70;
-    transform: translateX(-105%);
+    transform: translateX(-100%);
     transition: transform 200ms ease;
     overflow-y: auto;
     border-right: 1px solid rgba(0, 0, 0, 0.15);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
   }
   .sidebar.is-open { transform: translateX(0); }
+  .main-content { width: 100%; }
   .app-shell.drawer-open .sidebar-overlay {
     display: block;
     position: fixed;
