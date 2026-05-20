@@ -38,6 +38,9 @@ interface CommandPaletteProps {
   setView: (view: View) => void;
   /** Optional — pin the picked record into its list. */
   setSelectedJobId?: (jobId: string) => void;
+  /** Every page the current user can reach — turned into "Go to X" actions
+   *  so they can search for any screen (Calculator, Reports, etc.). */
+  navItems?: Array<{ key: View; label: string }>;
 }
 
 const RESULT_LIMIT = 30;
@@ -62,6 +65,7 @@ export function CommandPalette({
   leads,
   setView,
   setSelectedJobId,
+  navItems = [],
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -147,17 +151,20 @@ export function CommandPalette({
       });
     }
 
-    // Quick-action shortcuts at the top of the list when query is empty.
-    rows.push(
-      { id: 'action:jobs', kind: 'Action', label: 'Go to Jobs', view: 'jobs', haystack: 'go to jobs' },
-      { id: 'action:invoices', kind: 'Action', label: 'Go to Invoices', view: 'invoices', haystack: 'go to invoices' },
-      { id: 'action:clients', kind: 'Action', label: 'Go to Clients', view: 'clients', haystack: 'go to clients' },
-      { id: 'action:spares', kind: 'Action', label: 'Go to Spares & Consumables', view: 'spares', haystack: 'go to spares consumables stock' },
-      { id: 'action:settings', kind: 'Action', label: 'Open Settings', view: 'settings', haystack: 'settings preferences config' },
-    );
+    // "Go to <page>" action for every page the user can reach — so they can
+    // search for any screen by name (Calculator, Reports, Morning Digest…).
+    for (const item of navItems) {
+      rows.push({
+        id: `action:${item.key}`,
+        kind: 'Action',
+        label: `Go to ${item.label}`,
+        view: item.key,
+        haystack: `go to ${item.label} ${item.key}`.toLowerCase(),
+      });
+    }
 
     return rows;
-  }, [jobs, clients, products, spareParts, invoices, leads, setSelectedJobId]);
+  }, [jobs, clients, products, spareParts, invoices, leads, setSelectedJobId, navItems]);
 
   const filteredResults = useMemo(() => {
     const q = query.trim().toLowerCase();

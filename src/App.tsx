@@ -1549,14 +1549,26 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const topbarAction = (
-    <NotificationBell
-      notifications={notifications}
-      unreadCount={unreadCount}
-      isRead={isRead}
-      onOpen={(n) => markRead(n.id)}
-      onMarkAllRead={markAllRead}
-      onNavigate={(v) => setView(v)}
-    />
+    <>
+      <button
+        type="button"
+        className="topbar-search-btn"
+        onClick={() => setPaletteOpen(true)}
+        aria-label="Search (Cmd-K)"
+      >
+        <span aria-hidden="true">⌕</span>
+        <span className="topbar-search-label">Search</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <NotificationBell
+        notifications={notifications}
+        unreadCount={unreadCount}
+        isRead={isRead}
+        onOpen={(n) => markRead(n.id)}
+        onMarkAllRead={markAllRead}
+        onNavigate={(v) => setView(v)}
+      />
+    </>
   );
 
   const topbarSummary = useMemo(() => {
@@ -8603,6 +8615,7 @@ function App() {
       leads={data.leads}
       setView={setView}
       setSelectedJobId={setSelectedJobId}
+      navItems={navItems}
     />
     {workTicketPrintTarget ? (
       <WorkTicketPrint

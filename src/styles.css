@@ -1562,6 +1562,24 @@ select {
   color: inherit;
 }
 
+/* Replace the native macOS double-arrow on <select> with a single clean
+   chevron, applied app-wide for a consistent look. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12'><path d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%236f665a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+/* Remove the dotted focus ring Firefox draws on the text portion. */
+select:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 var(--jp-ink);
+}
+
 input:focus,
 textarea:focus,
 select:focus {
@@ -4238,4 +4256,40 @@ th {
   .calculator2-line-grid { grid-template-columns: 1fr; }
   .calculator2-shared-notes,
   .calculator2-grid-span-2 { grid-column: span 1; }
+}
+
+/* Topbar search button — opens the command palette (also Cmd-K) */
+.topbar-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--jp-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jp-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.topbar-search-btn:hover {
+  background: var(--jp-cream-warm);
+  color: var(--jp-ink);
+}
+.topbar-search-btn > span[aria-hidden="true"] {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.topbar-search-btn kbd {
+  font-family: var(--jp-mono);
+  font-size: 0.68rem;
+  background: var(--jp-cream);
+  border: 1px solid var(--jp-border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--jp-muted);
+}
+@media (max-width: 640px) {
+  .topbar-search-label, .topbar-search-btn kbd { display: none; }
+  .topbar-search-btn { width: 38px; height: 38px; padding: 0; justify-content: center; }
 }
