@@ -139,8 +139,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
                 >
                   <span>{group.title}</span>
                   <span className="nav-group-meta">
-                    <span className="nav-group-count">{group.items.length}</span>
-                    <span className="nav-group-chevron" aria-hidden="true">{isOpen ? '−' : '+'}</span>
+                    <span className="nav-group-chevron" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
                   </span>
                 </button>
                 {isOpen ? (

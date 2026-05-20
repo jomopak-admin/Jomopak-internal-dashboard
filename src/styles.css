@@ -2130,7 +2130,10 @@ th {
   display: none;
 }
 .topbar-menu-toggle {
-  display: none;
+  /* Always visible now: on desktop it collapses/expands the sidebar, on
+     mobile (<=1024px) it opens/closes the slide-in drawer. */
+  display: inline-flex;
+  flex: 0 0 auto;
   background: transparent;
   border: 1px solid var(--jp-border);
   border-radius: 8px;
@@ -2143,6 +2146,15 @@ th {
   margin-right: 0.5rem;
 }
 .topbar-menu-toggle:hover { background: var(--jp-cream-warm); }
+
+/* Desktop sidebar collapse — when the toggle is active, hide the rail and
+   let the content take the full width. Scoped to desktop so it doesn't
+   clash with the mobile drawer behaviour below. */
+@media (min-width: 1025px) {
+  .app-shell.drawer-open > .sidebar {
+    display: none;
+  }
+}
 
 @media (max-width: 1024px) {
   /* Single-column shell, sidebar floats as a slide-in drawer over the
