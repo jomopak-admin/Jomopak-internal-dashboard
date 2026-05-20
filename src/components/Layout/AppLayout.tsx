@@ -9,6 +9,9 @@ interface AppLayoutProps {
   onSignOut: () => void;
   topbarAction?: ReactNode;
   topbarSummary?: ReactNode;
+  /** Opens the global search / command palette. Rendered next to the menu
+   *  toggle on the left of the topbar for easy access. */
+  onOpenSearch?: () => void;
   children: ReactNode;
 }
 
@@ -37,7 +40,7 @@ function readStoredOpenGroups(): Set<string> | null {
   }
 }
 
-export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, topbarAction, topbarSummary, children }: AppLayoutProps) {
+export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, topbarAction, topbarSummary, onOpenSearch, children }: AppLayoutProps) {
   const accountName = profile?.fullName || profile?.email || 'Signed in';
   const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
@@ -187,6 +190,18 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
           >
             <span aria-hidden="true">☰</span>
           </button>
+          {onOpenSearch ? (
+            <button
+              type="button"
+              className="topbar-search-btn"
+              onClick={onOpenSearch}
+              aria-label="Search (Cmd-K)"
+            >
+              <span aria-hidden="true">⌕</span>
+              <span className="topbar-search-label">Search</span>
+              <kbd>⌘K</kbd>
+            </button>
+          ) : null}
           <div className="topbar-title">
             <p className="eyebrow">Workspace</p>
             <h2 className="page-heading">{currentItem?.label || 'Dashboard'}</h2>

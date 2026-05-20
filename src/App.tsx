@@ -1549,26 +1549,14 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const topbarAction = (
-    <>
-      <button
-        type="button"
-        className="topbar-search-btn"
-        onClick={() => setPaletteOpen(true)}
-        aria-label="Search (Cmd-K)"
-      >
-        <span aria-hidden="true">⌕</span>
-        <span className="topbar-search-label">Search</span>
-        <kbd>⌘K</kbd>
-      </button>
-      <NotificationBell
-        notifications={notifications}
-        unreadCount={unreadCount}
-        isRead={isRead}
-        onOpen={(n) => markRead(n.id)}
-        onMarkAllRead={markAllRead}
-        onNavigate={(v) => setView(v)}
-      />
-    </>
+    <NotificationBell
+      notifications={notifications}
+      unreadCount={unreadCount}
+      isRead={isRead}
+      onOpen={(n) => markRead(n.id)}
+      onMarkAllRead={markAllRead}
+      onNavigate={(v) => setView(v)}
+    />
   );
 
   const topbarSummary = useMemo(() => {
@@ -7554,6 +7542,7 @@ function App() {
       onSignOut={handleSignOut}
       topbarAction={topbarAction}
       topbarSummary={topbarSummary}
+      onOpenSearch={() => setPaletteOpen(true)}
     >
       {loading && (
         <div className="card">
