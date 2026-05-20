@@ -283,6 +283,7 @@ p {
 .nav-list {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .sidebar-user {
@@ -321,6 +322,15 @@ p {
 .account-copy {
   display: grid;
   gap: 2px;
+  /* Let the email/name shrink + wrap instead of forcing the account block
+     (and the whole sidebar) wider than 248px. */
+  min-width: 0;
+}
+.account-copy strong,
+.account-copy span,
+.account-copy small {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .account-copy strong {
@@ -348,11 +358,15 @@ p {
   cursor: pointer;
   font-weight: 500;
   /* Keep the button (and its orange active outline) strictly inside the
-     248px sidebar, and wrap long labels instead of overflowing. */
+     248px sidebar, and wrap long labels instead of overflowing. min-width:0
+     is essential — without it a grid item won't shrink below its text and
+     the button overruns the sidebar (measured at 277px vs the 248px rail). */
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .nav-button.active {
