@@ -5576,20 +5576,41 @@ function App() {
         } : item);
       }
 
+      // Build the next dispatch list first so we can total up everything
+      // dispatched for this job (existing + this save) and auto-advance the
+      // job's status.
+      let nextDispatch: DispatchRecord[];
       if (dispatchEditingId) {
-        return {
-          ...current,
-          finishedGoodsStock: nextFinishedStock,
-          dispatchRecords: current.dispatchRecords.map((record) => record.id === dispatchEditingId ? { ...record, ...payload } : record),
-        };
+        nextDispatch = current.dispatchRecords.map((record) =>
+          record.id === dispatchEditingId ? { ...record, ...payload } : record,
+        );
+      } else {
+        const dispatchNumber = generateCode('DSP', current.dispatchRecords.map((record) => record.dispatchNumber), dispatchForm.dispatchDate);
+        const newRecord: DispatchRecord = { id: dispatchNumber, dispatchNumber, createdAt: new Date().toISOString(), ...payload };
+        nextDispatch = [newRecord, ...current.dispatchRecords];
       }
 
-      const dispatchNumber = generateCode('DSP', current.dispatchRecords.map((record) => record.dispatchNumber), dispatchForm.dispatchDate);
-      const newRecord: DispatchRecord = { id: dispatchNumber, dispatchNumber, createdAt: new Date().toISOString(), ...payload };
+      // Auto-status: total dispatched for this job vs planned quantity.
+      //   fully dispatched (or no planned qty set) → Completed
+      //   partial                                  → Partially Dispatched
+      // Never downgrade a job a human already marked Completed.
+      const dispatchedForJob = nextDispatch
+        .filter((r) => r.jobId === linkedJob.id)
+        .reduce((sum, r) => sum + (r.quantityDispatched || 0), 0);
+      const planned = linkedJob.quantityPlanned || 0;
+      const autoStatus: JobCard['status'] =
+        planned > 0 && dispatchedForJob < planned ? 'Partially Dispatched' : 'Completed';
+      const nextJobs = current.jobs.map((j) => {
+        if (j.id !== linkedJob.id) return j;
+        if (j.status === 'Completed' && autoStatus !== 'Completed') return j; // don't revert
+        return { ...j, status: autoStatus };
+      });
+
       return {
         ...current,
         finishedGoodsStock: nextFinishedStock,
-        dispatchRecords: [newRecord, ...current.dispatchRecords],
+        dispatchRecords: nextDispatch,
+        jobs: nextJobs,
       };
     });
     resetDispatchEditor();
