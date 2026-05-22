@@ -46,6 +46,7 @@ export function buildSeedData(): AppData {
     dispatchRecords: [],
     proofOfDeliveries: [],
     invoiceInboxItems: [],
+    documents: [],
     stockChangeLogs: [],
     materialOrderRequests: [],
     inventoryMovements: [],

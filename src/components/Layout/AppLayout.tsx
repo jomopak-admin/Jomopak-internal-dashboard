@@ -22,7 +22,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Materials', views: ['materials', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
   { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog'] },
-  { title: 'Admin', views: ['permissions', 'settings'] },
+  { title: 'Admin', views: ['documentVault', 'permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';

@@ -73,6 +73,9 @@ import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
+import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
+import { uploadDocumentFile } from './utils/documentStorage';
+import { DocumentRecord } from './types';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
@@ -8278,6 +8281,33 @@ function App() {
                 return { ...current, proofOfDeliveries: Array.from(byId.values()) };
               });
             });
+          }}
+        />
+      )}
+
+      {view === 'documentVault' && (
+        <DocumentVaultPage
+          documents={data.documents}
+          suppliers={data.suppliers}
+          clients={data.clients}
+          uploaderName={profile?.fullName || profile?.email || ''}
+          onUploadFile={(file, docId) => uploadDocumentFile(file, docId)}
+          onSave={(doc: DocumentRecord) => {
+            setData((current) => {
+              const exists = current.documents.some((d) => d.id === doc.id);
+              return {
+                ...current,
+                documents: exists
+                  ? current.documents.map((d) => (d.id === doc.id ? doc : d))
+                  : [doc, ...current.documents],
+              };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({
+              ...current,
+              documents: current.documents.filter((d) => d.id !== id),
+            }));
           }}
         />
       )}

@@ -1522,6 +1522,27 @@ export function mapInvoiceInboxItem(row: any): any {
   };
 }
 
+function mapDocumentRecord(row: any): any {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    ownerType: row.owner_type ?? 'supplier',
+    ownerId: row.owner_id ?? '',
+    ownerName: row.owner_name ?? '',
+    category: row.category ?? 'Other',
+    title: row.title ?? '',
+    fileName: row.file_name ?? '',
+    fileMimeType: row.file_mime_type ?? '',
+    fileSizeBytes: Number(row.file_size_bytes ?? 0),
+    fileUrl: row.file_url ?? '',
+    storagePath: row.storage_path ?? '',
+    issueDate: row.issue_date ?? '',
+    expiryDate: row.expiry_date ?? '',
+    uploadedByName: row.uploaded_by_name ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
 export async function fetchAppData(): Promise<AppData> {
   const [
     suppliers,
@@ -1574,6 +1595,7 @@ export async function fetchAppData(): Promise<AppData> {
     visitorLogEntries,
     proofOfDeliveriesRows,
     invoiceInboxItemRows,
+    documentRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1627,6 +1649,8 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 17 — Driver POD + supplier-invoice OCR Inbox.
     safeSelect('proof_of_deliveries'),
     safeSelect('invoice_inbox_items'),
+    // Phase 22 — Document Vault.
+    safeSelect('documents'),
   ]);
 
   return {
@@ -1674,6 +1698,7 @@ export async function fetchAppData(): Promise<AppData> {
     dispatchRecords: dispatchRecords.map(mapDispatch),
     proofOfDeliveries: proofOfDeliveriesRows.map(mapProofOfDelivery),
     invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
+    documents: documentRows.map(mapDocumentRecord),
     stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
@@ -2727,6 +2752,24 @@ export async function syncAppData(data: AppData): Promise<void> {
         sync_status: 'synced',
         sync_error: '',
       }))),
+    safeUpsert('documents', data.documents.map((d) => ({
+      id: d.id,
+      created_at: d.createdAt,
+      owner_type: d.ownerType,
+      owner_id: d.ownerId || null,
+      owner_name: d.ownerName || '',
+      category: d.category,
+      title: d.title || '',
+      file_name: d.fileName || '',
+      file_mime_type: d.fileMimeType || '',
+      file_size_bytes: d.fileSizeBytes || 0,
+      file_url: d.fileUrl || '',
+      storage_path: d.storagePath || '',
+      issue_date: d.issueDate || '',
+      expiry_date: d.expiryDate || '',
+      uploaded_by_name: d.uploadedByName || '',
+      notes: d.notes || '',
+    }))),
     safeUpsert('invoice_inbox_items', data.invoiceInboxItems.map((r) => ({
       id: r.id,
       inbox_number: r.inboxNumber,

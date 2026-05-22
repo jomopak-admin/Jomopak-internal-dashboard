@@ -870,6 +870,7 @@ export function loadAppData(): AppData {
       // way these get populated client-side.
       proofOfDeliveries: (parsed.proofOfDeliveries ?? []) as AppData['proofOfDeliveries'],
       invoiceInboxItems: (parsed.invoiceInboxItems ?? []) as AppData['invoiceInboxItems'],
+      documents: (parsed.documents ?? []) as AppData['documents'],
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),

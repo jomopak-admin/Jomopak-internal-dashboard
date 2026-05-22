@@ -50,6 +50,7 @@ export type View =
   | 'driverPod'
   | 'invoiceInbox'
   | 'stockTake'
+  | 'documentVault'
   | 'production'
   | 'waste'
   | 'paper'
@@ -125,6 +126,7 @@ export const VIEW_LABELS: Record<View, string> = {
   driverPod: 'Driver POD',
   invoiceInbox: 'Supplier Invoice Inbox',
   stockTake: 'Stock Take',
+  documentVault: 'Document Vault',
   production: 'Production Logs',
   waste: 'Waste Log',
   paper: 'Paper Log',
@@ -190,6 +192,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'paper',
     'dispatch',
     'reports',
+    'documentVault',
   ],
   ops: [
     'dashboard',
@@ -3716,6 +3719,57 @@ export interface AppSettingsFormState {
   };
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 22 — Document Vault.
+ *
+ * Stores compliance + commercial documents against a supplier or client.
+ * The file lives in Supabase Storage; the row holds metadata + an optional
+ * expiry date so the notification bell can warn before a cert lapses.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type DocumentOwnerType = 'supplier' | 'client';
+
+export type DocumentCategory =
+  | 'Certification'
+  | 'FSC Certificate'
+  | 'ISO Certificate'
+  | 'Food Safety / HACCP'
+  | 'MSDS'
+  | 'Credit Application'
+  | 'Stock-Level Agreement'
+  | 'ID Document'
+  | 'Bank Details'
+  | 'Signed Terms / Contract'
+  | 'Price List'
+  | 'Tax / VAT Certificate'
+  | 'Other';
+
+export const DOCUMENT_CATEGORIES: DocumentCategory[] = [
+  'Certification', 'FSC Certificate', 'ISO Certificate', 'Food Safety / HACCP',
+  'MSDS', 'Credit Application', 'Stock-Level Agreement', 'ID Document',
+  'Bank Details', 'Signed Terms / Contract', 'Price List',
+  'Tax / VAT Certificate', 'Other',
+];
+
+export interface DocumentRecord {
+  id: string;
+  createdAt: string;
+  ownerType: DocumentOwnerType;
+  ownerId: string;
+  ownerName: string;
+  category: DocumentCategory;
+  title: string;
+  fileName: string;
+  fileMimeType: string;
+  fileSizeBytes: number;
+  fileUrl: string;       // signed URL (refreshable)
+  storagePath: string;
+  issueDate: string;
+  /** Optional — drives the "document expiring" notification. */
+  expiryDate: string;
+  uploadedByName: string;
+  notes: string;
+}
+
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
@@ -3761,6 +3815,7 @@ export interface AppData {
   dispatchRecords: DispatchRecord[];
   proofOfDeliveries: ProofOfDelivery[];
   invoiceInboxItems: InvoiceInboxItem[];
+  documents: DocumentRecord[];
   stockChangeLogs: StockChangeLog[];
   materialOrderRequests: MaterialOrderRequest[];
   inventoryMovements: InventoryMovement[];

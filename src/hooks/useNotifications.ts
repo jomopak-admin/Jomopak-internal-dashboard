@@ -192,6 +192,22 @@ export function deriveNotifications(data: AppData): AppNotification[] {
     });
   }
 
+  // ── Documents expiring / expired (Document Vault) ──────────────────────
+  for (const doc of data.documents || []) {
+    if (!doc.expiryDate) continue;
+    const until = daysFromNow(doc.expiryDate);
+    if (until > 30) continue;
+    list.push({
+      id: `doc-exp-${doc.id}-${until}`,
+      kind: 'sopExpiring',
+      severity: until < 0 ? 'urgent' : until < 7 ? 'warn' : 'info',
+      title: `${doc.category} expiring — ${doc.ownerName}`,
+      message: `${doc.title} · ${until < 0 ? `expired ${-until}d ago` : `in ${until}d`}`,
+      link: { view: 'documentVault' },
+      createdAt: now,
+    });
+  }
+
   // Sort: urgent → warn → info, then by stable id so the list doesn't
   // shuffle every render.
   const order: Record<NotificationSeverity, number> = { urgent: 0, warn: 1, info: 2 };
