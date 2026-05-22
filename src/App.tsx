@@ -75,7 +75,8 @@ import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
 import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
 import { uploadDocumentFile } from './utils/documentStorage';
-import { DocumentRecord } from './types';
+import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType } from './types';
+import { ShipmentsPage } from './pages/Shipments/ShipmentsPage';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
