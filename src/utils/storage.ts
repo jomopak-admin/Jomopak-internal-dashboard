@@ -871,6 +871,7 @@ export function loadAppData(): AppData {
       proofOfDeliveries: (parsed.proofOfDeliveries ?? []) as AppData['proofOfDeliveries'],
       invoiceInboxItems: (parsed.invoiceInboxItems ?? []) as AppData['invoiceInboxItems'],
       documents: (parsed.documents ?? []) as AppData['documents'],
+      shipments: (parsed.shipments ?? []) as AppData['shipments'],
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),

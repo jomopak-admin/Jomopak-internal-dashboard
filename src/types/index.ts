@@ -51,6 +51,7 @@ export type View =
   | 'invoiceInbox'
   | 'stockTake'
   | 'documentVault'
+  | 'shipments'
   | 'production'
   | 'waste'
   | 'paper'
@@ -127,6 +128,7 @@ export const VIEW_LABELS: Record<View, string> = {
   invoiceInbox: 'Supplier Invoice Inbox',
   stockTake: 'Stock Take',
   documentVault: 'Document Vault',
+  shipments: 'Imports & Shipments',
   production: 'Production Logs',
   waste: 'Waste Log',
   paper: 'Paper Log',
@@ -3770,6 +3772,71 @@ export interface DocumentRecord {
   notes: string;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 23 — Imports / Shipments tracker.
+ *
+ * Tracks inbound shipments from overseas (and local) suppliers: what's on
+ * order, on the water, clearing customs, and landed. Captures landed cost
+ * (goods + freight + duty + clearing) so you know the true cost of stock,
+ * and a "receive into stock" action turns shipment lines into material
+ * receipts.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type ShipmentStatus =
+  | 'Ordered'
+  | 'In Production'
+  | 'In Transit'
+  | 'Arrived at Port'
+  | 'Customs Clearance'
+  | 'Received'
+  | 'Cancelled';
+
+export const SHIPMENT_STATUSES: ShipmentStatus[] = [
+  'Ordered', 'In Production', 'In Transit', 'Arrived at Port',
+  'Customs Clearance', 'Received', 'Cancelled',
+];
+
+export interface ShipmentLineItem {
+  id: string;
+  description: string;
+  materialKind: MaterialKind;
+  quantity: number;
+  unit: string;
+  /** Unit cost in the shipment's currency. */
+  unitCost: number;
+}
+
+export interface Shipment {
+  id: string;
+  shipmentNumber: string;
+  createdAt: string;
+  supplierId: string;
+  supplierName: string;
+  /** Supplier PO / proforma reference. */
+  reference: string;
+  status: ShipmentStatus;
+  /** Incoterm — FOB, CIF, EXW, DDP, etc. */
+  incoterm: string;
+  currency: string;
+  orderDate: string;
+  expectedArrivalDate: string;
+  actualArrivalDate: string;
+  containerNumber: string;
+  billOfLadingNumber: string;
+  vessel: string;
+  lineItems: ShipmentLineItem[];
+  /** Sum of line item (qty × unit cost), in shipment currency. */
+  goodsValue: number;
+  freightCost: number;
+  dutyCost: number;
+  clearingCost: number;
+  otherCost: number;
+  /** goods + freight + duty + clearing + other. */
+  landedCostTotal: number;
+  notes: string;
+  /** True once the shipment's lines have been booked into material receipts. */
+  receivedIntoStock: boolean;
+}
+
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
@@ -3816,6 +3883,7 @@ export interface AppData {
   proofOfDeliveries: ProofOfDelivery[];
   invoiceInboxItems: InvoiceInboxItem[];
   documents: DocumentRecord[];
+  shipments: Shipment[];
   stockChangeLogs: StockChangeLog[];
   materialOrderRequests: MaterialOrderRequest[];
   inventoryMovements: InventoryMovement[];

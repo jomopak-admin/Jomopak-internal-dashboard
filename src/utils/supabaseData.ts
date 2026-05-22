@@ -1522,6 +1522,35 @@ export function mapInvoiceInboxItem(row: any): any {
   };
 }
 
+function mapShipment(row: any): any {
+  return {
+    id: row.id,
+    shipmentNumber: row.shipment_number,
+    createdAt: row.created_at,
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    reference: row.reference ?? '',
+    status: row.status ?? 'Ordered',
+    incoterm: row.incoterm ?? '',
+    currency: row.currency ?? 'USD',
+    orderDate: row.order_date ?? '',
+    expectedArrivalDate: row.expected_arrival_date ?? '',
+    actualArrivalDate: row.actual_arrival_date ?? '',
+    containerNumber: row.container_number ?? '',
+    billOfLadingNumber: row.bill_of_lading_number ?? '',
+    vessel: row.vessel ?? '',
+    lineItems: Array.isArray(row.line_items) ? row.line_items : [],
+    goodsValue: Number(row.goods_value ?? 0),
+    freightCost: Number(row.freight_cost ?? 0),
+    dutyCost: Number(row.duty_cost ?? 0),
+    clearingCost: Number(row.clearing_cost ?? 0),
+    otherCost: Number(row.other_cost ?? 0),
+    landedCostTotal: Number(row.landed_cost_total ?? 0),
+    notes: row.notes ?? '',
+    receivedIntoStock: Boolean(row.received_into_stock),
+  };
+}
+
 function mapDocumentRecord(row: any): any {
   return {
     id: row.id,
@@ -1596,6 +1625,7 @@ export async function fetchAppData(): Promise<AppData> {
     proofOfDeliveriesRows,
     invoiceInboxItemRows,
     documentRows,
+    shipmentRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1651,6 +1681,8 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('invoice_inbox_items'),
     // Phase 22 — Document Vault.
     safeSelect('documents'),
+    // Phase 23 — Imports / Shipments.
+    safeSelect('shipments'),
   ]);
 
   return {
@@ -1699,6 +1731,7 @@ export async function fetchAppData(): Promise<AppData> {
     proofOfDeliveries: proofOfDeliveriesRows.map(mapProofOfDelivery),
     invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
     documents: documentRows.map(mapDocumentRecord),
+    shipments: shipmentRows.map(mapShipment),
     stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
@@ -2752,6 +2785,32 @@ export async function syncAppData(data: AppData): Promise<void> {
         sync_status: 'synced',
         sync_error: '',
       }))),
+    safeUpsert('shipments', data.shipments.map((s) => ({
+      id: s.id,
+      shipment_number: s.shipmentNumber,
+      created_at: s.createdAt,
+      supplier_id: s.supplierId || null,
+      supplier_name: s.supplierName || '',
+      reference: s.reference || '',
+      status: s.status,
+      incoterm: s.incoterm || '',
+      currency: s.currency || 'USD',
+      order_date: s.orderDate || '',
+      expected_arrival_date: s.expectedArrivalDate || '',
+      actual_arrival_date: s.actualArrivalDate || '',
+      container_number: s.containerNumber || '',
+      bill_of_lading_number: s.billOfLadingNumber || '',
+      vessel: s.vessel || '',
+      line_items: s.lineItems,
+      goods_value: s.goodsValue,
+      freight_cost: s.freightCost,
+      duty_cost: s.dutyCost,
+      clearing_cost: s.clearingCost,
+      other_cost: s.otherCost,
+      landed_cost_total: s.landedCostTotal,
+      notes: s.notes || '',
+      received_into_stock: s.receivedIntoStock,
+    }))),
     safeUpsert('documents', data.documents.map((d) => ({
       id: d.id,
       created_at: d.createdAt,
