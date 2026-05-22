@@ -8313,6 +8313,68 @@ function App() {
         />
       )}
 
+      {view === 'shipments' && (
+        <ShipmentsPage
+          shipments={data.shipments}
+          suppliers={data.suppliers}
+          onSave={(shipment: Shipment) => {
+            setData((current) => {
+              if (shipment.id) {
+                return { ...current, shipments: current.shipments.map((s) => (s.id === shipment.id ? shipment : s)) };
+              }
+              const num = generateCode('SHP', current.shipments.map((s) => s.shipmentNumber), shipment.orderDate || getToday());
+              const created: Shipment = { ...shipment, id: num, shipmentNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, shipments: [created, ...current.shipments] };
+            });
+          }}
+          onReceiveIntoStock={(shipment: Shipment) => {
+            setData((current) => {
+              const today = getToday();
+              const newReceipts: MaterialReceiptType[] = [];
+              shipment.lineItems.forEach((line) => {
+                const num = generateCode(
+                  'RCV',
+                  [...current.materialReceipts.map((r) => r.receiptNumber), ...newReceipts.map((r) => r.receiptNumber)],
+                  today,
+                );
+                newReceipts.push({
+                  id: num,
+                  receiptNumber: num,
+                  barcode: '',
+                  createdAt: new Date().toISOString(),
+                  receivedDate: shipment.actualArrivalDate || today,
+                  supplierId: shipment.supplierId,
+                  supplierName: shipment.supplierName,
+                  supplierBatchNumber: shipment.reference || '',
+                  internalRollCode: '',
+                  materialKind: line.materialKind,
+                  itemName: line.description,
+                  paperType: line.materialKind === 'Paper' ? line.description : '',
+                  gsm: '',
+                  width: '',
+                  quantityReceived: Number(line.quantity) || 0,
+                  quantityAvailable: Number(line.quantity) || 0,
+                  quantityUnit: (line.unit || 'units') as MaterialReceiptType['quantityUnit'],
+                  fscClaimType: 'None',
+                  supplierCertificateCode: '',
+                  invoiceReference: shipment.shipmentNumber,
+                  storageLocation: '',
+                  inspectionNotes: `Received from shipment ${shipment.shipmentNumber}`,
+                  fscRelated: false,
+                });
+              });
+              return {
+                ...current,
+                materialReceipts: [...newReceipts, ...current.materialReceipts],
+                shipments: current.shipments.map((s) =>
+                  s.id === shipment.id ? { ...s, receivedIntoStock: true, status: 'Received' } : s,
+                ),
+              };
+            });
+          }}
+        />
+      )}
+
       {view === 'stockTake' && (
         <StockTakePage
           spareParts={data.spareParts}

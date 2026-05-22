@@ -19,7 +19,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'calculator', 'costInputs'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines'] },
-  { title: 'Materials', views: ['materials', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
+  { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
   { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog'] },
   { title: 'Admin', views: ['documentVault', 'permissions', 'settings'] },
