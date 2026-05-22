@@ -49,6 +49,7 @@ export type View =
   | 'leadAnalytics'
   | 'driverPod'
   | 'invoiceInbox'
+  | 'stockTake'
   | 'production'
   | 'waste'
   | 'paper'
@@ -123,6 +124,7 @@ export const VIEW_LABELS: Record<View, string> = {
   leadAnalytics: 'Lead Conversion Analytics',
   driverPod: 'Driver POD',
   invoiceInbox: 'Supplier Invoice Inbox',
+  stockTake: 'Stock Take',
   production: 'Production Logs',
   waste: 'Waste Log',
   paper: 'Paper Log',
@@ -154,6 +156,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'clients',
     'pricing',
     'finishedStock',
+    'stockTake',
     'spares',
     'materials',
     'chemicalRegister',
@@ -204,6 +207,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'jobs',
     'products',
     'finishedStock',
+    'stockTake',
     'spares',
     'materials',
     'chemicalRegister',
@@ -243,6 +247,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'productionSchedule',
     'materialRequirements',
     'finishedStock',
+    'stockTake',
     'driverPod',
     'materials',
     'chemicalRegister',

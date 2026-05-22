@@ -4293,3 +4293,32 @@ th {
   .topbar-search-label, .topbar-search-btn kbd { display: none; }
   .topbar-search-btn { width: 38px; height: 38px; padding: 0; justify-content: center; }
 }
+
+/* Stock Take page */
+.stocktake-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.stocktake-controls label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+.stocktake-table-wrap { overflow-x: auto; }
+.stocktake-table tr.is-selected { background: rgba(219, 90, 31, 0.05); }
+.stocktake-actions { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+.variance-pos { color: var(--jp-success, #5e6e4d); font-weight: 600; }
+.variance-neg { color: var(--jp-alert, #b8470f); font-weight: 600; }
+.stocktake-history { display: flex; flex-direction: column; gap: 1rem; }
+.stocktake-history-card {
+  border: 1px solid var(--jp-border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+.stocktake-history-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+@media (max-width: 760px) {
+  .stocktake-controls { grid-template-columns: 1fr; }
+}

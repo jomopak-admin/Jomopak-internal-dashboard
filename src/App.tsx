@@ -72,6 +72,7 @@ import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
+import { StockTakePage } from './pages/StockTake/StockTakePage';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
@@ -4515,15 +4516,34 @@ function App() {
     }
     const today = getToday();
     const countId = generateCode('SC', data.stockCounts.map((count) => count.id), today);
+    const scope = stockCountForm.scope;
+    // Resolve each counted item's system quantity + label from the right
+    // source for the scope. Paper/Finished use quantityAvailable; spares (the
+    // default, incl. the existing free-text spares scope) use quantityOnHand.
     const lines: StockCountLine[] = stockCountForm.selectedItemIds.map((itemId, index) => {
-      const item = data.spareParts.find((part) => part.id === itemId);
-      const systemQty = item?.quantityOnHand ?? 0;
+      let systemQty = 0;
+      let itemName = 'Unknown item';
+      if (scope === 'Paper / Materials') {
+        const r = data.materialReceipts.find((m) => m.id === itemId);
+        systemQty = r?.quantityAvailable ?? 0;
+        itemName = r
+          ? `${(r.paperType || r.itemName || 'Material')} ${r.gsm || ''} · ${r.internalRollCode || r.receiptNumber}`.replace(/\s+/g, ' ').trim()
+          : 'Unknown material';
+      } else if (scope === 'Finished Goods') {
+        const f = data.finishedGoodsStock.find((s) => s.id === itemId);
+        systemQty = f?.quantityAvailable ?? 0;
+        itemName = f ? `${f.productName} · ${f.stockNumber}` : 'Unknown stock';
+      } else {
+        const item = data.spareParts.find((part) => part.id === itemId);
+        systemQty = item?.quantityOnHand ?? 0;
+        itemName = item?.partName ?? 'Unknown item';
+      }
       const countedQty = Number(stockCountForm.countedQty[itemId] ?? 0);
       return {
         id: `${countId}-L${String(index + 1).padStart(3, '0')}`,
         countId,
         itemId,
-        itemName: item?.partName ?? 'Unknown item',
+        itemName,
         systemQty,
         countedQty,
         variance: countedQty - systemQty,
@@ -4556,23 +4576,51 @@ function App() {
   function handleReconcileStockCount(countId: string, reconciledByName: string) {
     const target = data.stockCounts.find((count) => count.id === countId);
     if (!target || target.reconciled) return;
-    setData((current) => ({
-      ...current,
-      stockCounts: current.stockCounts.map((count) => count.id === countId
+    const lineById = new Map(target.lines.map((l) => [l.itemId, l]));
+    setData((current) => {
+      const stockCounts = current.stockCounts.map((count) => count.id === countId
         ? {
             ...count,
             reconciled: true,
             reconciledAt: new Date().toISOString(),
             reconciledByName: reconciledByName || 'Admin',
           }
-        : count),
-      // Apply variance: set quantityOnHand to countedQty for each line item.
-      spareParts: current.spareParts.map((part) => {
-        const line = target.lines.find((entry) => entry.itemId === part.id);
-        if (!line) return part;
-        return { ...part, quantityOnHand: line.countedQty };
-      }),
-    }));
+        : count);
+
+      // Apply the counted quantities back to the right stock source for the
+      // count's scope. Paper/Finished adjust quantityAvailable (and keep any
+      // reserved qty intact); spares set quantityOnHand directly.
+      if (target.scope === 'Paper / Materials') {
+        return {
+          ...current,
+          stockCounts,
+          materialReceipts: current.materialReceipts.map((m) => {
+            const line = lineById.get(m.id);
+            return line ? { ...m, quantityAvailable: line.countedQty } : m;
+          }),
+        };
+      }
+      if (target.scope === 'Finished Goods') {
+        return {
+          ...current,
+          stockCounts,
+          finishedGoodsStock: current.finishedGoodsStock.map((s) => {
+            const line = lineById.get(s.id);
+            if (!line) return s;
+            const reserved = s.quantityReserved || 0;
+            return { ...s, quantityAvailable: line.countedQty, quantityOnHand: line.countedQty + reserved };
+          }),
+        };
+      }
+      return {
+        ...current,
+        stockCounts,
+        spareParts: current.spareParts.map((part) => {
+          const line = lineById.get(part.id);
+          return line ? { ...part, quantityOnHand: line.countedQty } : part;
+        }),
+      };
+    });
   }
 
   function handleReturnTool(issueId: string, condition: 'Good' | 'Damaged' | 'Lost') {
@@ -8231,6 +8279,20 @@ function App() {
               });
             });
           }}
+        />
+      )}
+
+      {view === 'stockTake' && (
+        <StockTakePage
+          spareParts={data.spareParts}
+          materialReceipts={data.materialReceipts}
+          finishedGoodsStock={data.finishedGoodsStock}
+          stockCounts={data.stockCounts}
+          form={stockCountForm}
+          setForm={setStockCountForm}
+          message={stockCountMessage}
+          onSave={handleSaveStockCount}
+          onReconcile={handleReconcileStockCount}
         />
       )}
 
