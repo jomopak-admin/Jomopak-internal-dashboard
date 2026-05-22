@@ -233,6 +233,16 @@ export function CalculatorPage({
             <span>Sales owner</span>
             <input value={state.shared.salesOwnerName} onChange={(e) => updateShared('salesOwnerName', e.target.value)} placeholder="Your name" />
           </label>
+          <label>
+            <span>Plate billing</span>
+            <select
+              value={state.shared.plateBilling}
+              onChange={(e) => updateShared('plateBilling', e.target.value as CalculatorState['shared']['plateBilling'])}
+            >
+              <option value="upfront">Upfront one-off (separate line)</option>
+              <option value="amortized">Spread into bag price (no upfront)</option>
+            </select>
+          </label>
           <label className="calculator2-shared-notes">
             <span>Quote notes (printed)</span>
             <textarea
@@ -506,8 +516,11 @@ function LineCard({
           </>
         )}
         <div className="calculator2-line-price"><span>Quoted unit price</span><strong>{formatNumber(result.quotedUnitPrice, 4)}</strong></div>
-        <div className="calculator2-line-price"><span>Plates (setup)</span><strong>{formatNumber(result.plateSetupFee, 2)}</strong></div>
-        <div className="calculator2-line-price"><span>Line total (incl plates)</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
+        <div className="calculator2-line-price">
+          <span>{result.platesAmortized ? 'Plates (in unit price)' : 'Plates (upfront)'}</span>
+          <strong>{result.platesAmortized ? `+${formatNumber(result.platePerBagAmortized, 4)}/bag` : formatNumber(result.plateSetupFee, 2)}</strong>
+        </div>
+        <div className="calculator2-line-price"><span>Line total</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
       </div>
     </div>
   );

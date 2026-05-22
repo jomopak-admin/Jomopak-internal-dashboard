@@ -92,10 +92,16 @@ export interface LineResult extends LineCostBreakdown {
   marginPercent: number;
   /** Per-bag sell price = production cost × (1+margin) + print band charge. */
   quotedUnitPrice: number;
-  /** One-off plate charge for this line = area × colours × R2.65 (sell). */
+  /** One-off plate charge for this line = area × colours × R2.65 (sell).
+   *  Zero when plates are amortized into the per-bag price. */
   plateSetupFee: number;
   /** What the plates cost us = area × colours × R0.55. */
   plateCost: number;
+  /** True when the plate charge is spread into the per-bag price instead of
+   *  billed upfront. */
+  platesAmortized: boolean;
+  /** The per-bag plate share when amortized (0 when billed upfront). */
+  platePerBagAmortized: number;
   /** lineTotal = quotedUnitPrice × qty + plateSetupFee. */
   lineTotal: number;
   /** Total paper consumption for procurement / stock check. */
@@ -208,10 +214,15 @@ function computeLine(
   const isPrinted = resolvedPrintMethod !== 'Plain' && colors > 0;
 
   // Plates: billed by area, one plate per colour. Sell at R2.65/cm²,
-  // cost R0.55/cm². One-off setup, not per bag.
+  // cost R0.55/cm². The total plate charge is the same either way; the
+  // billing mode decides whether it's a separate one-off line (upfront) or
+  // spread across the run into the per-bag price (amortized).
   const plateAreaCm2 = num(line.printAreaCm2);
-  const plateSetupFee = isPrinted ? plateAreaCm2 * colors * PLATE_SELL_RATE_PER_CM2 : 0;
+  const plateChargeTotal = isPrinted ? plateAreaCm2 * colors * PLATE_SELL_RATE_PER_CM2 : 0;
   const plateCost = isPrinted ? plateAreaCm2 * colors * PLATE_COST_RATE_PER_CM2 : 0;
+  const platesAmortized = state.shared.plateBilling === 'amortized';
+  const platePerBagAmortized = platesAmortized && qty > 0 ? plateChargeTotal / qty : 0;
+  const plateSetupFee = platesAmortized ? 0 : plateChargeTotal;
 
   // Print/ink: flat per-bag charge from the coverage band (a sell price).
   const band: PrintCoverageBand = line.coverageBand && line.coverageBand !== 'None'
@@ -239,9 +250,11 @@ function computeLine(
   const lineMargin = num(line.customMarginPercent);
   const marginPercent = lineMargin || sharedMargin || tierMargin || profileMargin || 0;
 
-  // Per-bag sell = marked-up production cost + the flat print charge.
-  const quotedUnitPrice = unitCost * (1 + marginPercent / 100) + printBandChargePerBag;
-  // Line total = per-bag price × qty, plus the one-off plate setup fee.
+  // Per-bag sell = marked-up production cost + flat print charge + (if the
+  // client doesn't want an upfront plate cost) the amortized plate share.
+  const quotedUnitPrice = unitCost * (1 + marginPercent / 100) + printBandChargePerBag + platePerBagAmortized;
+  // Line total = per-bag price × qty, plus the one-off plate setup fee
+  // (which is 0 when plates are amortized).
   const lineTotal = quotedUnitPrice * qty + plateSetupFee;
   const totalPaperKg = paperKgPerBagWithWaste * qty;
 
@@ -262,6 +275,8 @@ function computeLine(
     quotedUnitPrice,
     plateSetupFee,
     plateCost,
+    platesAmortized,
+    platePerBagAmortized,
     lineTotal,
     totalPaperKg,
   };
@@ -347,6 +362,7 @@ export function emptyCalculatorState(today: string): CalculatorState {
       quoteDate: today,
       notes: '',
       salesOwnerName: '',
+      plateBilling: 'upfront',
     },
     lines: [emptyCalculatorLine(`line-${Date.now()}-1`)],
   };

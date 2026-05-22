@@ -4094,6 +4094,13 @@ export interface CalculatorLineItem {
   customMarginPercent: string;
 }
 
+/** How plate charges are billed on the quote.
+ *   upfront   — plates shown as a separate one-off setup line.
+ *   amortized — plate charge spread across the run, baked into the per-bag
+ *               price (no separate plate line). Same total, different shape.
+ *  Some clients insist on no upfront plate cost; this toggles per quote. */
+export type PlateBillingMode = 'upfront' | 'amortized';
+
 export interface CalculatorSharedState {
   clientId: string;
   /** Optional CRM lead to attribute the quote to. */
@@ -4105,6 +4112,7 @@ export interface CalculatorSharedState {
   quoteDate: string;
   notes: string;
   salesOwnerName: string;
+  plateBilling: PlateBillingMode;
 }
 
 export interface CalculatorState {
