@@ -42,21 +42,45 @@ import {
   HandleType,
   PaperRate,
   PricingTier,
+  PrintCoverageBand,
   Client,
 } from '../types';
 
+/* ── JomoPak print + plate rate card ──────────────────────────────────────
+ * Starter rates calibrated from real figures. These will move into the Cost
+ * Inputs page so they're tunable without a code change — for now they live
+ * here as named constants so the model can be validated first.
+ *
+ *   Plates are billed by area: one plate per colour, sized to the artwork.
+ *     sell  R2.65 / cm²   (what we charge)
+ *     cost  R0.55 / cm²   (what the platemaker charges us)
+ *
+ *   Print/ink is a flat per-bag charge by coverage band (the rep eyeballs
+ *   how much of the bag is inked) — ink is thin-margin cost-recovery, so we
+ *   price it as a simple band rather than computing grams.
+ * ────────────────────────────────────────────────────────────────────────*/
+export const PLATE_SELL_RATE_PER_CM2 = 2.65;
+export const PLATE_COST_RATE_PER_CM2 = 0.55;
+export const PRINT_BAND_CHARGE_PER_BAG: Record<PrintCoverageBand, number> = {
+  None: 0,
+  Light: 0.01,   // 1c  — small logo / text
+  Medium: 0.015, // 1.5c — standard artwork
+  Heavy: 0.02,   // 2c  — heavy / flood coverage
+};
+
 export interface LineCostBreakdown {
   paperPerBag: number;
-  glueAndHandlePerBag: number;
   handlePerBag: number;
   glueOnlyPerBag: number;
-  printPerBag: number;
-  screenPrintPerBag: number;
-  flexoPrintPerBag: number;
   labourPerBag: number;
   packagingPerBag: number;
   transportPerBag: number;
+  /** Per-bag production cost that the margin is applied to (excludes the
+   *  print band charge + plates, which are priced directly). */
   unitCost: number;
+  /** Per-bag print/ink charge from the coverage band (a sell price, not
+   *  marked up further). */
+  printBandChargePerBag: number;
 }
 
 export interface LineResult extends LineCostBreakdown {
@@ -66,7 +90,13 @@ export interface LineResult extends LineCostBreakdown {
   recommendedSheetHeightMm: number;
   paperKgPerBagWithWaste: number;
   marginPercent: number;
+  /** Per-bag sell price = production cost × (1+margin) + print band charge. */
   quotedUnitPrice: number;
+  /** One-off plate charge for this line = area × colours × R2.65 (sell). */
+  plateSetupFee: number;
+  /** What the plates cost us = area × colours × R0.55. */
+  plateCost: number;
+  /** lineTotal = quotedUnitPrice × qty + plateSetupFee. */
   lineTotal: number;
   /** Total paper consumption for procurement / stock check. */
   totalPaperKg: number;
@@ -76,8 +106,9 @@ export interface QuoteRollup {
   lineCount: number;
   totalQuantity: number;
   totalUnitCost: number;       // weighted avg per-bag cost across all lines
-  totalCost: number;           // unit cost * quantity, summed
-  totalQuoted: number;         // quoted unit price * quantity, summed
+  totalCost: number;           // unit cost * quantity, summed (production)
+  totalQuoted: number;         // everything billed, incl plate setup fees
+  totalPlateFees: number;      // sum of one-off plate charges
   totalMarginAmount: number;
   blendedMarginPercent: number;
   totalPaperKg: number;
@@ -174,25 +205,30 @@ function computeLine(
   const handlePerBag = handleCost(line.handleType, costProfile);
 
   const resolvedPrintMethod = resolvePrintMethod(line, costProfile);
-  const screenPrintPerBag = costProfile && qty > 0 && resolvedPrintMethod === 'Screen Print'
-    ? (costProfile.screenPrintSetupCost + costProfile.screenPrintCostPerColor * colors) / qty
-    : 0;
-  const flexoPrintPerBag = costProfile && resolvedPrintMethod === 'Flexo'
-    ? ((costProfile.flexoInkCostPer1000PerColor * colors) / 1000)
-      + (qty > 0 ? (costProfile.plateCostPerColor * colors) / qty : 0)
-    : 0;
-  const printPerBag = screenPrintPerBag + flexoPrintPerBag;
+  const isPrinted = resolvedPrintMethod !== 'Plain' && colors > 0;
+
+  // Plates: billed by area, one plate per colour. Sell at R2.65/cm²,
+  // cost R0.55/cm². One-off setup, not per bag.
+  const plateAreaCm2 = num(line.printAreaCm2);
+  const plateSetupFee = isPrinted ? plateAreaCm2 * colors * PLATE_SELL_RATE_PER_CM2 : 0;
+  const plateCost = isPrinted ? plateAreaCm2 * colors * PLATE_COST_RATE_PER_CM2 : 0;
+
+  // Print/ink: flat per-bag charge from the coverage band (a sell price).
+  const band: PrintCoverageBand = line.coverageBand && line.coverageBand !== 'None'
+    ? line.coverageBand
+    : 'None';
+  const printBandChargePerBag = isPrinted ? PRINT_BAND_CHARGE_PER_BAG[band] : 0;
 
   const glueOnlyPerBag = costProfile?.baseGlueCostPerBag ?? 0;
-  const glueAndHandlePerBag = glueOnlyPerBag + handlePerBag;
   const labourPerBag = costProfile ? costProfile.labourCostPer1000 / 1000 : 0;
   const packagingPerBag = costProfile ? costProfile.packagingCostPer1000 / 1000 : 0;
   const transportPerBag = costProfile && qty > 0 ? costProfile.transportCostPerJob / qty : 0;
 
+  // Production cost per bag (the part the margin is applied to). Excludes the
+  // print band (priced directly) and plates (one-off setup).
   const unitCost = paperPerBag
     + handlePerBag
     + glueOnlyPerBag
-    + printPerBag
     + labourPerBag
     + packagingPerBag
     + transportPerBag;
@@ -203,28 +239,29 @@ function computeLine(
   const lineMargin = num(line.customMarginPercent);
   const marginPercent = lineMargin || sharedMargin || tierMargin || profileMargin || 0;
 
-  const quotedUnitPrice = unitCost * (1 + marginPercent / 100);
-  const lineTotal = quotedUnitPrice * qty;
+  // Per-bag sell = marked-up production cost + the flat print charge.
+  const quotedUnitPrice = unitCost * (1 + marginPercent / 100) + printBandChargePerBag;
+  // Line total = per-bag price × qty, plus the one-off plate setup fee.
+  const lineTotal = quotedUnitPrice * qty + plateSetupFee;
   const totalPaperKg = paperKgPerBagWithWaste * qty;
 
   return {
     paperPerBag,
-    glueAndHandlePerBag,
     handlePerBag,
     glueOnlyPerBag,
-    printPerBag,
-    screenPrintPerBag,
-    flexoPrintPerBag,
     labourPerBag,
     packagingPerBag,
     transportPerBag,
     unitCost,
+    printBandChargePerBag,
     resolvedPrintMethod,
     recommendedPaperWidthMm,
     recommendedSheetHeightMm,
     paperKgPerBagWithWaste,
     marginPercent,
     quotedUnitPrice,
+    plateSetupFee,
+    plateCost,
     lineTotal,
     totalPaperKg,
   };
@@ -245,12 +282,15 @@ export function computeQuote(
   let totalCost = 0;
   let totalQuoted = 0;
   let totalPaperKg = 0;
+  let totalPlateFees = 0;
   for (let i = 0; i < state.lines.length; i++) {
     const q = num(state.lines[i].quantity);
     totalQuantity += q;
-    totalCost += lines[i].unitCost * q;
+    // Cost side: production cost × qty + what the plates cost us.
+    totalCost += lines[i].unitCost * q + lines[i].plateCost;
     totalQuoted += lines[i].lineTotal;
     totalPaperKg += lines[i].totalPaperKg;
+    totalPlateFees += lines[i].plateSetupFee;
   }
   const totalUnitCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
   const totalMarginAmount = totalQuoted - totalCost;
@@ -264,6 +304,7 @@ export function computeQuote(
       totalUnitCost,
       totalCost,
       totalQuoted,
+      totalPlateFees,
       totalMarginAmount,
       blendedMarginPercent,
       totalPaperKg,
@@ -285,6 +326,8 @@ export function emptyCalculatorLine(id: string): CalculatorLineItem {
     handleType: 'None',
     printMethod: 'Auto',
     colors: '0',
+    printAreaCm2: '',
+    coverageBand: 'None',
     paperRateIdOverride: '',
     costProfileIdOverride: '',
     customMarginPercent: '',

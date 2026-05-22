@@ -4064,6 +4064,10 @@ export interface CalculatorQuoteFormState {
  * CalculatorLineItem. The calculator engine computes per-line totals
  * and a quote-level rollup.
  * ────────────────────────────────────────────────────────────────────────*/
+/** Print coverage band — replaces hard-to-measure exact coverage %. The rep
+ *  eyeballs how much of the bag is inked. Drives the per-bag print charge. */
+export type PrintCoverageBand = 'None' | 'Light' | 'Medium' | 'Heavy';
+
 export interface CalculatorLineItem {
   /** Stable client-side id used as a React key + when posting to a quote. */
   id: string;
@@ -4078,6 +4082,11 @@ export interface CalculatorLineItem {
   handleType: HandleType;
   printMethod: PrintMethod;
   colors: string;
+  /** Print artwork area in cm² — used to price plates (area × colours ×
+   *  plate rate). One plate per colour, each sized to this area. */
+  printAreaCm2: string;
+  /** Coverage band drives the per-bag ink/print charge. */
+  coverageBand: PrintCoverageBand;
   /** Per-line cost-master overrides. Empty string = inherit from shared. */
   paperRateIdOverride: string;
   costProfileIdOverride: string;

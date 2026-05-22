@@ -42,6 +42,7 @@ import {
   PaperRate,
   PricingTier,
   PrintMethod,
+  PrintCoverageBand,
   Product,
 } from '../../types';
 import { formatNumber } from '../../utils/calculations';
@@ -71,6 +72,7 @@ interface CalculatorPageProps {
 
 const HANDLE_OPTIONS: HandleType[] = ['None', 'Flat Handle', 'Rope Handle', 'Roll Handle'];
 const PRINT_OPTIONS: PrintMethod[] = ['Auto', 'Plain', 'Screen Print', 'Flexo'];
+const COVERAGE_OPTIONS: PrintCoverageBand[] = ['None', 'Light', 'Medium', 'Heavy'];
 
 export function CalculatorPage({
   canViewInternalCosts,
@@ -274,6 +276,7 @@ export function CalculatorPage({
           {canViewInternalCosts && (
             <div><span>Total cost</span><strong>{formatNumber(computation.rollup.totalCost, 2)}</strong></div>
           )}
+          <div><span>Plates (setup)</span><strong>{formatNumber(computation.rollup.totalPlateFees, 2)}</strong></div>
           <div><span>Total quoted</span><strong>{formatNumber(computation.rollup.totalQuoted, 2)}</strong></div>
           {canViewInternalCosts && (
             <div><span>Blended margin</span><strong>{formatNumber(computation.rollup.blendedMarginPercent, 2)}%</strong></div>
@@ -419,8 +422,25 @@ function LineCard({
           </select>
         </label>
         <label>
-          <span>Colors</span>
+          <span>Colours</span>
           <input type="number" inputMode="numeric" min="0" value={line.colors} onChange={(e) => onChange({ colors: e.target.value })} />
+        </label>
+        <label>
+          <span>Coverage</span>
+          <select value={line.coverageBand} onChange={(e) => onChange({ coverageBand: e.target.value as PrintCoverageBand })}>
+            {COVERAGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Print area (cm²)</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            value={line.printAreaCm2}
+            onChange={(e) => onChange({ printAreaCm2: e.target.value })}
+            placeholder="W × H of artwork"
+          />
         </label>
         <label>
           <span>Per-line margin %</span>
@@ -475,17 +495,19 @@ function LineCard({
           <>
             <div><span>Paper / bag</span><strong>{formatNumber(result.paperPerBag, 4)}</strong></div>
             <div><span>Handle / bag</span><strong>{formatNumber(result.handlePerBag, 4)}</strong></div>
-            <div><span>Print / bag</span><strong>{formatNumber(result.printPerBag, 4)}</strong></div>
+            <div><span>Print / bag</span><strong>{formatNumber(result.printBandChargePerBag, 4)}</strong></div>
             <div><span>Glue / bag</span><strong>{formatNumber(result.glueOnlyPerBag, 4)}</strong></div>
             <div><span>Labour / bag</span><strong>{formatNumber(result.labourPerBag, 4)}</strong></div>
             <div><span>Pack / bag</span><strong>{formatNumber(result.packagingPerBag, 4)}</strong></div>
             <div><span>Transport / bag</span><strong>{formatNumber(result.transportPerBag, 4)}</strong></div>
             <div><span>Unit cost</span><strong>{formatNumber(result.unitCost, 4)}</strong></div>
             <div><span>Margin %</span><strong>{formatNumber(result.marginPercent, 2)}%</strong></div>
+            <div><span>Plate cost</span><strong>{formatNumber(result.plateCost, 2)}</strong></div>
           </>
         )}
         <div className="calculator2-line-price"><span>Quoted unit price</span><strong>{formatNumber(result.quotedUnitPrice, 4)}</strong></div>
-        <div className="calculator2-line-price"><span>Line total</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
+        <div className="calculator2-line-price"><span>Plates (setup)</span><strong>{formatNumber(result.plateSetupFee, 2)}</strong></div>
+        <div className="calculator2-line-price"><span>Line total (incl plates)</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
       </div>
     </div>
   );
