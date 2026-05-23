@@ -1,4 +1,4 @@
-import { AppData, DEFAULT_APP_SETTINGS } from '../types';
+import { AppData, DEFAULT_APP_SETTINGS, buildDefaultChartOfAccounts } from '../types';
 
 export function buildSeedData(): AppData {
   return {
@@ -48,6 +48,8 @@ export function buildSeedData(): AppData {
     invoiceInboxItems: [],
     documents: [],
     shipments: [],
+    ledgerAccounts: buildDefaultChartOfAccounts(),
+    supplierBills: [],
     stockChangeLogs: [],
     materialOrderRequests: [],
     inventoryMovements: [],

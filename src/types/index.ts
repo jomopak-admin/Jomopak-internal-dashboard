@@ -52,6 +52,8 @@ export type View =
   | 'stockTake'
   | 'documentVault'
   | 'shipments'
+  | 'chartOfAccounts'
+  | 'accountsPayable'
   | 'production'
   | 'waste'
   | 'paper'
@@ -129,6 +131,8 @@ export const VIEW_LABELS: Record<View, string> = {
   stockTake: 'Stock Take',
   documentVault: 'Document Vault',
   shipments: 'Imports & Shipments',
+  chartOfAccounts: 'Chart of Accounts',
+  accountsPayable: 'Accounts Payable',
   production: 'Production Logs',
   waste: 'Waste Log',
   paper: 'Paper Log',
@@ -196,6 +200,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dispatch',
     'reports',
     'documentVault',
+    'chartOfAccounts',
+    'accountsPayable',
   ],
   ops: [
     'dashboard',
@@ -314,6 +320,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dashboard',
     'invoices',
     'invoiceInbox',
+    'chartOfAccounts',
+    'accountsPayable',
     'agedDebtors',
     'profitability',
     'salesPipeline',
@@ -3840,6 +3848,66 @@ export interface Shipment {
   receivedIntoStock: boolean;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 24 — Accounting core (Chart of Accounts + Accounts Payable).
+ * ────────────────────────────────────────────────────────────────────────*/
+export type LedgerAccountType = 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense';
+
+export const LEDGER_ACCOUNT_TYPES: LedgerAccountType[] = ['Asset', 'Liability', 'Equity', 'Income', 'Expense'];
+
+export interface LedgerAccount {
+  id: string;
+  /** Numeric account code, e.g. "1000". */
+  code: string;
+  name: string;
+  type: LedgerAccountType;
+  /** Free-text grouping, e.g. "Current Asset", "Cost of Sales", "Overheads". */
+  subType: string;
+  /** Whether transactions on this account usually carry VAT. */
+  vatApplicable: boolean;
+  active: boolean;
+  notes: string;
+}
+
+export type SupplierBillStatus = 'Unpaid' | 'Partially Paid' | 'Paid' | 'Disputed' | 'Cancelled';
+
+export interface SupplierBillPayment {
+  id: string;
+  paymentDate: string;
+  amount: number;
+  method: string;
+  reference: string;
+  notes: string;
+}
+
+export interface SupplierBill {
+  id: string;
+  /** Internal bill reference. */
+  billNumber: string;
+  /** The supplier's own invoice number. */
+  supplierInvoiceNumber: string;
+  createdAt: string;
+  billDate: string;
+  dueDate: string;
+  supplierId: string;
+  supplierName: string;
+  /** Chart-of-accounts expense account this bill posts to. */
+  expenseAccountId: string;
+  expenseAccountName: string;
+  currency: string;
+  subtotalExclVat: number;
+  vatAmount: number;
+  totalInclVat: number;
+  payments: SupplierBillPayment[];
+  amountPaid: number;
+  amountOutstanding: number;
+  status: SupplierBillStatus;
+  /** Optional links back to where the bill came from. */
+  sourceShipmentId: string;
+  sourceInboxId: string;
+  notes: string;
+}
+
 export interface AppData {
   suppliers: Supplier[];
   machines: Machine[];
@@ -3887,6 +3955,8 @@ export interface AppData {
   invoiceInboxItems: InvoiceInboxItem[];
   documents: DocumentRecord[];
   shipments: Shipment[];
+  ledgerAccounts: LedgerAccount[];
+  supplierBills: SupplierBill[];
   stockChangeLogs: StockChangeLog[];
   materialOrderRequests: MaterialOrderRequest[];
   inventoryMovements: InventoryMovement[];
@@ -4925,5 +4995,71 @@ export interface InvoiceInboxItem {
   /** Sender context — used by future inbound channels (WhatsApp/email). */
   senderHandle: string;
   senderSubject: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 24 — default South African small-business chart of accounts.
+ *
+ * Deliberately compact: enough structure to classify every supplier bill and
+ * map cleanly onto a SARS / accountant export later, without drowning a small
+ * factory team in ledger codes. Codes follow the common SA convention:
+ *   1000s Assets · 2000s Liabilities · 3000s Equity · 4000s Income ·
+ *   5000s Cost of Sales · 6000s+ Expenses (overheads).
+ * ────────────────────────────────────────────────────────────────────────*/
+export function buildDefaultChartOfAccounts(): LedgerAccount[] {
+  const rows: Array<Omit<LedgerAccount, 'id' | 'active' | 'notes'>> = [
+    // Assets
+    { code: '1000', name: 'Bank — Current Account', type: 'Asset', subType: 'Current Asset', vatApplicable: false },
+    { code: '1100', name: 'Accounts Receivable (Debtors)', type: 'Asset', subType: 'Current Asset', vatApplicable: false },
+    { code: '1200', name: 'Inventory — Raw Materials', type: 'Asset', subType: 'Current Asset', vatApplicable: false },
+    { code: '1210', name: 'Inventory — Finished Goods', type: 'Asset', subType: 'Current Asset', vatApplicable: false },
+    { code: '1400', name: 'VAT Input (claimable)', type: 'Asset', subType: 'Tax', vatApplicable: false },
+    { code: '1500', name: 'Plant & Machinery', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
+    { code: '1510', name: 'Office & Computer Equipment', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
+    { code: '1520', name: 'Motor Vehicles', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
+    // Liabilities
+    { code: '2000', name: 'Accounts Payable (Creditors)', type: 'Liability', subType: 'Current Liability', vatApplicable: false },
+    { code: '2100', name: 'VAT Output (payable)', type: 'Liability', subType: 'Tax', vatApplicable: false },
+    { code: '2200', name: 'PAYE / SDL / UIF Payable', type: 'Liability', subType: 'Payroll Liability', vatApplicable: false },
+    { code: '2300', name: 'Loans Payable', type: 'Liability', subType: 'Long-term Liability', vatApplicable: false },
+    // Equity
+    { code: '3000', name: "Owner's Capital", type: 'Equity', subType: 'Equity', vatApplicable: false },
+    { code: '3100', name: 'Retained Earnings', type: 'Equity', subType: 'Equity', vatApplicable: false },
+    { code: '3200', name: "Owner's Drawings", type: 'Equity', subType: 'Equity', vatApplicable: false },
+    // Income
+    { code: '4000', name: 'Sales — Paper Bags', type: 'Income', subType: 'Revenue', vatApplicable: true },
+    { code: '4010', name: 'Sales — Printing & Plates', type: 'Income', subType: 'Revenue', vatApplicable: true },
+    { code: '4900', name: 'Other Income', type: 'Income', subType: 'Revenue', vatApplicable: true },
+    // Cost of Sales
+    { code: '5000', name: 'Paper & Board', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    { code: '5010', name: 'Ink & Coatings', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    { code: '5020', name: 'Plates & Origination', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    { code: '5030', name: 'Glue & Consumables', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    { code: '5040', name: 'Outsourced / Subcontract', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    { code: '5050', name: 'Freight & Import Duty', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
+    // Overheads / Expenses
+    { code: '6000', name: 'Salaries & Wages', type: 'Expense', subType: 'Overheads', vatApplicable: false },
+    { code: '6010', name: 'Rent', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6020', name: 'Electricity & Water', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6030', name: 'Machine Maintenance & Spares', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6040', name: 'Vehicle & Fuel', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6050', name: 'Telephone & Internet', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6060', name: 'Insurance', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6070', name: 'Bank Charges', type: 'Expense', subType: 'Overheads', vatApplicable: false },
+    { code: '6080', name: 'Professional Fees (Accounting/Legal)', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6090', name: 'Cleaning & Sanitation', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6100', name: 'Office & Admin', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6110', name: 'Marketing & Advertising', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6120', name: 'Software & Subscriptions', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6130', name: 'Staff Training & PPE', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6140', name: 'Pest Control & Compliance', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6900', name: 'Sundry / Other Expenses', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+  ];
+  return rows.map((row) => ({
+    ...row,
+    id: `acct-${row.code}`,
+    active: true,
+    notes: '',
+  }));
 }
 

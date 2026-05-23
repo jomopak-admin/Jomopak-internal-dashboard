@@ -4355,3 +4355,38 @@ th {
 @media (max-width: 480px) {
   .shipments-grid { grid-template-columns: 1fr; }
 }
+
+/* Accounting — Chart of Accounts + Accounts Payable */
+.accounting-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem 0.8rem;
+}
+.accounting-grid label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; }
+.accounting-check { flex-direction: row !important; align-items: center; gap: 0.45rem !important; }
+.accounting-check input { width: auto; }
+.accounting-inline { display: flex; gap: 0.4rem; align-items: center; }
+.accounting-inline input { flex: 1; min-width: 0; }
+.accounting-actions { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+.accounting-toolbar { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
+.accounting-toolbar label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; min-width: 200px; }
+.accounting-toolbar .accounting-check { flex-direction: row !important; min-width: 0; align-items: center; }
+.accounting-group-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.accounting-summary {
+  display: flex;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--jp-border-strong);
+}
+.accounting-summary > div { display: flex; flex-direction: column; gap: 0.15rem; }
+.accounting-summary strong { font-size: 1.1rem; }
+.amount-due { color: var(--jp-alert); }
+tr.row-muted { opacity: 0.55; }
+@media (max-width: 760px) {
+  .accounting-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .accounting-grid { grid-template-columns: 1fr; }
+}

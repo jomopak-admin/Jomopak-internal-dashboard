@@ -1572,6 +1572,45 @@ function mapDocumentRecord(row: any): any {
   };
 }
 
+function mapLedgerAccount(row: any): any {
+  return {
+    id: row.id,
+    code: row.code ?? '',
+    name: row.name ?? '',
+    type: row.type ?? 'Expense',
+    subType: row.sub_type ?? '',
+    vatApplicable: Boolean(row.vat_applicable),
+    active: row.active === undefined ? true : Boolean(row.active),
+    notes: row.notes ?? '',
+  };
+}
+
+function mapSupplierBill(row: any): any {
+  return {
+    id: row.id,
+    billNumber: row.bill_number ?? '',
+    supplierInvoiceNumber: row.supplier_invoice_number ?? '',
+    createdAt: row.created_at,
+    billDate: row.bill_date ?? '',
+    dueDate: row.due_date ?? '',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    expenseAccountId: row.expense_account_id ?? '',
+    expenseAccountName: row.expense_account_name ?? '',
+    currency: row.currency ?? 'ZAR',
+    subtotalExclVat: Number(row.subtotal_excl_vat ?? 0),
+    vatAmount: Number(row.vat_amount ?? 0),
+    totalInclVat: Number(row.total_incl_vat ?? 0),
+    payments: Array.isArray(row.payments) ? row.payments : [],
+    amountPaid: Number(row.amount_paid ?? 0),
+    amountOutstanding: Number(row.amount_outstanding ?? 0),
+    status: row.status ?? 'Unpaid',
+    sourceShipmentId: row.source_shipment_id ?? '',
+    sourceInboxId: row.source_inbox_id ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
 export async function fetchAppData(): Promise<AppData> {
   const [
     suppliers,
@@ -1626,6 +1665,8 @@ export async function fetchAppData(): Promise<AppData> {
     invoiceInboxItemRows,
     documentRows,
     shipmentRows,
+    ledgerAccountRows,
+    supplierBillRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1683,6 +1724,9 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('documents'),
     // Phase 23 — Imports / Shipments.
     safeSelect('shipments'),
+    // Phase 24 — Accounting (Chart of Accounts + Accounts Payable).
+    safeSelect('ledger_accounts'),
+    safeSelect('supplier_bills'),
   ]);
 
   return {
@@ -1732,6 +1776,8 @@ export async function fetchAppData(): Promise<AppData> {
     invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
     documents: documentRows.map(mapDocumentRecord),
     shipments: shipmentRows.map(mapShipment),
+    ledgerAccounts: ledgerAccountRows.map(mapLedgerAccount),
+    supplierBills: supplierBillRows.map(mapSupplierBill),
     stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
@@ -2856,6 +2902,39 @@ export async function syncAppData(data: AppData): Promise<void> {
       duplicate_candidate_ids: r.duplicateCandidateIds || [],
       sender_handle: r.senderHandle || '',
       sender_subject: r.senderSubject || '',
+    }))),
+    safeUpsert('ledger_accounts', data.ledgerAccounts.map((a) => ({
+      id: a.id,
+      code: a.code || '',
+      name: a.name || '',
+      type: a.type,
+      sub_type: a.subType || '',
+      vat_applicable: a.vatApplicable,
+      active: a.active,
+      notes: a.notes || '',
+    }))),
+    safeUpsert('supplier_bills', data.supplierBills.map((b) => ({
+      id: b.id,
+      bill_number: b.billNumber,
+      supplier_invoice_number: b.supplierInvoiceNumber || '',
+      created_at: b.createdAt,
+      bill_date: b.billDate || '',
+      due_date: b.dueDate || '',
+      supplier_id: b.supplierId || null,
+      supplier_name: b.supplierName || '',
+      expense_account_id: b.expenseAccountId || null,
+      expense_account_name: b.expenseAccountName || '',
+      currency: b.currency || 'ZAR',
+      subtotal_excl_vat: b.subtotalExclVat,
+      vat_amount: b.vatAmount,
+      total_incl_vat: b.totalInclVat,
+      payments: b.payments,
+      amount_paid: b.amountPaid,
+      amount_outstanding: b.amountOutstanding,
+      status: b.status,
+      source_shipment_id: b.sourceShipmentId || null,
+      source_inbox_id: b.sourceInboxId || null,
+      notes: b.notes || '',
     }))),
   ]);
 }

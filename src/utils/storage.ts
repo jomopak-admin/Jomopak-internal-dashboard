@@ -5,6 +5,7 @@ import {
   ArtworkRecord,
   buildBlankChangeoverChecklist,
   buildBlankQcPlan,
+  buildDefaultChartOfAccounts,
   CustomerStockRelease,
   DEFAULT_APP_SETTINGS,
   DeliveryNote,
@@ -872,6 +873,13 @@ export function loadAppData(): AppData {
       invoiceInboxItems: (parsed.invoiceInboxItems ?? []) as AppData['invoiceInboxItems'],
       documents: (parsed.documents ?? []) as AppData['documents'],
       shipments: (parsed.shipments ?? []) as AppData['shipments'],
+      // Accounting — if no chart of accounts has ever been stored, seed the
+      // South African small-business default so the books are usable on day one.
+      ledgerAccounts:
+        parsed.ledgerAccounts && parsed.ledgerAccounts.length > 0
+          ? (parsed.ledgerAccounts as AppData['ledgerAccounts'])
+          : buildDefaultChartOfAccounts(),
+      supplierBills: (parsed.supplierBills ?? []) as AppData['supplierBills'],
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),

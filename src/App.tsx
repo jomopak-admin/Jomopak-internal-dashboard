@@ -75,8 +75,10 @@ import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
 import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
 import { uploadDocumentFile } from './utils/documentStorage';
-import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType } from './types';
+import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType, LedgerAccount, SupplierBill } from './types';
 import { ShipmentsPage } from './pages/Shipments/ShipmentsPage';
+import { ChartOfAccountsPage } from './pages/Accounting/ChartOfAccountsPage';
+import { AccountsPayablePage } from './pages/Accounting/AccountsPayablePage';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
@@ -296,6 +298,8 @@ const VIEW_ORDER: View[] = [
   'paper',
   'dispatch',
   'reports',
+  'chartOfAccounts',
+  'accountsPayable',
 ];
 const createInitialJobForm = (): JobFormState => ({
   jobDate: getToday(),
@@ -8371,6 +8375,51 @@ function App() {
                 ),
               };
             });
+          }}
+        />
+      )}
+
+      {view === 'chartOfAccounts' && (
+        <ChartOfAccountsPage
+          ledgerAccounts={data.ledgerAccounts}
+          onSave={(account: LedgerAccount) => {
+            setData((current) => {
+              if (account.id) {
+                const exists = current.ledgerAccounts.some((a) => a.id === account.id);
+                return {
+                  ...current,
+                  ledgerAccounts: exists
+                    ? current.ledgerAccounts.map((a) => (a.id === account.id ? account : a))
+                    : [...current.ledgerAccounts, account],
+                };
+              }
+              const created: LedgerAccount = { ...account, id: `acct-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
+              return { ...current, ledgerAccounts: [...current.ledgerAccounts, created] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, ledgerAccounts: current.ledgerAccounts.filter((a) => a.id !== id) }));
+          }}
+        />
+      )}
+
+      {view === 'accountsPayable' && (
+        <AccountsPayablePage
+          supplierBills={data.supplierBills}
+          suppliers={data.suppliers}
+          ledgerAccounts={data.ledgerAccounts}
+          onSave={(bill: SupplierBill) => {
+            setData((current) => {
+              if (bill.id) {
+                return { ...current, supplierBills: current.supplierBills.map((b) => (b.id === bill.id ? bill : b)) };
+              }
+              const num = generateCode('BILL', current.supplierBills.map((b) => b.billNumber), bill.billDate || getToday());
+              const created: SupplierBill = { ...bill, id: num, billNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, supplierBills: [created, ...current.supplierBills] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, supplierBills: current.supplierBills.filter((b) => b.id !== id) }));
           }}
         />
       )}
