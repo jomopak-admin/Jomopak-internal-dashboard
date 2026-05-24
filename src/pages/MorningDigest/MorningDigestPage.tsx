@@ -26,8 +26,10 @@ import {
   Lead,
   NonConformance,
   getLatestPassingClean,
+  SARS_OBLIGATION_SHORT,
 } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
+import { buildSarsCalendar, daysUntil } from '../../utils/sars';
 
 interface MorningDigestPageProps {
   data: AppData;
@@ -133,6 +135,20 @@ export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
       && inv.dueDate < today,
     ).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
   }, [data.invoices, today]);
+
+  // ----- SARS deadlines due soon / overdue -----
+  const sarsDue = useMemo(() => {
+    const cfg = data.appSettings?.sarsConfig;
+    if (!cfg) return [];
+    const savedByKey = new Map((data.sarsFilings || []).map((f) => [f.periodKey, f]));
+    return buildSarsCalendar(cfg, today)
+      .filter((slot) => {
+        const saved = savedByKey.get(slot.periodKey);
+        if (saved && (saved.status === 'Submitted' || saved.status === 'Paid')) return false;
+        return daysUntil(slot.dueDate, today) <= 30;
+      })
+      .slice(0, 8);
+  }, [data.appSettings, data.sarsFilings, today]);
 
   // ----- Pest control overdue -----
   const pestOverdue = useMemo(() => {
@@ -273,6 +289,24 @@ export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
                 );
               })}
               {invoicesOverdue.length > 8 ? <li><em>… and {invoicesOverdue.length - 8} more</em></li> : null}
+            </ul>
+          </section>
+        )}
+
+        {/* ===== SARS — deadlines due soon ===== */}
+        {sarsDue.length > 0 && (
+          <section style={{ marginBottom: 20 }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>SARS deadlines (next 30 days)</h2>
+            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
+              {sarsDue.map((slot) => {
+                const until = daysUntil(slot.dueDate, today);
+                return (
+                  <li key={slot.periodKey}>
+                    <strong>{SARS_OBLIGATION_SHORT[slot.obligationType]}</strong> — {slot.periodLabel} — due {formatDate(slot.dueDate)}{' '}
+                    {until < 0 ? <span style={{ color: '#b22b2b' }}>({-until}d overdue)</span> : until === 0 ? <span style={{ color: '#b22b2b' }}>(due today)</span> : `(${until}d)`}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

@@ -33,6 +33,7 @@ import {
 } from '../types';
 import { normalizeAppSettings } from './storage';
 import { supabase } from './supabase';
+import { publishableTiles } from './connectorTiles';
 
 const MISSING_TABLE = '42P01';
 
@@ -92,6 +93,9 @@ function mapAppSettings(row: any): AppSettings {
       defaultReviewCadenceDays: row.default_stock_holding_review_cadence_days ?? row.defaultReviewCadenceDays,
       defaultAgreementTermsText: row.default_stock_holding_terms ?? row.defaultAgreementTermsText,
     },
+    sarsConfig: row.sars_config ?? row.sarsConfig ?? undefined,
+    currencyConfig: row.currency_config ?? row.currencyConfig ?? undefined,
+    connectorConfig: row.connector_config ?? row.connectorConfig ?? undefined,
     updatedAt: row.updated_at ?? row.updatedAt ?? '',
     updatedBy: row.updated_by ?? row.updatedBy ?? '',
   });
@@ -1018,6 +1022,7 @@ export function mapInvoice(row: any): any {
     footerNotes: row.footer_notes ?? '',
     status: row.status ?? 'Draft',
     currency: row.currency ?? 'ZAR',
+    exchangeRate: Number(row.exchange_rate ?? 1) || 1,
     lineItems: Array.isArray(row.line_items) ? row.line_items : [],
     subtotalExclVat: Number(row.subtotal_excl_vat ?? 0),
     vatTotal: Number(row.vat_total ?? 0),
@@ -1598,6 +1603,7 @@ function mapSupplierBill(row: any): any {
     expenseAccountId: row.expense_account_id ?? '',
     expenseAccountName: row.expense_account_name ?? '',
     currency: row.currency ?? 'ZAR',
+    exchangeRate: Number(row.exchange_rate ?? 1) || 1,
     subtotalExclVat: Number(row.subtotal_excl_vat ?? 0),
     vatAmount: Number(row.vat_amount ?? 0),
     totalInclVat: Number(row.total_incl_vat ?? 0),
@@ -1607,6 +1613,158 @@ function mapSupplierBill(row: any): any {
     status: row.status ?? 'Unpaid',
     sourceShipmentId: row.source_shipment_id ?? '',
     sourceInboxId: row.source_inbox_id ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapSarsFiling(row: any): any {
+  return {
+    id: row.id,
+    obligationType: row.obligation_type ?? 'VAT201',
+    periodKey: row.period_key ?? '',
+    periodLabel: row.period_label ?? '',
+    periodStart: row.period_start ?? '',
+    periodEnd: row.period_end ?? '',
+    dueDate: row.due_date ?? '',
+    status: row.status ?? 'Not Started',
+    outputVat: Number(row.output_vat ?? 0),
+    inputVat: Number(row.input_vat ?? 0),
+    manualAdjustment: Number(row.manual_adjustment ?? 0),
+    netVatPayable: Number(row.net_vat_payable ?? 0),
+    amountPayable: Number(row.amount_payable ?? 0),
+    figures: Array.isArray(row.figures) ? row.figures : [],
+    submittedDate: row.submitted_date ?? '',
+    submittedBy: row.submitted_by ?? '',
+    paymentDate: row.payment_date ?? '',
+    paymentReference: row.payment_reference ?? '',
+    proofDocumentId: row.proof_document_id ?? '',
+    notes: row.notes ?? '',
+    createdAt: row.created_at,
+  };
+}
+
+function mapEmployee(row: any): any {
+  return {
+    id: row.id,
+    employeeNumber: row.employee_number ?? '',
+    firstName: row.first_name ?? '',
+    lastName: row.last_name ?? '',
+    idNumber: row.id_number ?? '',
+    taxNumber: row.tax_number ?? '',
+    email: row.email ?? '',
+    phone: row.phone ?? '',
+    jobTitle: row.job_title ?? '',
+    department: row.department ?? '',
+    payCycle: row.pay_cycle ?? 'Monthly',
+    basicSalary: Number(row.basic_salary ?? 0),
+    bankName: row.bank_name ?? '',
+    bankAccountNumber: row.bank_account_number ?? '',
+    bankBranchCode: row.bank_branch_code ?? '',
+    accountType: row.account_type ?? '',
+    uifContributor: row.uif_contributor === undefined ? true : Boolean(row.uif_contributor),
+    startDate: row.start_date ?? '',
+    endDate: row.end_date ?? '',
+    active: row.active === undefined ? true : Boolean(row.active),
+    notes: row.notes ?? '',
+  };
+}
+
+function mapPayrollRun(row: any): any {
+  return {
+    id: row.id,
+    runNumber: row.run_number ?? '',
+    createdAt: row.created_at,
+    payCycle: row.pay_cycle ?? 'Monthly',
+    periodMonth: Number(row.period_month ?? 0),
+    periodYear: Number(row.period_year ?? 0),
+    periodLabel: row.period_label ?? '',
+    payDate: row.pay_date ?? '',
+    status: row.status ?? 'Draft',
+    payslips: Array.isArray(row.payslips) ? row.payslips : [],
+    totalGross: Number(row.total_gross ?? 0),
+    totalPaye: Number(row.total_paye ?? 0),
+    totalUifEmployee: Number(row.total_uif_employee ?? 0),
+    totalUifEmployer: Number(row.total_uif_employer ?? 0),
+    totalSdl: Number(row.total_sdl ?? 0),
+    totalOtherDeductions: Number(row.total_other_deductions ?? 0),
+    totalNet: Number(row.total_net ?? 0),
+    notes: row.notes ?? '',
+  };
+}
+
+function mapBankTransaction(row: any): any {
+  return {
+    id: row.id,
+    importBatch: row.import_batch ?? '',
+    bankAccountName: row.bank_account_name ?? '',
+    date: row.date ?? '',
+    description: row.description ?? '',
+    reference: row.reference ?? '',
+    amount: Number(row.amount ?? 0),
+    matchType: row.match_type ?? 'none',
+    matchId: row.match_id ?? '',
+    matchLabel: row.match_label ?? '',
+    ledgerAccountId: row.ledger_account_id ?? '',
+    reconciled: Boolean(row.reconciled),
+    notes: row.notes ?? '',
+    createdAt: row.created_at,
+  };
+}
+
+function mapJournalEntry(row: any): any {
+  return {
+    id: row.id,
+    entryNumber: row.entry_number ?? '',
+    date: row.date ?? '',
+    reference: row.reference ?? '',
+    description: row.description ?? '',
+    status: row.status ?? 'Draft',
+    source: row.source ?? 'manual',
+    lines: Array.isArray(row.lines) ? row.lines : [],
+    createdAt: row.created_at,
+    notes: row.notes ?? '',
+  };
+}
+
+function mapFixedAsset(row: any): any {
+  return {
+    id: row.id,
+    assetNumber: row.asset_number ?? '',
+    name: row.name ?? '',
+    category: row.category ?? '',
+    acquisitionDate: row.acquisition_date ?? '',
+    cost: Number(row.cost ?? 0),
+    residualValue: Number(row.residual_value ?? 0),
+    usefulLifeYears: Number(row.useful_life_years ?? 0),
+    depreciationMethod: row.depreciation_method ?? 'Straight Line',
+    status: row.status ?? 'Active',
+    depreciationPostedToDate: row.depreciation_posted_to_date ?? '',
+    disposalDate: row.disposal_date ?? '',
+    disposalProceeds: Number(row.disposal_proceeds ?? 0),
+    notes: row.notes ?? '',
+    createdAt: row.created_at,
+  };
+}
+
+function mapMaintenanceWorkOrder(row: any): any {
+  return {
+    id: row.id,
+    woNumber: row.wo_number ?? '',
+    machineId: row.machine_id ?? '',
+    machineName: row.machine_name ?? '',
+    type: row.type ?? 'Preventive',
+    priority: row.priority ?? 'Medium',
+    status: row.status ?? 'Open',
+    scheduledDate: row.scheduled_date ?? '',
+    completedDate: row.completed_date ?? '',
+    assignedTo: row.assigned_to ?? '',
+    description: row.description ?? '',
+    partsUsed: row.parts_used ?? '',
+    labourHours: Number(row.labour_hours ?? 0),
+    downtimeHours: Number(row.downtime_hours ?? 0),
+    cost: Number(row.cost ?? 0),
+    nextServiceIntervalDays: Number(row.next_service_interval_days ?? 0),
+    createdAt: row.created_at,
     notes: row.notes ?? '',
   };
 }
@@ -1667,6 +1825,13 @@ export async function fetchAppData(): Promise<AppData> {
     shipmentRows,
     ledgerAccountRows,
     supplierBillRows,
+    sarsFilingRows,
+    employeeRows,
+    payrollRunRows,
+    bankTransactionRows,
+    journalEntryRows,
+    fixedAssetRows,
+    maintenanceWorkOrderRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1727,6 +1892,19 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 24 — Accounting (Chart of Accounts + Accounts Payable).
     safeSelect('ledger_accounts'),
     safeSelect('supplier_bills'),
+    // Phase 25 — SARS Centre filings.
+    safeSelect('sars_filings'),
+    // Phase 26 — Payroll.
+    safeSelect('employees'),
+    safeSelect('payroll_runs'),
+    // Phase 27 — Bank reconciliation.
+    safeSelect('bank_transactions'),
+    // Phase 28 — General Ledger.
+    safeSelect('journal_entries'),
+    // Phase 29 — Fixed assets.
+    safeSelect('fixed_assets'),
+    // Phase 30 — Maintenance work orders.
+    safeSelect('maintenance_work_orders'),
   ]);
 
   return {
@@ -1778,6 +1956,13 @@ export async function fetchAppData(): Promise<AppData> {
     shipments: shipmentRows.map(mapShipment),
     ledgerAccounts: ledgerAccountRows.map(mapLedgerAccount),
     supplierBills: supplierBillRows.map(mapSupplierBill),
+    sarsFilings: sarsFilingRows.map(mapSarsFiling),
+    employees: employeeRows.map(mapEmployee),
+    payrollRuns: payrollRunRows.map(mapPayrollRun),
+    bankTransactions: bankTransactionRows.map(mapBankTransaction),
+    journalEntries: journalEntryRows.map(mapJournalEntry),
+    fixedAssets: fixedAssetRows.map(mapFixedAsset),
+    maintenanceWorkOrders: maintenanceWorkOrderRows.map(mapMaintenanceWorkOrder),
     stockChangeLogs: stockChangeLogs.map(mapStockChangeLog),
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
@@ -2476,6 +2661,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       default_stock_holding_max_days: data.appSettings.stockHolding.defaultMaxDays,
       default_stock_holding_review_cadence_days: data.appSettings.stockHolding.defaultReviewCadenceDays,
       default_stock_holding_terms: data.appSettings.stockHolding.defaultAgreementTermsText,
+      sars_config: data.appSettings.sarsConfig,
+      currency_config: data.appSettings.currencyConfig,
+      connector_config: data.appSettings.connectorConfig,
       updated_at: data.appSettings.updatedAt || new Date().toISOString(),
       updated_by: data.appSettings.updatedBy || null,
     }]),
@@ -2530,7 +2718,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       production_spec_number: inv.productionSpecNumber || null,
       customer_reference: inv.customerReference, terms_type: inv.termsType,
       terms_text: inv.termsText, notes: inv.notes, footer_notes: inv.footerNotes,
-      status: inv.status, currency: inv.currency,
+      status: inv.status, currency: inv.currency, exchange_rate: inv.exchangeRate ?? 1,
       line_items: inv.lineItems, subtotal_excl_vat: inv.subtotalExclVat,
       vat_total: inv.vatTotal, total_incl_vat: inv.totalInclVat,
       payments: inv.payments, amount_paid: inv.amountPaid,
@@ -2925,6 +3113,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       expense_account_id: b.expenseAccountId || null,
       expense_account_name: b.expenseAccountName || '',
       currency: b.currency || 'ZAR',
+      exchange_rate: b.exchangeRate ?? 1,
       subtotal_excl_vat: b.subtotalExclVat,
       vat_amount: b.vatAmount,
       total_incl_vat: b.totalInclVat,
@@ -2936,7 +3125,158 @@ export async function syncAppData(data: AppData): Promise<void> {
       source_inbox_id: b.sourceInboxId || null,
       notes: b.notes || '',
     }))),
+    safeUpsert('sars_filings', data.sarsFilings.map((f) => ({
+      id: f.id,
+      obligation_type: f.obligationType,
+      period_key: f.periodKey,
+      period_label: f.periodLabel || '',
+      period_start: f.periodStart || '',
+      period_end: f.periodEnd || '',
+      due_date: f.dueDate || '',
+      status: f.status,
+      output_vat: f.outputVat,
+      input_vat: f.inputVat,
+      manual_adjustment: f.manualAdjustment,
+      net_vat_payable: f.netVatPayable,
+      amount_payable: f.amountPayable,
+      figures: f.figures,
+      submitted_date: f.submittedDate || '',
+      submitted_by: f.submittedBy || '',
+      payment_date: f.paymentDate || '',
+      payment_reference: f.paymentReference || '',
+      proof_document_id: f.proofDocumentId || null,
+      notes: f.notes || '',
+      created_at: f.createdAt || new Date().toISOString(),
+    }))),
+    safeUpsert('employees', data.employees.map((e) => ({
+      id: e.id,
+      employee_number: e.employeeNumber || '',
+      first_name: e.firstName || '',
+      last_name: e.lastName || '',
+      id_number: e.idNumber || '',
+      tax_number: e.taxNumber || '',
+      email: e.email || '',
+      phone: e.phone || '',
+      job_title: e.jobTitle || '',
+      department: e.department || '',
+      pay_cycle: e.payCycle,
+      basic_salary: e.basicSalary,
+      bank_name: e.bankName || '',
+      bank_account_number: e.bankAccountNumber || '',
+      bank_branch_code: e.bankBranchCode || '',
+      account_type: e.accountType || '',
+      uif_contributor: e.uifContributor,
+      start_date: e.startDate || '',
+      end_date: e.endDate || '',
+      active: e.active,
+      notes: e.notes || '',
+    }))),
+    safeUpsert('payroll_runs', data.payrollRuns.map((r) => ({
+      id: r.id,
+      run_number: r.runNumber,
+      created_at: r.createdAt || new Date().toISOString(),
+      pay_cycle: r.payCycle,
+      period_month: r.periodMonth,
+      period_year: r.periodYear,
+      period_label: r.periodLabel || '',
+      pay_date: r.payDate || '',
+      status: r.status,
+      payslips: r.payslips,
+      total_gross: r.totalGross,
+      total_paye: r.totalPaye,
+      total_uif_employee: r.totalUifEmployee,
+      total_uif_employer: r.totalUifEmployer,
+      total_sdl: r.totalSdl,
+      total_other_deductions: r.totalOtherDeductions,
+      total_net: r.totalNet,
+      notes: r.notes || '',
+    }))),
+    safeUpsert('bank_transactions', data.bankTransactions.map((t) => ({
+      id: t.id,
+      import_batch: t.importBatch || '',
+      bank_account_name: t.bankAccountName || '',
+      date: t.date || '',
+      description: t.description || '',
+      reference: t.reference || '',
+      amount: t.amount,
+      match_type: t.matchType,
+      match_id: t.matchId || '',
+      match_label: t.matchLabel || '',
+      ledger_account_id: t.ledgerAccountId || null,
+      reconciled: t.reconciled,
+      notes: t.notes || '',
+      created_at: t.createdAt || new Date().toISOString(),
+    }))),
+    safeUpsert('journal_entries', data.journalEntries.map((j) => ({
+      id: j.id,
+      entry_number: j.entryNumber,
+      date: j.date || '',
+      reference: j.reference || '',
+      description: j.description || '',
+      status: j.status,
+      source: j.source || 'manual',
+      lines: j.lines,
+      created_at: j.createdAt || new Date().toISOString(),
+      notes: j.notes || '',
+    }))),
+    safeUpsert('fixed_assets', data.fixedAssets.map((a) => ({
+      id: a.id,
+      asset_number: a.assetNumber,
+      name: a.name || '',
+      category: a.category || '',
+      acquisition_date: a.acquisitionDate || '',
+      cost: a.cost,
+      residual_value: a.residualValue,
+      useful_life_years: a.usefulLifeYears,
+      depreciation_method: a.depreciationMethod,
+      status: a.status,
+      depreciation_posted_to_date: a.depreciationPostedToDate || '',
+      disposal_date: a.disposalDate || '',
+      disposal_proceeds: a.disposalProceeds,
+      notes: a.notes || '',
+      created_at: a.createdAt || new Date().toISOString(),
+    }))),
+    safeUpsert('maintenance_work_orders', data.maintenanceWorkOrders.map((w) => ({
+      id: w.id,
+      wo_number: w.woNumber,
+      machine_id: w.machineId || null,
+      machine_name: w.machineName || '',
+      type: w.type,
+      priority: w.priority,
+      status: w.status,
+      scheduled_date: w.scheduledDate || '',
+      completed_date: w.completedDate || '',
+      assigned_to: w.assignedTo || '',
+      description: w.description || '',
+      parts_used: w.partsUsed || '',
+      labour_hours: w.labourHours,
+      downtime_hours: w.downtimeHours,
+      cost: w.cost,
+      next_service_interval_days: w.nextServiceIntervalDays,
+      created_at: w.createdAt || new Date().toISOString(),
+      notes: w.notes || '',
+    }))),
   ]);
+
+  // Phase 32 — refresh the curated Aman OS connector feed on every sync.
+  await publishConnectorFeed(data);
+}
+
+/**
+ * Publish the curated connector tiles to the read-only feed Aman OS consumes.
+ * Only toggled-on tiles are written; if the connector is disabled, the feed is
+ * emptied. Never writes raw rows — only the aggregated tiles.
+ */
+export async function publishConnectorFeed(data: AppData): Promise<void> {
+  const cfg = data.appSettings.connectorConfig;
+  const today = new Date().toISOString().slice(0, 10);
+  const tiles = cfg?.enabled ? publishableTiles(data, today, cfg.disabledTileKeys || []) : [];
+  await safeUpsert('connector_feed', [{
+    id: 'current',
+    tiles,
+    contract_version: cfg?.contractVersion ?? 1,
+    published_at: new Date().toISOString(),
+  }]);
 }
 
 /**

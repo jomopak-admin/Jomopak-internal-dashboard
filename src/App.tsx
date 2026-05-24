@@ -26,6 +26,7 @@ import { InvoiceInboxPage } from './pages/InvoiceInbox/InvoiceInboxPage';
 import { runOcrOnInboxItem } from './utils/ocrRunner';
 import { attachAutoFlush, flushPodQueue } from './utils/podSync';
 import { uploadInvoiceInboxFile } from './utils/invoiceInboxStorage';
+import { getRate, RealisedFxResult } from './utils/currency';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { computeQuote, emptyCalculatorState } from './utils/calculatorEngine';
 import { FoodSafeCertificatePrint } from './pages/Phase5/FoodSafeCertificatePrint';
@@ -75,10 +76,24 @@ import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
 import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
 import { uploadDocumentFile } from './utils/documentStorage';
-import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType, LedgerAccount, SupplierBill } from './types';
+import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType, LedgerAccount, SupplierBill, SarsFiling, AppSettingsSarsConfig } from './types';
 import { ShipmentsPage } from './pages/Shipments/ShipmentsPage';
 import { ChartOfAccountsPage } from './pages/Accounting/ChartOfAccountsPage';
 import { AccountsPayablePage } from './pages/Accounting/AccountsPayablePage';
+import { SarsCentrePage } from './pages/Sars/SarsCentrePage';
+import { FinanceSummaryPage } from './pages/Sars/FinanceSummaryPage';
+import { CustomerStatementsPage } from './pages/Sars/CustomerStatementsPage';
+import { EmployeesPage } from './pages/Payroll/EmployeesPage';
+import { PayrollPage } from './pages/Payroll/PayrollPage';
+import { BankReconciliationPage } from './pages/Sars/BankReconciliationPage';
+import { GeneralLedgerPage } from './pages/Sars/GeneralLedgerPage';
+import { FinancialStatementsPage } from './pages/Sars/FinancialStatementsPage';
+import { FixedAssetsPage } from './pages/Sars/FixedAssetsPage';
+import { MaintenancePage } from './pages/Maintenance/MaintenancePage';
+import { CurrenciesPage } from './pages/Sars/CurrenciesPage';
+import { OsConnectorPage } from './pages/OsConnector/OsConnectorPage';
+import { publishConnectorFeed } from './utils/supabaseData';
+import { Employee, PayrollRun, BankTransaction, JournalEntry, FixedAsset, MaintenanceWorkOrder, AppSettingsCurrencyConfig, AppSettingsConnectorConfig, AppData } from './types';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
@@ -269,6 +284,39 @@ import { supabase } from './utils/supabase';
 import { detectVersionConflict, recordAuditEvent } from './utils/supabaseData';
 
 const currentMonth = getCurrentMonthValue();
+/** Recompute an invoice's paid/outstanding/status from its payments array.
+ *  Used when bank reconciliation adds or removes an auto-payment. */
+function recomputeInvoiceFromPayments(inv: Invoice): Invoice {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const amountPaid = inv.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const amountOutstanding = Math.max(0, (Number(inv.totalInclVat) || 0) - amountPaid);
+  let status = inv.status;
+  if (status !== 'Cancelled' && status !== 'Draft') {
+    if (amountPaid <= 0) {
+      if (status === 'Paid' || status === 'Partially Paid') status = 'Sent';
+    } else if (amountOutstanding <= 0) {
+      status = 'Paid';
+    } else {
+      status = 'Partially Paid';
+    }
+  }
+  return { ...inv, amountPaid: round2(amountPaid), amountOutstanding: round2(amountOutstanding), status };
+}
+
+/** Recompute a supplier bill's paid/outstanding/status from its payments. */
+function recomputeBillFromPayments(b: SupplierBill): SupplierBill {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const total = Number(b.totalInclVat) || 0;
+  const paid = b.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  let status = b.status;
+  if (status !== 'Disputed' && status !== 'Cancelled') {
+    if (paid <= 0) status = 'Unpaid';
+    else if (total - paid <= 0) status = 'Paid';
+    else status = 'Partially Paid';
+  }
+  return { ...b, amountPaid: round2(paid), amountOutstanding: round2(total - paid), status };
+}
+
 const VIEW_ORDER: View[] = [
   'dashboard',
   'salesDesk',
@@ -300,6 +348,18 @@ const VIEW_ORDER: View[] = [
   'reports',
   'chartOfAccounts',
   'accountsPayable',
+  'sarsCentre',
+  'financeSummary',
+  'customerStatements',
+  'employees',
+  'payroll',
+  'bankRec',
+  'generalLedger',
+  'financialStatements',
+  'fixedAssets',
+  'currencies',
+  'maintenance',
+  'osConnector',
 ];
 const createInitialJobForm = (): JobFormState => ({
   jobDate: getToday(),
@@ -1469,6 +1529,23 @@ function App() {
   const canManageCostInputs = allowedViews.has('costInputs');
   const canViewInternalCalculatorCosts = canManageCostInputs;
 
+  // Live accounts-receivable balance per client, derived from unpaid invoices,
+  // so credit checks fire on real numbers rather than a stale stored field.
+  const clientArOutstanding = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of data.invoices) {
+      if (inv.status === 'Draft' || inv.status === 'Cancelled') continue;
+      map.set(inv.clientId, (map.get(inv.clientId) || 0) + (Number(inv.amountOutstanding) || 0));
+    }
+    return map;
+  }, [data.invoices]);
+  function effectiveClientBalance(client: Client): number {
+    if (clientArOutstanding.has(client.id)) {
+      return Math.round((clientArOutstanding.get(client.id)! + (Number(client.openingBalance) || 0)) * 100) / 100;
+    }
+    return Number(client.currentBalance) || 0;
+  }
+
   // Cmd-K / Ctrl-K — toggle the global command palette. Registered once at the
   // App level so the shortcut works on any view. Skip if the user is typing in
   // a textarea or contenteditable region.
@@ -1587,7 +1664,7 @@ function App() {
         const openJobs = dashboardJobs.filter((job) => job.status !== 'Completed').length;
         const awaitingArtwork = dashboardJobs.filter((job) => !job.artworkReceived && job.status !== 'Completed').length;
         const overdue = dashboardJobs.filter((job) => job.dueDate && job.dueDate < todayStr && job.status !== 'Completed').length;
-        const overCredit = data.clients.filter((client) => client.creditLimit > 0 && client.currentBalance > client.creditLimit).length;
+        const overCredit = data.clients.filter((client) => client.creditLimit > 0 && effectiveClientBalance(client) > client.creditLimit).length;
         const onHold = data.clients.filter((client) => client.accountHold).length;
         return renderChips([
           { label: 'Open jobs', value: openJobs },
@@ -1660,7 +1737,7 @@ function App() {
       case 'clients': {
         const active = data.clients.filter((c) => c.active).length;
         const onHold = data.clients.filter((c) => c.accountHold).length;
-        const overCredit = data.clients.filter((c) => c.creditLimit > 0 && c.currentBalance > c.creditLimit).length;
+        const overCredit = data.clients.filter((c) => c.creditLimit > 0 && effectiveClientBalance(c) > c.creditLimit).length;
         return renderChips([
           { label: 'Active', value: active },
           { label: 'On hold', value: onHold, tone: onHold > 0 ? 'warn' : undefined },
@@ -2569,6 +2646,12 @@ function App() {
         defaultReviewCadenceDays: numeric(settingsForm.stockHolding.defaultReviewCadenceDays, data.appSettings.stockHolding.defaultReviewCadenceDays),
         defaultAgreementTermsText: settingsForm.stockHolding.defaultAgreementTermsText,
       },
+      // SARS config is edited from the SARS Centre, not this form — preserve it.
+      sarsConfig: data.appSettings.sarsConfig,
+      // Currency config is edited from Currencies & FX — preserve it.
+      currencyConfig: data.appSettings.currencyConfig,
+      // Connector config is edited from the Aman OS Connector page — preserve it.
+      connectorConfig: data.appSettings.connectorConfig,
       updatedAt: new Date().toISOString(),
       updatedBy: profile?.fullName || profile?.email || data.appSettings.updatedBy,
     };
@@ -3444,6 +3527,7 @@ function App() {
       footerNotes: invoiceForm.footerNotes,
       status: invoiceForm.status,
       currency: invoiceForm.currency,
+      exchangeRate: getRate(invoiceForm.currency, data.appSettings.currencyConfig),
       lineItems,
       subtotalExclVat,
       vatTotal,
@@ -3575,7 +3659,7 @@ function App() {
     const reservedQuantity = Number(jobForm.reservedQuantity || 0);
     const commercialCleared = jobForm.commercialReleaseStatus === 'Cleared for Production';
     const orderValue = Number(jobForm.orderValue || linkedQuote?.totalQuote || 0);
-    const availableCredit = linkedClient ? Math.max(linkedClient.creditLimit - linkedClient.currentBalance, 0) : 0;
+    const availableCredit = linkedClient ? Math.max(linkedClient.creditLimit - effectiveClientBalance(linkedClient), 0) : 0;
     const paymentRequirement = jobForm.paymentRequirement;
     const paymentStatus = jobForm.paymentStatus;
     const creditCheckStatus = paymentRequirement === 'Credit Terms'
@@ -3687,11 +3771,12 @@ function App() {
     // is already over their credit limit OR the new order tips them over,
     // we block production clearance.
     if (commercialCleared && linkedClient && linkedClient.creditLimit > 0) {
-      const projectedBalance = linkedClient.currentBalance + orderValue;
+      const liveBalance = effectiveClientBalance(linkedClient);
+      const projectedBalance = liveBalance + orderValue;
       if (projectedBalance > linkedClient.creditLimit) {
         const overflow = projectedBalance - linkedClient.creditLimit;
         setJobMessage(
-          `Credit block — ${linkedClient.name} would be R ${overflow.toFixed(2)} over their R ${linkedClient.creditLimit.toFixed(0)} credit limit. Current balance: R ${linkedClient.currentBalance.toFixed(2)}. Collect outstanding before clearing this job.`,
+          `Credit block — ${linkedClient.name} would be R ${overflow.toFixed(2)} over their R ${linkedClient.creditLimit.toFixed(0)} credit limit. Current balance: R ${liveBalance.toFixed(2)}. Collect outstanding before clearing this job.`,
         );
         return;
       }
@@ -7709,6 +7794,10 @@ function App() {
           state={calculatorState}
           setState={setCalculatorState}
           onSaveAsQuote={handleSaveCalculatorAsQuote}
+          company={data.appSettings.company}
+          defaultFooterLines={data.appSettings.templates.invoiceFooterLines}
+          preparedByName={profile?.fullName || profile?.email || ''}
+          today={getToday()}
         />
       )}
 
@@ -8367,9 +8456,42 @@ function App() {
                   fscRelated: false,
                 });
               });
+              // Raise an Accounts Payable bill for the goods value owed to the
+              // supplier — unless one already exists for this shipment.
+              const alreadyBilled = current.supplierBills.some((b) => b.sourceShipmentId === shipment.id);
+              let supplierBills = current.supplierBills;
+              if (!alreadyBilled && (Number(shipment.goodsValue) || 0) > 0) {
+                const billNum = generateCode('BILL', current.supplierBills.map((b) => b.billNumber), today);
+                const goods = Number(shipment.goodsValue) || 0;
+                const newBill: SupplierBill = {
+                  id: billNum,
+                  billNumber: billNum,
+                  supplierInvoiceNumber: shipment.reference || '',
+                  createdAt: new Date().toISOString(),
+                  billDate: shipment.actualArrivalDate || today,
+                  dueDate: '',
+                  supplierId: shipment.supplierId || '',
+                  supplierName: shipment.supplierName || '',
+                  expenseAccountId: '',
+                  expenseAccountName: '',
+                  currency: shipment.currency || 'USD',
+                  subtotalExclVat: goods,
+                  vatAmount: 0,
+                  totalInclVat: goods,
+                  payments: [],
+                  amountPaid: 0,
+                  amountOutstanding: goods,
+                  status: 'Unpaid',
+                  sourceShipmentId: shipment.id,
+                  sourceInboxId: '',
+                  notes: `Goods value from shipment ${shipment.shipmentNumber}. Freight/duty/clearing billed separately.`,
+                };
+                supplierBills = [newBill, ...current.supplierBills];
+              }
               return {
                 ...current,
                 materialReceipts: [...newReceipts, ...current.materialReceipts],
+                supplierBills,
                 shipments: current.shipments.map((s) =>
                   s.id === shipment.id ? { ...s, receivedIntoStock: true, status: 'Received' } : s,
                 ),
@@ -8414,12 +8536,380 @@ function App() {
                 return { ...current, supplierBills: current.supplierBills.map((b) => (b.id === bill.id ? bill : b)) };
               }
               const num = generateCode('BILL', current.supplierBills.map((b) => b.billNumber), bill.billDate || getToday());
-              const created: SupplierBill = { ...bill, id: num, billNumber: num, createdAt: new Date().toISOString() };
+              const created: SupplierBill = { ...bill, id: num, billNumber: num, createdAt: new Date().toISOString(), exchangeRate: getRate(bill.currency, current.appSettings.currencyConfig) };
               return { ...current, supplierBills: [created, ...current.supplierBills] };
             });
           }}
           onDelete={(id: string) => {
             setData((current) => ({ ...current, supplierBills: current.supplierBills.filter((b) => b.id !== id) }));
+          }}
+        />
+      )}
+
+      {view === 'sarsCentre' && (
+        <SarsCentrePage
+          sarsFilings={data.sarsFilings}
+          sarsConfig={data.appSettings.sarsConfig}
+          invoices={data.invoices}
+          supplierBills={data.supplierBills}
+          payrollRuns={data.payrollRuns}
+          documents={data.documents}
+          today={getToday()}
+          onSaveFiling={(filing: SarsFiling) => {
+            setData((current) => {
+              const id = filing.id || `sars-${filing.periodKey}`;
+              const createdAt = filing.createdAt || new Date().toISOString();
+              const next: SarsFiling = { ...filing, id, createdAt };
+              const exists = current.sarsFilings.some((f) => f.id === id || f.periodKey === filing.periodKey);
+              return {
+                ...current,
+                sarsFilings: exists
+                  ? current.sarsFilings.map((f) => (f.id === id || f.periodKey === filing.periodKey ? next : f))
+                  : [next, ...current.sarsFilings],
+              };
+            });
+          }}
+          onSaveConfig={(config: AppSettingsSarsConfig) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                sarsConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+          }}
+        />
+      )}
+
+      {view === 'financeSummary' && (
+        <FinanceSummaryPage
+          invoices={data.invoices}
+          supplierBills={data.supplierBills}
+          ledgerAccounts={data.ledgerAccounts}
+          sarsConfig={data.appSettings.sarsConfig}
+          today={getToday()}
+        />
+      )}
+
+      {view === 'customerStatements' && (
+        <CustomerStatementsPage
+          invoices={data.invoices}
+          clients={data.clients}
+          company={data.appSettings.company}
+          today={getToday()}
+        />
+      )}
+
+      {view === 'employees' && (
+        <EmployeesPage
+          employees={data.employees}
+          onSave={(employee: Employee) => {
+            setData((current) => {
+              if (employee.id) {
+                return { ...current, employees: current.employees.map((e) => (e.id === employee.id ? employee : e)) };
+              }
+              const seq = current.employees.length + 1;
+              const created: Employee = {
+                ...employee,
+                id: `emp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                employeeNumber: employee.employeeNumber || `EMP-${String(seq).padStart(3, '0')}`,
+              };
+              return { ...current, employees: [...current.employees, created] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, employees: current.employees.filter((e) => e.id !== id) }));
+          }}
+        />
+      )}
+
+      {view === 'payroll' && (
+        <PayrollPage
+          payrollRuns={data.payrollRuns}
+          employees={data.employees}
+          company={data.appSettings.company}
+          onSave={(run: PayrollRun) => {
+            setData((current) => {
+              if (run.id) {
+                return { ...current, payrollRuns: current.payrollRuns.map((r) => (r.id === run.id ? run : r)) };
+              }
+              const num = `PAY-${run.periodYear}${String(run.periodMonth).padStart(2, '0')}`;
+              const created: PayrollRun = { ...run, id: num, runNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, payrollRuns: [created, ...current.payrollRuns] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, payrollRuns: current.payrollRuns.filter((r) => r.id !== id) }));
+          }}
+        />
+      )}
+
+      {view === 'bankRec' && (
+        <BankReconciliationPage
+          bankTransactions={data.bankTransactions}
+          invoices={data.invoices}
+          supplierBills={data.supplierBills}
+          payrollRuns={data.payrollRuns}
+          ledgerAccounts={data.ledgerAccounts}
+          onImport={(transactions: BankTransaction[]) => {
+            setData((current) => ({ ...current, bankTransactions: [...transactions, ...current.bankTransactions] }));
+          }}
+          onUpdate={(transaction: BankTransaction) => {
+            setData((current) => {
+              const bankTransactions = current.bankTransactions.map((t) => (t.id === transaction.id ? transaction : t));
+              const payId = `bankpay-${transaction.id}`;
+              const payDate = transaction.date || getToday();
+              const reference = transaction.reference || `Bank ${transaction.date}`;
+              const amount = Math.abs(Number(transaction.amount) || 0);
+              // Reverse any prior auto-payment from this txn across invoices + bills.
+              let invoices = current.invoices.map((inv) =>
+                inv.payments.some((p) => p.id === payId)
+                  ? recomputeInvoiceFromPayments({ ...inv, payments: inv.payments.filter((p) => p.id !== payId) })
+                  : inv,
+              );
+              let supplierBills = current.supplierBills.map((b) =>
+                b.payments.some((p) => p.id === payId)
+                  ? recomputeBillFromPayments({ ...b, payments: b.payments.filter((p) => p.id !== payId) })
+                  : b,
+              );
+              // Re-apply when reconciled + matched to an invoice or bill.
+              if (transaction.reconciled && transaction.matchId && amount > 0) {
+                if (transaction.matchType === 'invoice') {
+                  invoices = invoices.map((inv) =>
+                    inv.id === transaction.matchId
+                      ? recomputeInvoiceFromPayments({ ...inv, payments: [...inv.payments, { id: payId, paymentDate: payDate, amount, method: 'EFT', reference, notes: 'Auto from bank reconciliation' }] })
+                      : inv,
+                  );
+                } else if (transaction.matchType === 'bill') {
+                  supplierBills = supplierBills.map((b) =>
+                    b.id === transaction.matchId
+                      ? recomputeBillFromPayments({ ...b, payments: [...b.payments, { id: payId, paymentDate: payDate, amount, method: 'EFT', reference, notes: 'Auto from bank reconciliation' }] })
+                      : b,
+                  );
+                }
+              }
+              return { ...current, bankTransactions, invoices, supplierBills };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, bankTransactions: current.bankTransactions.filter((t) => t.id !== id) }));
+          }}
+        />
+      )}
+
+      {view === 'generalLedger' && (
+        <GeneralLedgerPage
+          journalEntries={data.journalEntries}
+          ledgerAccounts={data.ledgerAccounts}
+          invoices={data.invoices}
+          supplierBills={data.supplierBills}
+          today={getToday()}
+          onSave={(entry: JournalEntry) => {
+            setData((current) => {
+              if (entry.id) {
+                const exists = current.journalEntries.some((j) => j.id === entry.id);
+                return {
+                  ...current,
+                  journalEntries: exists
+                    ? current.journalEntries.map((j) => (j.id === entry.id ? entry : j))
+                    : [entry, ...current.journalEntries],
+                };
+              }
+              const num = generateCode('JNL', current.journalEntries.map((j) => j.entryNumber), entry.date || getToday());
+              const created: JournalEntry = { ...entry, id: num, entryNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, journalEntries: [created, ...current.journalEntries] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, journalEntries: current.journalEntries.filter((j) => j.id !== id) }));
+          }}
+          onGenerate={(entries: JournalEntry[]) => {
+            setData((current) => {
+              const existingNumbers = current.journalEntries.map((j) => j.entryNumber);
+              const numbered = entries.map((e) => {
+                const num = generateCode('JNL', existingNumbers, e.date || getToday());
+                existingNumbers.push(num);
+                return { ...e, entryNumber: num };
+              });
+              return { ...current, journalEntries: [...numbered, ...current.journalEntries] };
+            });
+          }}
+        />
+      )}
+
+      {view === 'financialStatements' && (
+        <FinancialStatementsPage
+          journalEntries={data.journalEntries}
+          ledgerAccounts={data.ledgerAccounts}
+          sarsConfig={data.appSettings.sarsConfig}
+          today={getToday()}
+        />
+      )}
+
+      {view === 'fixedAssets' && (
+        <FixedAssetsPage
+          fixedAssets={data.fixedAssets}
+          ledgerAccounts={data.ledgerAccounts}
+          today={getToday()}
+          onSave={(asset: FixedAsset) => {
+            setData((current) => {
+              if (asset.id) {
+                return { ...current, fixedAssets: current.fixedAssets.map((a) => (a.id === asset.id ? asset : a)) };
+              }
+              const num = generateCode('FA', current.fixedAssets.map((a) => a.assetNumber), asset.acquisitionDate || getToday());
+              const created: FixedAsset = {
+                ...asset,
+                id: num,
+                assetNumber: asset.assetNumber || num,
+                createdAt: new Date().toISOString(),
+              };
+              return { ...current, fixedAssets: [...current.fixedAssets, created] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, fixedAssets: current.fixedAssets.filter((a) => a.id !== id) }));
+          }}
+          onPostDepreciation={(journal: JournalEntry, postedToDate: string) => {
+            setData((current) => {
+              const num = generateCode('JNL', current.journalEntries.map((j) => j.entryNumber), journal.date || getToday());
+              const created: JournalEntry = { ...journal, id: num, entryNumber: num, createdAt: new Date().toISOString() };
+              return {
+                ...current,
+                journalEntries: [created, ...current.journalEntries],
+                fixedAssets: current.fixedAssets.map((a) =>
+                  a.status === 'Active' ? { ...a, depreciationPostedToDate: postedToDate } : a,
+                ),
+              };
+            });
+          }}
+        />
+      )}
+
+      {view === 'currencies' && (
+        <CurrenciesPage
+          currencyConfig={data.appSettings.currencyConfig}
+          invoices={data.invoices}
+          supplierBills={data.supplierBills}
+          ledgerAccounts={data.ledgerAccounts}
+          today={getToday()}
+          onSaveConfig={(config: AppSettingsCurrencyConfig) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                currencyConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+          }}
+          onPostRevaluation={(journal: JournalEntry) => {
+            setData((current) => {
+              const num = generateCode('JNL', current.journalEntries.map((j) => j.entryNumber), journal.date || getToday());
+              const created: JournalEntry = { ...journal, id: num, entryNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, journalEntries: [created, ...current.journalEntries] };
+            });
+          }}
+          onPostRealisedFx={(result: RealisedFxResult) => {
+            if (!result.journal) return;
+            setData((current) => {
+              const num = generateCode('JNL', current.journalEntries.map((j) => j.entryNumber), result.journal!.date || getToday());
+              const created: JournalEntry = { ...result.journal!, id: num, entryNumber: num, createdAt: new Date().toISOString() };
+              const invKeys = new Set(result.postedPayments.filter((p) => p.kind === 'invoice').map((p) => `${p.docId}::${p.paymentId}`));
+              const billKeys = new Set(result.postedPayments.filter((p) => p.kind === 'bill').map((p) => `${p.docId}::${p.paymentId}`));
+              return {
+                ...current,
+                journalEntries: [created, ...current.journalEntries],
+                invoices: current.invoices.map((inv) =>
+                  result.postedPayments.some((p) => p.kind === 'invoice' && p.docId === inv.id)
+                    ? { ...inv, payments: inv.payments.map((p) => (invKeys.has(`${inv.id}::${p.id}`) ? { ...p, fxPosted: true } : p)) }
+                    : inv,
+                ),
+                supplierBills: current.supplierBills.map((b) =>
+                  result.postedPayments.some((p) => p.kind === 'bill' && p.docId === b.id)
+                    ? { ...b, payments: b.payments.map((p) => (billKeys.has(`${b.id}::${p.id}`) ? { ...p, fxPosted: true } : p)) }
+                    : b,
+                ),
+              };
+            });
+          }}
+        />
+      )}
+
+      {view === 'osConnector' && (
+        <OsConnectorPage
+          data={data}
+          connectorConfig={data.appSettings.connectorConfig}
+          today={getToday()}
+          onSaveConfig={(config: AppSettingsConnectorConfig) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                connectorConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+          }}
+          onPublishNow={async () => {
+            const stamped: AppData = {
+              ...data,
+              appSettings: { ...data.appSettings, connectorConfig: { ...data.appSettings.connectorConfig, lastPublishedAt: new Date().toISOString() } },
+            };
+            await publishConnectorFeed(stamped);
+            setData((current) => ({
+              ...current,
+              appSettings: { ...current.appSettings, connectorConfig: { ...current.appSettings.connectorConfig, lastPublishedAt: stamped.appSettings.connectorConfig.lastPublishedAt } },
+            }));
+          }}
+        />
+      )}
+
+      {view === 'maintenance' && (
+        <MaintenancePage
+          workOrders={data.maintenanceWorkOrders}
+          machines={data.machines}
+          today={getToday()}
+          onSave={(wo: MaintenanceWorkOrder) => {
+            setData((current) => {
+              if (wo.id) {
+                return { ...current, maintenanceWorkOrders: current.maintenanceWorkOrders.map((w) => (w.id === wo.id ? wo : w)) };
+              }
+              const num = generateCode('WO', current.maintenanceWorkOrders.map((w) => w.woNumber), wo.scheduledDate || getToday());
+              const created: MaintenanceWorkOrder = { ...wo, id: num, woNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, maintenanceWorkOrders: [created, ...current.maintenanceWorkOrders] };
+            });
+          }}
+          onDelete={(id: string) => {
+            setData((current) => ({ ...current, maintenanceWorkOrders: current.maintenanceWorkOrders.filter((w) => w.id !== id) }));
+          }}
+          onComplete={(wo: MaintenanceWorkOrder) => {
+            setData((current) => {
+              const completedDate = wo.completedDate || getToday();
+              const id = wo.id || generateCode('WO', current.maintenanceWorkOrders.map((w) => w.woNumber), wo.scheduledDate || getToday());
+              const finished: MaintenanceWorkOrder = { ...wo, id, woNumber: wo.woNumber || id, status: 'Completed', completedDate, createdAt: wo.createdAt || new Date().toISOString() };
+              const exists = current.maintenanceWorkOrders.some((w) => w.id === id);
+              // Advance the machine's next-service date for preventive jobs.
+              let machinesNext = current.machines;
+              if (wo.type === 'Preventive' && wo.machineId && wo.nextServiceIntervalDays > 0) {
+                const next = new Date(`${completedDate}T00:00:00Z`);
+                next.setUTCDate(next.getUTCDate() + wo.nextServiceIntervalDays);
+                const nextStr = next.toISOString().slice(0, 10);
+                machinesNext = current.machines.map((m) =>
+                  m.id === wo.machineId ? { ...m, lastServicedDate: completedDate, nextServiceDate: nextStr, maintenanceStatus: 'OK' as const } : m,
+                );
+              }
+              return {
+                ...current,
+                machines: machinesNext,
+                maintenanceWorkOrders: exists
+                  ? current.maintenanceWorkOrders.map((w) => (w.id === id ? finished : w))
+                  : [finished, ...current.maintenanceWorkOrders],
+              };
+            });
           }}
         />
       )}
@@ -8480,6 +8970,51 @@ function App() {
                   : it,
               ),
             }));
+          }}
+          onPostToAccountsPayable={(item: InvoiceInboxItem) => {
+            const ex = item.extractedJson;
+            if (!ex) return;
+            setData((current) => {
+              const billDate = ex.invoiceDate || getToday();
+              const num = generateCode('BILL', current.supplierBills.map((b) => b.billNumber), billDate);
+              const supplier = current.suppliers.find((s) => s.id === ex.matchedSupplierId);
+              const subtotal = Number(ex.subtotal) || 0;
+              const vat = Number(ex.vatTotal) || 0;
+              const total = Number(ex.grandTotal) || subtotal + vat;
+              const bill: SupplierBill = {
+                id: num,
+                billNumber: num,
+                supplierInvoiceNumber: ex.invoiceNumber || '',
+                createdAt: new Date().toISOString(),
+                billDate,
+                dueDate: ex.dueDate || '',
+                supplierId: ex.matchedSupplierId || '',
+                supplierName: supplier?.name || ex.supplierGuess || '',
+                expenseAccountId: '',
+                expenseAccountName: '',
+                currency: ex.currency || 'ZAR',
+                subtotalExclVat: subtotal,
+                vatAmount: vat,
+                totalInclVat: total,
+                payments: [],
+                amountPaid: 0,
+                amountOutstanding: total,
+                status: 'Unpaid',
+                sourceShipmentId: '',
+                sourceInboxId: item.id,
+                notes: `Posted from OCR inbox ${item.inboxNumber || item.id}`,
+              };
+              return {
+                ...current,
+                supplierBills: [bill, ...current.supplierBills],
+                invoiceInboxItems: current.invoiceInboxItems.map((it) =>
+                  it.id === item.id
+                    ? { ...it, status: 'posted', postedAt: new Date().toISOString(), postedAsApInvoiceId: num }
+                    : it,
+                ),
+              };
+            });
+            setView('accountsPayable');
           }}
         />
       )}

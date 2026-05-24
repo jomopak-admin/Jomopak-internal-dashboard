@@ -37,6 +37,8 @@ interface InvoiceInboxPageProps {
   suppliers: Supplier[];
   onSave: (item: InvoiceInboxItem) => void;
   onPostToMaterialReceipt: (item: InvoiceInboxItem) => void;
+  /** Create a supplier bill in Accounts Payable from the extracted invoice. */
+  onPostToAccountsPayable: (item: InvoiceInboxItem) => void;
   /** Run OCR on the given inbox item. Returns a fresh extraction. */
   onRunOcr: (item: InvoiceInboxItem) => Promise<InvoiceExtraction>;
   /** Upload the file to Supabase Storage and resolve with the storage
@@ -101,6 +103,7 @@ export function InvoiceInboxPage({
   suppliers,
   onSave,
   onPostToMaterialReceipt,
+  onPostToAccountsPayable,
   onRunOcr,
   onUploadFile,
 }: InvoiceInboxPageProps) {
@@ -288,6 +291,7 @@ export function InvoiceInboxPage({
                 onUpdateExtraction={updateExtraction}
                 onMarkReviewed={markReviewed}
                 onPost={() => onPostToMaterialReceipt(selected)}
+                onPostToAp={() => onPostToAccountsPayable(selected)}
               />
             )}
           </div>
@@ -306,6 +310,7 @@ interface ReviewPaneProps {
   onUpdateExtraction: (item: InvoiceInboxItem, patch: Partial<InvoiceExtraction>) => void;
   onMarkReviewed: (item: InvoiceInboxItem) => void;
   onPost: () => void;
+  onPostToAp: () => void;
 }
 
 function ReviewPane({
@@ -317,6 +322,7 @@ function ReviewPane({
   onUpdateExtraction,
   onMarkReviewed,
   onPost,
+  onPostToAp,
 }: ReviewPaneProps) {
   const ex = item.extractedJson || emptyExtraction();
   const supplierOptions = useMemo(
@@ -436,12 +442,21 @@ function ReviewPane({
               </button>
             )}
             {(item.status === 'reviewed' || item.status === 'ocr_done') && (
-              <button className="primary-button" onClick={onPost}>
-                Post to Materials Receiving
-              </button>
+              <>
+                <button className="secondary-button" onClick={onPost}>
+                  Post to Materials Receiving
+                </button>
+                <button className="primary-button" onClick={onPostToAp} disabled={!item.extractedJson}>
+                  Post to Accounts Payable
+                </button>
+              </>
             )}
             {item.status === 'posted' && (
-              <p className="muted">Posted as {item.postedAsMaterialReceiptNumber} on {item.postedAt}.</p>
+              <p className="muted">
+                Posted{item.postedAsMaterialReceiptNumber ? ` as ${item.postedAsMaterialReceiptNumber}` : ''}
+                {item.postedAsApInvoiceId ? ` · AP bill ${item.postedAsApInvoiceId}` : ''}
+                {item.postedAt ? ` on ${item.postedAt}` : ''}.
+              </p>
             )}
           </div>
         </>

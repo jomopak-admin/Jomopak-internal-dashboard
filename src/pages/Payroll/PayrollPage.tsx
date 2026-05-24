@@ -1,0 +1,415 @@
+/**
+ * Payroll — Phase 26
+ *
+ * Run monthly (or weekly) payroll. Creating a run pulls active employees for the
+ * cycle and pre-fills a payslip each: gross from their basic pay, UIF (1%, capped
+ * at R177.12/mth) and SDL (1%) as editable defaults. PAYE and other deductions
+ * are entered by hand — no tax tables here. The run totals feed EMP201.
+ *
+ * "Send payroll out" produces: printable payslips and a bank EFT CSV you upload
+ * to your bank. Emailing payslips needs a mail connector wired up first.
+ */
+
+import { useMemo, useState } from 'react';
+import { SectionTitle } from '../../components/SectionTitle';
+import { EmptyState } from '../../components/EmptyState';
+import {
+  AppSettingsCompany,
+  Employee,
+  PayCycle,
+  PayrollRun,
+  PayrollRunStatus,
+  PAYROLL_RUN_STATUSES,
+  Payslip,
+} from '../../types';
+import { formatNumber } from '../../utils/calculations';
+import { buildPayslipHtml, sendEmails, OutgoingEmail } from '../../utils/emailService';
+
+interface PayrollPageProps {
+  payrollRuns: PayrollRun[];
+  employees: Employee[];
+  company?: AppSettingsCompany;
+  onSave: (run: PayrollRun) => void;
+  onDelete: (id: string) => void;
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const UIF_RATE = 0.01;
+const UIF_MONTHLY_CAP = 17712; // R177.12 max each side
+const SDL_RATE = 0.01;
+
+function round2(n: number): number { return Math.round((Number(n) || 0) * 100) / 100; }
+
+const STATUS_CLASS: Record<PayrollRunStatus, string> = {
+  'Draft': 'status-pending',
+  'Approved': 'status-ocr_done',
+  'Paid': 'status-reviewed',
+};
+
+function recomputePayslip(p: Payslip): Payslip {
+  const gross = round2((Number(p.basicSalary) || 0) + (Number(p.allowances) || 0));
+  const net = round2(gross - (Number(p.paye) || 0) - (Number(p.uifEmployee) || 0) - (Number(p.otherDeductions) || 0));
+  return { ...p, grossPay: gross, netPay: net };
+}
+
+function recomputeTotals(run: PayrollRun): PayrollRun {
+  const t = run.payslips.reduce(
+    (acc, p) => {
+      acc.gross += Number(p.grossPay) || 0;
+      acc.paye += Number(p.paye) || 0;
+      acc.uifE += Number(p.uifEmployee) || 0;
+      acc.uifR += Number(p.uifEmployer) || 0;
+      acc.sdl += Number(p.sdl) || 0;
+      acc.other += Number(p.otherDeductions) || 0;
+      acc.net += Number(p.netPay) || 0;
+      return acc;
+    },
+    { gross: 0, paye: 0, uifE: 0, uifR: 0, sdl: 0, other: 0, net: 0 },
+  );
+  return {
+    ...run,
+    totalGross: round2(t.gross),
+    totalPaye: round2(t.paye),
+    totalUifEmployee: round2(t.uifE),
+    totalUifEmployer: round2(t.uifR),
+    totalSdl: round2(t.sdl),
+    totalOtherDeductions: round2(t.other),
+    totalNet: round2(t.net),
+  };
+}
+
+function buildPayslips(employees: Employee[], cycle: PayCycle): Payslip[] {
+  return employees
+    .filter((e) => e.active && e.payCycle === cycle)
+    .map((e) => {
+      const gross = Number(e.basicSalary) || 0;
+      const uifBase = cycle === 'Monthly' ? Math.min(gross, UIF_MONTHLY_CAP) : gross;
+      const uif = e.uifContributor ? round2(uifBase * UIF_RATE) : 0;
+      const slip: Payslip = {
+        id: `slip-${e.id}-${Date.now()}`,
+        employeeId: e.id,
+        employeeName: `${e.firstName} ${e.lastName}`.trim(),
+        employeeNumber: e.employeeNumber,
+        basicSalary: gross,
+        allowances: 0,
+        grossPay: gross,
+        paye: 0,
+        uifEmployee: uif,
+        otherDeductions: 0,
+        netPay: 0,
+        uifEmployer: uif,
+        sdl: round2(gross * SDL_RATE),
+        notes: '',
+      };
+      return recomputePayslip(slip);
+    });
+}
+
+function emptyRun(): PayrollRun {
+  const now = new Date();
+  return {
+    id: '', runNumber: '', createdAt: '', payCycle: 'Monthly',
+    periodMonth: now.getMonth() + 1, periodYear: now.getFullYear(),
+    periodLabel: `${MONTHS[now.getMonth()]} ${now.getFullYear()}`,
+    payDate: now.toISOString().slice(0, 10), status: 'Draft', payslips: [],
+    totalGross: 0, totalPaye: 0, totalUifEmployee: 0, totalUifEmployer: 0,
+    totalSdl: 0, totalOtherDeductions: 0, totalNet: 0, notes: '',
+  };
+}
+
+export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete }: PayrollPageProps) {
+  const [mode, setMode] = useState<'list' | 'run' | 'payslips'>('list');
+  const [draft, setDraft] = useState<PayrollRun>(emptyRun());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const employeeById = useMemo(() => {
+    const map = new Map<string, Employee>();
+    employees.forEach((e) => map.set(e.id, e));
+    return map;
+  }, [employees]);
+
+  const sorted = useMemo(
+    () => [...payrollRuns].sort((a, b) => (b.periodYear - a.periodYear) || (b.periodMonth - a.periodMonth)),
+    [payrollRuns],
+  );
+
+  function startNew() {
+    const base = emptyRun();
+    setDraft(recomputeTotals({ ...base, payslips: buildPayslips(employees, base.payCycle) }));
+    setEditingId(null);
+    setMessage('');
+    setMode('run');
+  }
+  function startEdit(r: PayrollRun) { setDraft(recomputeTotals(r)); setEditingId(r.id); setMessage(''); setMode('run'); }
+
+  function updateRun(patch: Partial<PayrollRun>) { setDraft((d) => recomputeTotals({ ...d, ...patch })); }
+
+  function setPeriod(month: number, year: number) {
+    updateRun({ periodMonth: month, periodYear: year, periodLabel: `${MONTHS[month - 1]} ${year}` });
+  }
+
+  function regeneratePayslips(cycle: PayCycle) {
+    setDraft((d) => recomputeTotals({ ...d, payCycle: cycle, payslips: buildPayslips(employees, cycle) }));
+  }
+
+  function updateSlip(id: string, patch: Partial<Payslip>) {
+    setDraft((d) => recomputeTotals({ ...d, payslips: d.payslips.map((p) => (p.id === id ? recomputePayslip({ ...p, ...patch }) : p)) }));
+  }
+
+  function save() {
+    if (draft.payslips.length === 0) return;
+    onSave(recomputeTotals(draft));
+    setMode('list');
+  }
+
+  function exportEft() {
+    const rows = [['Employee', 'Employee No', 'Bank', 'Branch Code', 'Account Number', 'Account Type', 'Amount', 'Reference']];
+    for (const p of draft.payslips) {
+      if ((Number(p.netPay) || 0) <= 0) continue;
+      const emp = employeeById.get(p.employeeId);
+      rows.push([
+        p.employeeName,
+        p.employeeNumber || '',
+        emp?.bankName || '',
+        emp?.bankBranchCode || '',
+        emp?.bankAccountNumber || '',
+        emp?.accountType || '',
+        (Number(p.netPay) || 0).toFixed(2),
+        `SALARY ${draft.periodLabel}`,
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `payroll-eft-${draft.periodYear}-${String(draft.periodMonth).padStart(2, '0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setMessage('Bank EFT file downloaded — upload it to your bank to pay staff.');
+  }
+
+  async function emailPayslips() {
+    const emails: OutgoingEmail[] = [];
+    const skipped: string[] = [];
+    for (const p of draft.payslips) {
+      const emp = employeeById.get(p.employeeId);
+      if (!emp?.email) { skipped.push(p.employeeName); continue; }
+      emails.push({ to: emp.email, subject: `Payslip — ${draft.periodLabel}`, html: buildPayslipHtml(p, draft, company) });
+    }
+    if (emails.length === 0) {
+      setMessage('No employees have an email address on file — add emails under Employees first.');
+      return;
+    }
+    setSending(true);
+    setMessage('Sending payslips…');
+    const res = await sendEmails(emails);
+    setSending(false);
+    if (res.error) {
+      setMessage(`Could not send: ${res.error}`);
+    } else {
+      const skipNote = skipped.length ? ` ${skipped.length} skipped (no email on file).` : '';
+      const failNote = res.sent < res.total ? ` ${res.total - res.sent} failed.` : '';
+      setMessage(`Emailed ${res.sent} of ${res.total} payslips.${skipNote}${failNote}`);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────── Payslip print
+  if (mode === 'payslips') {
+    return (
+      <div className="page-stack">
+        <SectionTitle
+          title={`Payslips — ${draft.periodLabel}`}
+          action={<>
+            <button className="ghost-button no-print" onClick={() => setMode('run')}>Back</button>
+            <button className="primary-button no-print" onClick={() => window.print()}>Print all</button>
+          </>}
+        />
+        <div className="payslip-stack">
+          {draft.payslips.map((p) => {
+            const emp = employeeById.get(p.employeeId);
+            return (
+              <article key={p.id} className="card payslip-doc">
+                <header className="payslip-head">
+                  <div>
+                    <strong>{company?.name || 'Jomopak'}</strong>
+                    <div className="muted" style={{ fontSize: 11 }}>{company?.legalName}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <strong>PAYSLIP</strong>
+                    <div className="muted" style={{ fontSize: 11 }}>{draft.periodLabel} · paid {draft.payDate}</div>
+                  </div>
+                </header>
+                <div className="payslip-meta">
+                  <div><span className="muted">Employee</span><strong>{p.employeeName}</strong></div>
+                  <div><span className="muted">Employee no.</span><strong>{p.employeeNumber || '—'}</strong></div>
+                  <div><span className="muted">ID</span><strong>{emp?.idNumber || '—'}</strong></div>
+                  <div><span className="muted">Tax no.</span><strong>{emp?.taxNumber || '—'}</strong></div>
+                </div>
+                <table className="data-table payslip-table">
+                  <tbody>
+                    <tr><td>Basic pay</td><td className="num">{formatNumber(p.basicSalary, 2)}</td></tr>
+                    <tr><td>Allowances</td><td className="num">{formatNumber(p.allowances, 2)}</td></tr>
+                    <tr className="payslip-strong"><td>Gross pay</td><td className="num">{formatNumber(p.grossPay, 2)}</td></tr>
+                    <tr><td>PAYE</td><td className="num">-{formatNumber(p.paye, 2)}</td></tr>
+                    <tr><td>UIF</td><td className="num">-{formatNumber(p.uifEmployee, 2)}</td></tr>
+                    <tr><td>Other deductions</td><td className="num">-{formatNumber(p.otherDeductions, 2)}</td></tr>
+                    <tr className="payslip-strong"><td>Net pay</td><td className="num">R {formatNumber(p.netPay, 2)}</td></tr>
+                  </tbody>
+                </table>
+                <p className="muted payslip-foot">Employer contributions (not deducted): UIF {formatNumber(p.uifEmployer, 2)} · SDL {formatNumber(p.sdl, 2)}</p>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────── Run editor
+  if (mode === 'run') {
+    const emp201 = round2(draft.totalPaye + draft.totalUifEmployee + draft.totalUifEmployer + draft.totalSdl);
+    return (
+      <div className="page-stack accounting-shell">
+        <SectionTitle
+          title={editingId ? `Payroll — ${draft.periodLabel}` : 'New payroll run'}
+          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+        />
+        <section className="card">
+          <div className="accounting-grid">
+            <label><span>Pay cycle</span>
+              <select value={draft.payCycle} onChange={(e) => regeneratePayslips(e.target.value as PayCycle)}>
+                <option value="Monthly">Monthly</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+            </label>
+            <label><span>Month</span>
+              <select value={draft.periodMonth} onChange={(e) => setPeriod(Number(e.target.value), draft.periodYear)}>
+                {MONTHS.map((mn, i) => <option key={mn} value={i + 1}>{mn}</option>)}
+              </select>
+            </label>
+            <label><span>Year</span><input type="number" value={draft.periodYear} onChange={(e) => setPeriod(draft.periodMonth, Number(e.target.value))} /></label>
+            <label><span>Pay date</span><input type="date" value={draft.payDate} onChange={(e) => updateRun({ payDate: e.target.value })} /></label>
+            <label><span>Status</span>
+              <select value={draft.status} onChange={(e) => updateRun({ status: e.target.value as PayrollRunStatus })}>
+                {PAYROLL_RUN_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
+          </div>
+          {!editingId && (
+            <button className="ghost-button" style={{ marginTop: '0.5rem' }} onClick={() => regeneratePayslips(draft.payCycle)}>↻ Rebuild payslips from employees</button>
+          )}
+        </section>
+
+        <section className="card">
+          <h3>Payslips ({draft.payslips.length})</h3>
+          {draft.payslips.length === 0 ? (
+            <p className="muted">No active employees for this cycle. Add staff under Employees first.</p>
+          ) : (
+            <div className="payroll-table-wrap">
+              <table className="data-table payroll-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th className="num">Basic</th>
+                    <th className="num">Allow.</th>
+                    <th className="num">Gross</th>
+                    <th className="num">PAYE</th>
+                    <th className="num">UIF</th>
+                    <th className="num">Other</th>
+                    <th className="num">Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.payslips.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.employeeName}</td>
+                      <td><input type="number" className="payroll-input" value={p.basicSalary} onChange={(e) => updateSlip(p.id, { basicSalary: Number(e.target.value) })} /></td>
+                      <td><input type="number" className="payroll-input" value={p.allowances} onChange={(e) => updateSlip(p.id, { allowances: Number(e.target.value) })} /></td>
+                      <td className="num">{formatNumber(p.grossPay, 2)}</td>
+                      <td><input type="number" className="payroll-input" value={p.paye} onChange={(e) => updateSlip(p.id, { paye: Number(e.target.value) })} /></td>
+                      <td><input type="number" className="payroll-input" value={p.uifEmployee} onChange={(e) => updateSlip(p.id, { uifEmployee: Number(e.target.value) })} /></td>
+                      <td><input type="number" className="payroll-input" value={p.otherDeductions} onChange={(e) => updateSlip(p.id, { otherDeductions: Number(e.target.value) })} /></td>
+                      <td className="num"><strong>{formatNumber(p.netPay, 2)}</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="payroll-totals">
+                    <td>Totals</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + p.basicSalary, 0), 2)}</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + p.allowances, 0), 2)}</td>
+                    <td className="num">{formatNumber(draft.totalGross, 2)}</td>
+                    <td className="num">{formatNumber(draft.totalPaye, 2)}</td>
+                    <td className="num">{formatNumber(draft.totalUifEmployee, 2)}</td>
+                    <td className="num">{formatNumber(draft.totalOtherDeductions, 2)}</td>
+                    <td className="num"><strong>{formatNumber(draft.totalNet, 2)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          <div className="payroll-summary">
+            <div><span className="muted">Net to pay staff</span><strong>R {formatNumber(draft.totalNet, 2)}</strong></div>
+            <div><span className="muted">EMP201 to SARS</span><strong>R {formatNumber(emp201, 2)}</strong></div>
+            <div><span className="muted">SDL</span><strong>R {formatNumber(draft.totalSdl, 2)}</strong></div>
+          </div>
+
+          {message ? <p className="muted" style={{ color: 'var(--jp-accent, #1f7a4d)' }}>{message}</p> : null}
+
+          <div className="payroll-actions">
+            <button className="primary-button" onClick={save} disabled={draft.payslips.length === 0}>Save run</button>
+            <button className="secondary-button" onClick={() => setMode('payslips')} disabled={draft.payslips.length === 0}>View / print payslips</button>
+            <button className="ghost-button" onClick={exportEft} disabled={draft.payslips.length === 0}>Download bank EFT file</button>
+            <button className="ghost-button" onClick={emailPayslips} disabled={draft.payslips.length === 0 || sending}>{sending ? 'Sending…' : 'Email payslips'}</button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────── List
+  return (
+    <div className="page-stack">
+      <SectionTitle
+        title="Payroll"
+        subtitle="Run payroll, produce payslips and a bank file. PAYE is entered manually — not computed from tax tables."
+        action={<button className="secondary-button" onClick={startNew}>New payroll run</button>}
+      />
+      {sorted.length === 0 ? (
+        <EmptyState title="No payroll runs yet" body="Start a run to produce payslips and EMP201 totals." />
+      ) : (
+        <section className="card">
+          <table className="data-table">
+            <thead>
+              <tr><th>Period</th><th>Pay date</th><th>Status</th><th style={{ textAlign: 'center' }}>Staff</th><th style={{ textAlign: 'right' }}>Net</th><th style={{ textAlign: 'right' }}>EMP201</th><th></th></tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => {
+                const emp201 = round2(r.totalPaye + r.totalUifEmployee + r.totalUifEmployer + r.totalSdl);
+                return (
+                  <tr key={r.id}>
+                    <td><strong>{r.periodLabel}</strong><div className="muted" style={{ fontSize: '0.75rem' }}>{r.payCycle}</div></td>
+                    <td>{r.payDate || '—'}</td>
+                    <td><span className={`status-pill ${STATUS_CLASS[r.status]}`}>{r.status}</span></td>
+                    <td style={{ textAlign: 'center' }}>{r.payslips.length}</td>
+                    <td style={{ textAlign: 'right' }}>R {formatNumber(r.totalNet, 2)}</td>
+                    <td style={{ textAlign: 'right' }}>R {formatNumber(emp201, 2)}</td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <button className="link-button" onClick={() => startEdit(r)}>Open</button>
+                      {' · '}
+                      <button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(r.id)}>Delete</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  );
+}

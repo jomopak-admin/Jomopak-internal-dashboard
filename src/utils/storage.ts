@@ -737,6 +737,43 @@ export function normalizeAppSettings(raw: any): AppSettings {
       defaultReviewCadenceDays: Number(stockHolding.defaultReviewCadenceDays ?? DEFAULT_APP_SETTINGS.stockHolding.defaultReviewCadenceDays),
       defaultAgreementTermsText: stockHolding.defaultAgreementTermsText ?? DEFAULT_APP_SETTINGS.stockHolding.defaultAgreementTermsText,
     },
+    sarsConfig: (() => {
+      const sars = safe.sarsConfig && typeof safe.sarsConfig === 'object' ? safe.sarsConfig : {};
+      const fallback = DEFAULT_APP_SETTINGS.sarsConfig;
+      const category = sars.vatCategory === 'B' ? 'B' : sars.vatCategory === 'A' ? 'A' : fallback.vatCategory;
+      const frequency = sars.vatFrequency === 'monthly' ? 'monthly' : sars.vatFrequency === 'bimonthly' ? 'bimonthly' : fallback.vatFrequency;
+      const fyEnd = Number(sars.financialYearEndMonth);
+      return {
+        vatRegistered: typeof sars.vatRegistered === 'boolean' ? sars.vatRegistered : fallback.vatRegistered,
+        vatCategory: category,
+        vatFrequency: frequency,
+        payrollActive: typeof sars.payrollActive === 'boolean' ? sars.payrollActive : fallback.payrollActive,
+        financialYearEndMonth: Number.isFinite(fyEnd) && fyEnd >= 1 && fyEnd <= 12 ? fyEnd : fallback.financialYearEndMonth,
+      };
+    })(),
+    currencyConfig: (() => {
+      const cc = safe.currencyConfig && typeof safe.currencyConfig === 'object' ? safe.currencyConfig : {};
+      const fallback = DEFAULT_APP_SETTINGS.currencyConfig;
+      const rates = Array.isArray(cc.rates)
+        ? cc.rates
+            .filter((r: any) => r && typeof r.code === 'string')
+            .map((r: any) => ({ code: r.code, rateToBase: Number(r.rateToBase) || 0, asOf: typeof r.asOf === 'string' ? r.asOf : '' }))
+        : fallback.rates;
+      return {
+        baseCurrency: typeof cc.baseCurrency === 'string' && cc.baseCurrency ? cc.baseCurrency : fallback.baseCurrency,
+        rates: rates.length > 0 ? rates : fallback.rates,
+      };
+    })(),
+    connectorConfig: (() => {
+      const con = safe.connectorConfig && typeof safe.connectorConfig === 'object' ? safe.connectorConfig : {};
+      const fallback = DEFAULT_APP_SETTINGS.connectorConfig;
+      return {
+        enabled: typeof con.enabled === 'boolean' ? con.enabled : fallback.enabled,
+        disabledTileKeys: Array.isArray(con.disabledTileKeys) ? con.disabledTileKeys.filter((k: any) => typeof k === 'string') : [],
+        contractVersion: Number(con.contractVersion) || fallback.contractVersion,
+        lastPublishedAt: typeof con.lastPublishedAt === 'string' ? con.lastPublishedAt : '',
+      };
+    })(),
     updatedAt: typeof safe.updatedAt === 'string' ? safe.updatedAt : '',
     updatedBy: typeof safe.updatedBy === 'string' ? safe.updatedBy : '',
   };
@@ -880,6 +917,13 @@ export function loadAppData(): AppData {
           ? (parsed.ledgerAccounts as AppData['ledgerAccounts'])
           : buildDefaultChartOfAccounts(),
       supplierBills: (parsed.supplierBills ?? []) as AppData['supplierBills'],
+      sarsFilings: (parsed.sarsFilings ?? []) as AppData['sarsFilings'],
+      employees: (parsed.employees ?? []) as AppData['employees'],
+      payrollRuns: (parsed.payrollRuns ?? []) as AppData['payrollRuns'],
+      bankTransactions: (parsed.bankTransactions ?? []) as AppData['bankTransactions'],
+      journalEntries: (parsed.journalEntries ?? []) as AppData['journalEntries'],
+      fixedAssets: (parsed.fixedAssets ?? []) as AppData['fixedAssets'],
+      maintenanceWorkOrders: (parsed.maintenanceWorkOrders ?? []) as AppData['maintenanceWorkOrders'],
       stockChangeLogs: (parsed.stockChangeLogs ?? []).map(normalizeStockChangeLog),
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),

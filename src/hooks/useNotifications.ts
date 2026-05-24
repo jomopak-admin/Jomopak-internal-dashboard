@@ -13,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppData, AppNotification, NotificationSeverity } from '../types';
+import { AppData, AppNotification, NotificationSeverity, SARS_OBLIGATION_SHORT } from '../types';
+import { buildSarsCalendar } from '../utils/sars';
 
 const STORAGE_KEY = 'jomopak.notifications.read';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -175,9 +176,19 @@ export function deriveNotifications(data: AppData): AppNotification[] {
   // signals we do have:
   //   • accountHold === true → soft "On Hold" (operator should review)
   //   • currentBalance >= creditLimit (limit > 0) → hard "Block"
+  // Live AR outstanding per client (unpaid non-draft invoices) — credit checks
+  // use this rather than the stored currentBalance so they reflect reality.
+  const arByClient = new Map<string, number>();
+  for (const inv of data.invoices) {
+    if (inv.status === 'Draft' || inv.status === 'Cancelled') continue;
+    arByClient.set(inv.clientId, (arByClient.get(inv.clientId) || 0) + (Number(inv.amountOutstanding) || 0));
+  }
   for (const c of data.clients) {
+    const liveBalance = arByClient.has(c.id)
+      ? arByClient.get(c.id)! + (Number(c.openingBalance) || 0)
+      : (Number(c.currentBalance) || 0);
     const onHold = c.accountHold === true;
-    const overLimit = (c.creditLimit || 0) > 0 && (c.currentBalance || 0) >= (c.creditLimit || 0);
+    const overLimit = (c.creditLimit || 0) > 0 && liveBalance >= (c.creditLimit || 0);
     if (!onHold && !overLimit) continue;
     list.push({
       id: `credit-${c.id}`,
@@ -185,7 +196,7 @@ export function deriveNotifications(data: AppData): AppNotification[] {
       severity: overLimit ? 'urgent' : 'warn',
       title: `${c.companyName || c.name || 'Client'} ${overLimit ? 'over credit limit' : 'on credit hold'}`,
       message: overLimit
-        ? `Balance ${Math.round(c.currentBalance || 0).toLocaleString()} ≥ limit ${Math.round(c.creditLimit || 0).toLocaleString()}`
+        ? `Balance ${Math.round(liveBalance).toLocaleString()} ≥ limit ${Math.round(c.creditLimit || 0).toLocaleString()}`
         : 'Account hold flag set — review before new orders',
       link: { view: 'clients', entityId: c.id },
       createdAt: now,
@@ -206,6 +217,29 @@ export function deriveNotifications(data: AppData): AppNotification[] {
       link: { view: 'documentVault' },
       createdAt: now,
     });
+  }
+
+  // ── SARS deadlines due soon / overdue (Phase 25) ───────────────────────
+  if (data.appSettings?.sarsConfig) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const savedByKey = new Map((data.sarsFilings || []).map((f) => [f.periodKey, f]));
+    for (const slot of buildSarsCalendar(data.appSettings.sarsConfig, todayStr)) {
+      const saved = savedByKey.get(slot.periodKey);
+      // Already filed/paid — nothing to nag about.
+      if (saved && (saved.status === 'Submitted' || saved.status === 'Paid')) continue;
+      const until = daysFromNow(slot.dueDate);
+      if (until > 30) continue; // only surface the near horizon
+      const short = SARS_OBLIGATION_SHORT[slot.obligationType];
+      list.push({
+        id: `sars-${slot.periodKey}-${until}`,
+        kind: 'sarsDeadline',
+        severity: until < 0 ? 'urgent' : until < 7 ? 'warn' : 'info',
+        title: `SARS ${short} due — ${slot.periodLabel}`,
+        message: until < 0 ? `Overdue by ${-until}d (was ${slot.dueDate})` : until === 0 ? 'Due today' : `Due in ${until}d (${slot.dueDate})`,
+        link: { view: 'sarsCentre' },
+        createdAt: now,
+      });
+    }
   }
 
   // Sort: urgent → warn → info, then by stable id so the list doesn't

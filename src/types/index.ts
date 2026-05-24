@@ -8,6 +8,7 @@ export type View =
   | 'leads'
   | 'permissions'
   | 'settings'
+  | 'osConnector'
   | 'suppliers'
   | 'quotes'
   | 'artwork'
@@ -54,6 +55,17 @@ export type View =
   | 'shipments'
   | 'chartOfAccounts'
   | 'accountsPayable'
+  | 'sarsCentre'
+  | 'financeSummary'
+  | 'customerStatements'
+  | 'employees'
+  | 'payroll'
+  | 'bankRec'
+  | 'generalLedger'
+  | 'financialStatements'
+  | 'fixedAssets'
+  | 'currencies'
+  | 'maintenance'
   | 'production'
   | 'waste'
   | 'paper'
@@ -87,6 +99,7 @@ export const VIEW_LABELS: Record<View, string> = {
   leads: 'Leads',
   permissions: 'Permissions',
   settings: 'Settings',
+  osConnector: 'Aman OS Connector',
   suppliers: 'Suppliers',
   quotes: 'Quotes & Estimates',
   artwork: 'Artwork',
@@ -133,6 +146,17 @@ export const VIEW_LABELS: Record<View, string> = {
   shipments: 'Imports & Shipments',
   chartOfAccounts: 'Chart of Accounts',
   accountsPayable: 'Accounts Payable',
+  sarsCentre: 'SARS Centre',
+  financeSummary: 'P&L & VAT Summary',
+  customerStatements: 'Customer Statements',
+  employees: 'Employees',
+  payroll: 'Payroll',
+  bankRec: 'Bank Reconciliation',
+  generalLedger: 'General Ledger',
+  financialStatements: 'Financial Statements',
+  fixedAssets: 'Fixed Assets',
+  currencies: 'Currencies & FX',
+  maintenance: 'Maintenance',
   production: 'Production Logs',
   waste: 'Waste Log',
   paper: 'Paper Log',
@@ -151,6 +175,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'leads',
     'permissions',
     'settings',
+    'osConnector',
     'suppliers',
     'quotes',
     'artwork',
@@ -159,6 +184,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'invoices',
     'productionSpecs',
     'machines',
+    'maintenance',
     'jobs',
     'products',
     'clients',
@@ -202,6 +228,16 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'documentVault',
     'chartOfAccounts',
     'accountsPayable',
+    'sarsCentre',
+    'financeSummary',
+    'customerStatements',
+    'employees',
+    'payroll',
+    'bankRec',
+    'generalLedger',
+    'financialStatements',
+    'fixedAssets',
+    'currencies',
   ],
   ops: [
     'dashboard',
@@ -216,6 +252,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'invoices',
     'productionSpecs',
     'machines',
+    'maintenance',
     'jobs',
     'products',
     'finishedStock',
@@ -267,6 +304,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'chemicalRegister',
     'foodSafeMaterials',
     'cleaningLogs',
+    'maintenance',
     'production',
     'waste',
     'paper',
@@ -322,6 +360,16 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'invoiceInbox',
     'chartOfAccounts',
     'accountsPayable',
+    'sarsCentre',
+    'financeSummary',
+    'customerStatements',
+    'employees',
+    'payroll',
+    'bankRec',
+    'generalLedger',
+    'financialStatements',
+    'fixedAssets',
+    'currencies',
     'agedDebtors',
     'profitability',
     'salesPipeline',
@@ -3472,6 +3520,10 @@ export interface InvoicePayment {
   method: PaymentMethod;
   reference: string;
   notes: string;
+  /** FX settlement rate to base at payment date (foreign docs). */
+  exchangeRate?: number;
+  /** Whether realised FX for this payment has been posted to the GL. */
+  fxPosted?: boolean;
 }
 
 export interface Invoice {
@@ -3507,6 +3559,8 @@ export interface Invoice {
   footerNotes: string;
   status: InvoiceStatus;
   currency: CurrencyCode;
+  /** Booking exchange rate to base (ZAR) at invoice date. 1 for ZAR. */
+  exchangeRate?: number;
   lineItems: InvoiceLineItem[];
   /** Computed totals (snapshotted at save). */
   subtotalExclVat: number;
@@ -3666,11 +3720,47 @@ export interface AppSettingsStockHolding {
   defaultAgreementTermsText: string;
 }
 
+/**
+ * SARS / tax-calendar configuration. Drives the deadline generator and which
+ * obligations show up in the SARS Centre. Editable from the SARS Centre header.
+ */
+export interface AppSettingsSarsConfig {
+  vatRegistered: boolean;
+  /** Bi-monthly VAT category: A = periods ending odd months (Jan, Mar, …),
+   *  B = periods ending even months (Feb, Apr, …). */
+  vatCategory: 'A' | 'B';
+  vatFrequency: 'bimonthly' | 'monthly';
+  /** Whether payroll obligations (EMP201/EMP501) are tracked. */
+  payrollActive: boolean;
+  /** Financial year-end month, 1–12. Most SA companies use 2 (end February). */
+  financialYearEndMonth: number;
+}
+
+/**
+ * Multi-currency config (Phase 31). Base currency is ZAR; foreign currencies
+ * carry a rate-to-base. `rateToBase` means: 1 unit of the currency = rateToBase
+ * ZAR (e.g. USD rateToBase 18.50). `asOf` is when the rate was last set —
+ * structured so an auto-fetch routine can update rates + asOf later.
+ */
+export interface ExchangeRate {
+  code: string;      // e.g. 'USD'
+  rateToBase: number;
+  asOf: string;      // ISO date
+}
+
+export interface AppSettingsCurrencyConfig {
+  baseCurrency: string; // 'ZAR'
+  rates: ExchangeRate[];
+}
+
 export interface AppSettings {
   id: 'default';
   company: AppSettingsCompany;
   templates: AppSettingsTemplates;
   stockHolding: AppSettingsStockHolding;
+  sarsConfig: AppSettingsSarsConfig;
+  currencyConfig: AppSettingsCurrencyConfig;
+  connectorConfig: AppSettingsConnectorConfig;
   /** Last-write metadata, surfaced in the UI so admins can see who changed what. */
   updatedAt: string;
   updatedBy: string;
@@ -3710,6 +3800,27 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultReviewCadenceDays: 30,
     defaultAgreementTermsText:
       'Stock will be held free of charge for the agreed storage period from the invoice date. Releases are subject to written instruction from an authorised contact at the client.',
+  },
+  sarsConfig: {
+    vatRegistered: true,
+    vatCategory: 'A',
+    vatFrequency: 'bimonthly',
+    payrollActive: true,
+    financialYearEndMonth: 2,
+  },
+  currencyConfig: {
+    baseCurrency: 'ZAR',
+    rates: [
+      { code: 'USD', rateToBase: 18.5, asOf: '' },
+      { code: 'EUR', rateToBase: 20.0, asOf: '' },
+      { code: 'GBP', rateToBase: 23.5, asOf: '' },
+    ],
+  },
+  connectorConfig: {
+    enabled: true,
+    disabledTileKeys: [],
+    contractVersion: 1,
+    lastPublishedAt: '',
   },
   updatedAt: '',
   updatedBy: '',
@@ -3878,6 +3989,10 @@ export interface SupplierBillPayment {
   method: string;
   reference: string;
   notes: string;
+  /** FX settlement rate to base at payment date (foreign docs). */
+  exchangeRate?: number;
+  /** Whether realised FX for this payment has been posted to the GL. */
+  fxPosted?: boolean;
 }
 
 export interface SupplierBill {
@@ -3895,6 +4010,8 @@ export interface SupplierBill {
   expenseAccountId: string;
   expenseAccountName: string;
   currency: string;
+  /** Booking exchange rate to base (ZAR) at bill date. 1 for ZAR. */
+  exchangeRate?: number;
   subtotalExclVat: number;
   vatAmount: number;
   totalInclVat: number;
@@ -3906,6 +4023,321 @@ export interface SupplierBill {
   sourceShipmentId: string;
   sourceInboxId: string;
   notes: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 25 — SARS Centre (tax organizer / prep, NOT a tax engine).
+ *
+ * Tracks SARS obligations, their deadlines, the figures that go on each return
+ * (auto-pulled from accounting data where we can, with manual override), and the
+ * submission + payment trail. It does not file anything or compute tax owed
+ * beyond simple VAT arithmetic — it makes the admin side of SARS easier.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type SarsObligationType = 'VAT201' | 'EMP201' | 'EMP501' | 'IRP6' | 'ITR14';
+
+export const SARS_OBLIGATION_LABELS: Record<SarsObligationType, string> = {
+  VAT201: 'VAT201 — Value-Added Tax',
+  EMP201: 'EMP201 — PAYE / UIF / SDL',
+  EMP501: 'EMP501 — Employer Reconciliation',
+  IRP6: 'IRP6 — Provisional Tax',
+  ITR14: 'ITR14 — Company Income Tax',
+};
+
+export const SARS_OBLIGATION_SHORT: Record<SarsObligationType, string> = {
+  VAT201: 'VAT',
+  EMP201: 'PAYE',
+  EMP501: 'Recon',
+  IRP6: 'Provisional',
+  ITR14: 'Income Tax',
+};
+
+export type SarsFilingStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'Paid';
+
+export const SARS_FILING_STATUSES: SarsFilingStatus[] = ['Not Started', 'In Progress', 'Submitted', 'Paid'];
+
+/** A single editable line on a return worksheet (e.g. "Standard-rated sales"). */
+export interface SarsFilingFigure {
+  id: string;
+  label: string;
+  amount: number;
+  /** 'auto' lines are computed from accounting data; 'manual' are user-entered. */
+  source: 'auto' | 'manual';
+  note: string;
+}
+
+export interface SarsFiling {
+  id: string;
+  obligationType: SarsObligationType;
+  /** Stable key matching a generated calendar slot, e.g. "VAT201-2026-04". */
+  periodKey: string;
+  periodLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  status: SarsFilingStatus;
+  /** VAT-specific headline figures (zero for non-VAT returns). */
+  outputVat: number;
+  inputVat: number;
+  manualAdjustment: number;
+  netVatPayable: number;
+  /** Generic headline payable for non-VAT returns (PAYE total, provisional payment…). */
+  amountPayable: number;
+  figures: SarsFilingFigure[];
+  /** Submission + payment trail. */
+  submittedDate: string;
+  submittedBy: string;
+  paymentDate: string;
+  paymentReference: string;
+  /** Optional link to a proof-of-submission / receipt in the Document Vault. */
+  proofDocumentId: string;
+  notes: string;
+  createdAt: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 26 — Payroll.
+ *
+ * Deliberately a manual-entry payroll: the operator (or accountant) enters each
+ * employee's PAYE and other deductions, and the system records, totals, and
+ * produces payslips + a bank payment file + EMP201 totals. We pre-fill UIF (1%,
+ * capped) and SDL (1%) as editable conveniences, but DO NOT compute PAYE from
+ * SARS tax tables — that stays in human hands so the books can't go stale.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type PayCycle = 'Monthly' | 'Weekly';
+
+export interface Employee {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  idNumber: string;
+  taxNumber: string;
+  email: string;
+  phone: string;
+  jobTitle: string;
+  department: string;
+  payCycle: PayCycle;
+  /** Gross pay per period (the basic salary/wage). */
+  basicSalary: number;
+  bankName: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+  accountType: string;
+  uifContributor: boolean;
+  startDate: string;
+  endDate: string;
+  active: boolean;
+  notes: string;
+}
+
+export type PayrollRunStatus = 'Draft' | 'Approved' | 'Paid';
+
+export const PAYROLL_RUN_STATUSES: PayrollRunStatus[] = ['Draft', 'Approved', 'Paid'];
+
+export interface Payslip {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string;
+  basicSalary: number;
+  allowances: number;
+  grossPay: number;
+  paye: number;
+  uifEmployee: number;
+  otherDeductions: number;
+  netPay: number;
+  /** Employer-side contributions — not deducted from the employee, but part of
+   *  the EMP201 the company pays SARS. */
+  uifEmployer: number;
+  sdl: number;
+  notes: string;
+}
+
+export interface PayrollRun {
+  id: string;
+  runNumber: string;
+  createdAt: string;
+  payCycle: PayCycle;
+  periodMonth: number; // 1–12
+  periodYear: number;
+  periodLabel: string; // e.g. "May 2026"
+  payDate: string;
+  status: PayrollRunStatus;
+  payslips: Payslip[];
+  totalGross: number;
+  totalPaye: number;
+  totalUifEmployee: number;
+  totalUifEmployer: number;
+  totalSdl: number;
+  totalOtherDeductions: number;
+  totalNet: number;
+  notes: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 27 — Bank reconciliation.
+ *
+ * Import a bank statement (CSV), then match each line to the record it relates
+ * to — a customer invoice (money in), a supplier bill or payroll run (money
+ * out), or straight to a ledger account (bank charges, etc.) — and tick it
+ * reconciled. This records the match; it does not auto-post payments.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type BankTxnMatchType = 'none' | 'invoice' | 'bill' | 'payroll' | 'account';
+
+export interface BankTransaction {
+  id: string;
+  /** Groups transactions that came in from the same CSV import. */
+  importBatch: string;
+  bankAccountName: string;
+  date: string;
+  description: string;
+  reference: string;
+  /** Signed: positive = money in, negative = money out. */
+  amount: number;
+  matchType: BankTxnMatchType;
+  matchId: string;
+  matchLabel: string;
+  /** Ledger account when matchType === 'account'. */
+  ledgerAccountId: string;
+  reconciled: boolean;
+  notes: string;
+  createdAt: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 28 — General Ledger (double-entry journal entries).
+ *
+ * The formal books. Each journal entry has two or more lines that must balance
+ * (total debits == total credits). Entries can be posted by hand (accruals,
+ * depreciation, opening balances, payroll journals) or generated in a batch
+ * from the sub-ledgers (invoices, supplier bills, payments). The Trial Balance,
+ * Balance Sheet and Income Statement are computed from POSTED entries.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type JournalEntryStatus = 'Draft' | 'Posted';
+
+export const JOURNAL_ENTRY_STATUSES: JournalEntryStatus[] = ['Draft', 'Posted'];
+
+export interface JournalLine {
+  id: string;
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  description: string;
+  debit: number;
+  credit: number;
+}
+
+export interface JournalEntry {
+  id: string;
+  entryNumber: string;
+  date: string;
+  reference: string;
+  description: string;
+  status: JournalEntryStatus;
+  /** 'manual' or e.g. 'auto:invoice', 'auto:bill' from the batch generator. */
+  source: string;
+  lines: JournalLine[];
+  createdAt: string;
+  notes: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 29 — Fixed-asset register + depreciation.
+ *
+ * Straight-line depreciation: annual = (cost − residual) / useful life. The
+ * register shows accumulated depreciation and book value as at today; a
+ * depreciation run posts the period's charge to the GL (Dr Depreciation 6150
+ * / Cr Accumulated Depreciation 1590).
+ * ────────────────────────────────────────────────────────────────────────*/
+export type FixedAssetStatus = 'Active' | 'Disposed';
+
+export interface FixedAsset {
+  id: string;
+  assetNumber: string;
+  name: string;
+  category: string;
+  acquisitionDate: string;
+  cost: number;
+  residualValue: number;
+  usefulLifeYears: number;
+  depreciationMethod: 'Straight Line';
+  status: FixedAssetStatus;
+  /** Date through which depreciation has been posted to the GL. */
+  depreciationPostedToDate: string;
+  disposalDate: string;
+  disposalProceeds: number;
+  notes: string;
+  createdAt: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 30 — Maintenance scheduler / work orders.
+ *
+ * Preventive + corrective maintenance against machines. A completed preventive
+ * work order advances the machine's next-service date by the interval, so PM
+ * stays on a rolling schedule and the "service due" alerts keep firing.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type MaintenanceType = 'Preventive' | 'Corrective' | 'Inspection' | 'Breakdown';
+export const MAINTENANCE_TYPES: MaintenanceType[] = ['Preventive', 'Corrective', 'Inspection', 'Breakdown'];
+
+export type MaintenancePriority = 'Low' | 'Medium' | 'High' | 'Critical';
+export const MAINTENANCE_PRIORITIES: MaintenancePriority[] = ['Low', 'Medium', 'High', 'Critical'];
+
+export type MaintenanceStatus = 'Open' | 'In Progress' | 'Completed' | 'Cancelled';
+export const MAINTENANCE_WO_STATUSES: MaintenanceStatus[] = ['Open', 'In Progress', 'Completed', 'Cancelled'];
+
+export interface MaintenanceWorkOrder {
+  id: string;
+  woNumber: string;
+  machineId: string;
+  machineName: string;
+  type: MaintenanceType;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  scheduledDate: string;
+  completedDate: string;
+  assignedTo: string;
+  description: string;
+  partsUsed: string;
+  labourHours: number;
+  downtimeHours: number;
+  cost: number;
+  /** When a Preventive WO is completed, advance the machine's next service by
+   *  this many days. */
+  nextServiceIntervalDays: number;
+  createdAt: string;
+  notes: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 32 — Aman OS Connector (publisher side).
+ *
+ * JomoPak publishes a curated, read-only set of metric "tiles" that an external
+ * operating system (Aman OS) can read via a token-secured edge function. Never
+ * raw rows — only the aggregated tiles below, and only the ones toggled on.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type ConnectorTileCategory = 'Finance' | 'Sales' | 'Production' | 'Stock' | 'Compliance' | 'Tax';
+
+export interface ConnectorTile {
+  /** Stable, namespaced key, e.g. 'jomopak.finance.ar_outstanding'. */
+  key: string;
+  category: ConnectorTileCategory;
+  label: string;
+  value: number;
+  /** 'ZAR' | '%' | 'count' | 'days' | ''. */
+  unit: string;
+  /** Optional secondary context, e.g. "3 overdue". */
+  detail: string;
+}
+
+export interface AppSettingsConnectorConfig {
+  /** Master on/off for the whole connector. */
+  enabled: boolean;
+  /** Tile keys explicitly turned OFF (default = every tile published). */
+  disabledTileKeys: string[];
+  /** Contract version the publisher currently speaks. */
+  contractVersion: number;
+  lastPublishedAt: string;
 }
 
 export interface AppData {
@@ -3957,6 +4389,13 @@ export interface AppData {
   shipments: Shipment[];
   ledgerAccounts: LedgerAccount[];
   supplierBills: SupplierBill[];
+  sarsFilings: SarsFiling[];
+  employees: Employee[];
+  payrollRuns: PayrollRun[];
+  bankTransactions: BankTransaction[];
+  journalEntries: JournalEntry[];
+  fixedAssets: FixedAsset[];
+  maintenanceWorkOrders: MaintenanceWorkOrder[];
   stockChangeLogs: StockChangeLog[];
   materialOrderRequests: MaterialOrderRequest[];
   inventoryMovements: InventoryMovement[];
@@ -4794,7 +5233,8 @@ export type NotificationKind =
   | 'sopExpiring'
   | 'materialLowCover'
   | 'maintenanceDue'
-  | 'creditBlock';
+  | 'creditBlock'
+  | 'sarsDeadline';
 
 export type NotificationSeverity = 'info' | 'warn' | 'urgent';
 
@@ -5017,6 +5457,7 @@ export function buildDefaultChartOfAccounts(): LedgerAccount[] {
     { code: '1500', name: 'Plant & Machinery', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
     { code: '1510', name: 'Office & Computer Equipment', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
     { code: '1520', name: 'Motor Vehicles', type: 'Asset', subType: 'Fixed Asset', vatApplicable: true },
+    { code: '1590', name: 'Accumulated Depreciation', type: 'Asset', subType: 'Fixed Asset', vatApplicable: false },
     // Liabilities
     { code: '2000', name: 'Accounts Payable (Creditors)', type: 'Liability', subType: 'Current Liability', vatApplicable: false },
     { code: '2100', name: 'VAT Output (payable)', type: 'Liability', subType: 'Tax', vatApplicable: false },
@@ -5030,6 +5471,7 @@ export function buildDefaultChartOfAccounts(): LedgerAccount[] {
     { code: '4000', name: 'Sales — Paper Bags', type: 'Income', subType: 'Revenue', vatApplicable: true },
     { code: '4010', name: 'Sales — Printing & Plates', type: 'Income', subType: 'Revenue', vatApplicable: true },
     { code: '4900', name: 'Other Income', type: 'Income', subType: 'Revenue', vatApplicable: true },
+    { code: '4920', name: 'Foreign Exchange Gain / (Loss)', type: 'Income', subType: 'Revenue', vatApplicable: false },
     // Cost of Sales
     { code: '5000', name: 'Paper & Board', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
     { code: '5010', name: 'Ink & Coatings', type: 'Expense', subType: 'Cost of Sales', vatApplicable: true },
@@ -5053,6 +5495,7 @@ export function buildDefaultChartOfAccounts(): LedgerAccount[] {
     { code: '6120', name: 'Software & Subscriptions', type: 'Expense', subType: 'Overheads', vatApplicable: true },
     { code: '6130', name: 'Staff Training & PPE', type: 'Expense', subType: 'Overheads', vatApplicable: true },
     { code: '6140', name: 'Pest Control & Compliance', type: 'Expense', subType: 'Overheads', vatApplicable: true },
+    { code: '6150', name: 'Depreciation', type: 'Expense', subType: 'Overheads', vatApplicable: false },
     { code: '6900', name: 'Sundry / Other Expenses', type: 'Expense', subType: 'Overheads', vatApplicable: true },
   ];
   return rows.map((row) => ({

@@ -18,12 +18,13 @@ interface AppLayoutProps {
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'calculator', 'costInputs'] },
-  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines'] },
+  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance'] },
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
-  { title: 'Finance', views: ['chartOfAccounts', 'accountsPayable'] },
+  { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
+  { title: 'Payroll', views: ['payroll', 'employees'] },
   { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog'] },
-  { title: 'Admin', views: ['documentVault', 'permissions', 'settings'] },
+  { title: 'Admin', views: ['documentVault', 'osConnector', 'permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';

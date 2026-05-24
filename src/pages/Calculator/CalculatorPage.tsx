@@ -45,6 +45,7 @@ import {
   PrintCoverageBand,
   Product,
 } from '../../types';
+import { AppSettingsCompany } from '../../types';
 import { formatNumber } from '../../utils/calculations';
 import {
   computeQuote,
@@ -52,6 +53,7 @@ import {
   emptyCalculatorState,
   LineResult,
 } from '../../utils/calculatorEngine';
+import { CalculatorQuotePrint } from './CalculatorQuotePrint';
 
 interface CalculatorPageProps {
   canViewInternalCosts: boolean;
@@ -68,6 +70,11 @@ interface CalculatorPageProps {
    *  records and persisting them. Should return the new quote number(s)
    *  so we can show a confirmation. */
   onSaveAsQuote?: (state: CalculatorState) => Promise<{ quoteNumbers: string[] }> | { quoteNumbers: string[] };
+  /** Company + footer for the printable quote. */
+  company?: AppSettingsCompany;
+  defaultFooterLines?: string[];
+  preparedByName?: string;
+  today?: string;
 }
 
 const HANDLE_OPTIONS: HandleType[] = ['None', 'Flat Handle', 'Rope Handle', 'Roll Handle'];
@@ -85,9 +92,14 @@ export function CalculatorPage({
   state,
   setState,
   onSaveAsQuote,
+  company,
+  defaultFooterLines,
+  preparedByName,
+  today,
 }: CalculatorPageProps) {
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
+  const [printing, setPrinting] = useState(false);
 
   // Live computation runs on every render. Pure function — no perf cost.
   const computation = useMemo(
@@ -162,6 +174,22 @@ export function CalculatorPage({
   if (!state.shared.paperRateId) blockingIssues.push('Pick a paper rate');
   if (!state.shared.costProfileId) blockingIssues.push('Pick a cost profile');
   if (computation.rollup.totalQuantity === 0) blockingIssues.push('Add at least one line quantity');
+
+  if (printing) {
+    return (
+      <CalculatorQuotePrint
+        lines={state.lines}
+        results={computation.lines}
+        rollup={computation.rollup}
+        client={selectedClient}
+        company={company}
+        preparedBy={preparedByName}
+        today={today || new Date().toISOString().slice(0, 10)}
+        defaultFooterLines={defaultFooterLines}
+        onClose={() => setPrinting(false)}
+      />
+    );
+  }
 
   return (
     <div className="calculator2-shell">
@@ -307,6 +335,14 @@ export function CalculatorPage({
 
         <div className="calculator2-actions">
           <button type="button" className="ghost-button" onClick={reset} disabled={saving}>Reset</button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setPrinting(true)}
+            disabled={computation.rollup.totalQuantity === 0}
+          >
+            Print Quote
+          </button>
           <button
             type="button"
             className="primary-button"
