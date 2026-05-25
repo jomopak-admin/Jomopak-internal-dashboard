@@ -314,9 +314,22 @@ interface TemplatesTabProps {
   patchTemplates: (patch: Partial<AppSettingsFormState['templates']>) => void;
 }
 
+type TemplateGroup = 'customer' | 'invoice' | 'delivery' | 'spec';
+
 function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
+  const [group, setGroup] = useState<TemplateGroup>('customer');
   return (
     <div className="settings-template-groups">
+      <label className="full-span" style={{ maxWidth: 380 }}>
+        <span>Edit templates for</span>
+        <select value={group} onChange={(e) => setGroup(e.target.value as TemplateGroup)}>
+          <option value="customer">Customer note &amp; terms</option>
+          <option value="invoice">Invoice</option>
+          <option value="delivery">Delivery note</option>
+          <option value="spec">Production spec</option>
+        </select>
+      </label>
+      {group === 'customer' ? (
       <section className="settings-template-group">
         <h4 className="accounting-group-head"><span className="sars-tag">Customer note &amp; terms</span></h4>
         <p className="muted" style={{ marginTop: 0, fontSize: '0.78rem' }}>Shared across customer-facing documents — set once.</p>
@@ -352,7 +365,8 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
           </label>
         </div>
       </section>
-
+      ) : null}
+      {group === 'invoice' ? (
       <section className="settings-template-group">
         <h4 className="accounting-group-head"><span className="sars-tag">Invoice</span></h4>
         <div className="form-grid">
@@ -384,7 +398,8 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
           </label>
         </div>
       </section>
-
+      ) : null}
+      {group === 'delivery' ? (
       <section className="settings-template-group">
         <h4 className="accounting-group-head"><span className="sars-tag">Delivery note</span></h4>
         <div className="form-grid">
@@ -407,7 +422,8 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
           </label>
         </div>
       </section>
-
+      ) : null}
+      {group === 'spec' ? (
       <section className="settings-template-group">
         <h4 className="accounting-group-head"><span className="sars-tag">Production spec</span></h4>
         <div className="form-grid">
@@ -422,6 +438,7 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
           </label>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }
