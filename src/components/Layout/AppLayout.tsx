@@ -44,7 +44,6 @@ function readStoredOpenGroups(): Set<string> | null {
 
 export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, topbarAction, topbarSummary, onOpenSearch, children }: AppLayoutProps) {
   const accountName = profile?.fullName || profile?.email || 'Signed in';
-  const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
   const currentItem = navItems.find((item) => item.key === view);
   // Mobile drawer state — sidebar is hidden by default on narrow viewports
@@ -164,21 +163,6 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
             );
           })}
         </nav>
-
-        <div className="sidebar-user">
-          <p className="eyebrow">Account</p>
-          <div className="account-block">
-            <div className="account-avatar" aria-hidden="true">
-              {accountName.charAt(0).toUpperCase()}
-            </div>
-            <div className="account-copy">
-              <strong>{accountName}</strong>
-              <span>{accountEmail}</span>
-              <small>{accountRole}</small>
-            </div>
-          </div>
-          <button className="ghost-button sidebar-signout" onClick={onSignOut}>Sign Out</button>
-        </div>
       </aside>
 
       <main className="main-content">

@@ -18,9 +18,10 @@ import { supabase } from '../../utils/supabase';
  * `settings.company.logoUrl`.
  */
 
-type SettingsTab = 'branding' | 'templates' | 'stockHolding' | 'permissions' | 'access';
+type SettingsTab = 'account' | 'branding' | 'templates' | 'stockHolding' | 'permissions' | 'access';
 
 const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
+  { key: 'account', label: 'Account', subtitle: 'Your signed-in account and sign out.' },
   { key: 'branding', label: 'Branding', subtitle: 'Letterhead, logo, address, VAT — applied to every printed doc.' },
   { key: 'templates', label: 'Templates', subtitle: 'Default footer copy and payment terms for invoices, delivery notes, and specs.' },
   { key: 'stockHolding', label: 'Stock-holding', subtitle: 'Default storage days, review cadence, and agreement wording.' },
@@ -35,11 +36,15 @@ interface SettingsPageProps {
   onSave: () => void;
   onReset: () => void;
   saveMessage: string;
+  accountName: string;
+  accountEmail: string;
+  accountRole: string;
+  onSignOut: () => void;
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  const { settings, settingsForm, setSettingsForm, onSave, onReset, saveMessage } = props;
-  const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
+  const { settings, settingsForm, setSettingsForm, onSave, onReset, saveMessage, accountName, accountEmail, accountRole, onSignOut } = props;
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
   const tab = TABS.find((entry) => entry.key === activeTab) ?? TABS[0];
 
   // Helpers used by both Branding and Templates tabs ----------------------------------
@@ -81,7 +86,9 @@ export function SettingsPage(props: SettingsPageProps) {
 
         <SectionTitle title={tab.label} subtitle={tab.subtitle} />
 
-        {activeTab === 'branding' ? (
+        {activeTab === 'account' ? (
+          <AccountTab name={accountName} email={accountEmail} role={accountRole} onSignOut={onSignOut} />
+        ) : activeTab === 'branding' ? (
           <BrandingTab
             company={settingsForm.company}
             patchCompany={patchCompany}
@@ -111,6 +118,31 @@ export function SettingsPage(props: SettingsPageProps) {
         ) : null}
       </section>
     </>
+  );
+}
+
+/* --------------------------------- Account tab ---------------------------------- */
+
+interface AccountTabProps {
+  name: string;
+  email: string;
+  role: string;
+  onSignOut: () => void;
+}
+
+function AccountTab({ name, email, role, onSignOut }: AccountTabProps) {
+  return (
+    <div className="account-tab">
+      <div className="account-block" style={{ marginBottom: '1rem' }}>
+        <div className="account-avatar" aria-hidden="true">{(name || '?').charAt(0).toUpperCase()}</div>
+        <div className="account-copy">
+          <strong>{name}</strong>
+          <span>{email}</span>
+          <small>{role}</small>
+        </div>
+      </div>
+      <button type="button" className="ghost-button" onClick={onSignOut}>Sign Out</button>
+    </div>
   );
 }
 

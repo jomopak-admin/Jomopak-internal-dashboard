@@ -8020,6 +8020,10 @@ function App() {
           onSave={handleSaveSettings}
           onReset={resetSettingsEditor}
           saveMessage={settingsMessage}
+          accountName={profile?.fullName || profile?.email || 'Signed in'}
+          accountEmail={profile?.email || 'No email stored'}
+          accountRole={profile?.role || 'ops'}
+          onSignOut={handleSignOut}
         />
       )}
 
