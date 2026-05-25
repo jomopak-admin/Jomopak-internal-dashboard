@@ -21,6 +21,8 @@ export function buildSeedData(): AppData {
     pricingTiers: [],
     clients: [],
     products: [],
+    productPriceVersions: [],
+    clientProductPrices: [],
     jobs: [],
     finishedGoodsStock: [],
     spareParts: [],

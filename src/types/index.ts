@@ -21,6 +21,7 @@ export type View =
   | 'products'
   | 'clients'
   | 'pricing'
+  | 'priceList'
   | 'finishedStock'
   | 'spares'
   | 'materials'
@@ -112,6 +113,7 @@ export const VIEW_LABELS: Record<View, string> = {
   products: 'Products',
   clients: 'Clients',
   pricing: 'Pricing Tiers',
+  priceList: 'Price List',
   finishedStock: 'Finished Stock',
   spares: 'Spares & Consumables',
   materials: 'Materials Receiving',
@@ -189,6 +191,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'products',
     'clients',
     'pricing',
+    'priceList',
     'finishedStock',
     'stockTake',
     'spares',
@@ -255,6 +258,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'maintenance',
     'jobs',
     'products',
+    'priceList',
     'finishedStock',
     'stockTake',
     'spares',
@@ -330,6 +334,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'productionSpecs',
     'jobs',
     'products',
+    'priceList',
     'foodSafetyControlCentre',
     'haccpRegister',
     'nonConformance',
@@ -394,6 +399,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'quotes',
     'clients',
     'pricing',
+    'priceList',
     'jobs',
     'products',
     'customerStock',
@@ -1165,6 +1171,41 @@ export interface Client {
   active: boolean;
 }
 
+/**
+ * Standard-product pricing spec (phase 33).
+ *
+ * A standard catalogue product carries a fixed specification so its cost can
+ * be recomputed automatically from the live cost masters (paper rate + cost
+ * profile) — exactly the same maths the ad-hoc Calculator uses, but saved
+ * against the product instead of typed in each time. The Price List view turns
+ * this spec into cost-plus prices at the base quantity and each MOQ break.
+ *
+ * All numeric fields are numbers (not form strings); the form state mirrors
+ * them as strings. Optional on Product so legacy records load untouched.
+ */
+export interface ProductPricingSpec {
+  bagWidthMm: number;
+  bagHeightMm: number;
+  gussetMm: number;
+  handleType: HandleType;
+  printMethod: PrintMethod;
+  colors: number;
+  printAreaCm2: number;
+  coverageBand: PrintCoverageBand;
+  /** Which paper rate (paper type + gsm + price/ton) this product is made from. */
+  paperRateId: string;
+  /** Which cost profile (wastage, labour, glue, allowances, …) applies. */
+  costProfileId: string;
+  /** How plates are billed for this product's standard run. */
+  plateBilling: PlateBillingMode;
+  /** The product's own default margin %, applied unless a tier/client overrides. */
+  baseMarginPercent: number;
+  /** Headline order quantity the standard price is quoted at. */
+  baseQuantity: number;
+  /** Additional MOQ break quantities to show in the price list (ascending). */
+  breakQuantities: number[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -1179,6 +1220,88 @@ export interface Product {
   defaultGsm: string;
   notes: string;
   active: boolean;
+  /** Phase 33 — when true this product appears in the Price List and carries a
+   *  pricing spec. Optional so existing products load without a migration. */
+  pricingEnabled?: boolean;
+  /** Phase 33 — the standard costing spec used to compute cost-plus prices. */
+  pricingSpec?: ProductPricingSpec;
+}
+
+/**
+ * A point-in-time, approvable snapshot of a product's price (phase 33).
+ *
+ * Standard prices must be versioned, auditable and private: this records the
+ * margin used, the cost assumptions in force at the time (so we can see *why*
+ * a price was what it was), the resulting cost-plus prices per break quantity,
+ * and who approved it and when. The Price List flags a product as "out of
+ * date" when the live recomputed cost drifts from the latest approved version.
+ */
+export type ProductPriceVersionStatus = 'Draft' | 'Approved' | 'Superseded';
+
+export interface ProductPriceBreakSnapshot {
+  quantity: number;
+  /** Production cost per unit at this quantity (margin excluded). */
+  unitCost: number;
+  /** Cost-plus sell price per unit at the version's base margin. */
+  unitPrice: number;
+  /** One-off plate setup fee at this quantity (0 when amortised). */
+  plateSetupFee: number;
+}
+
+export interface ProductPriceVersion {
+  id: string;
+  productId: string;
+  productName: string;
+  /** Monotonic per-product version number (1, 2, 3 …). */
+  versionNumber: number;
+  status: ProductPriceVersionStatus;
+  baseMarginPercent: number;
+  /** Snapshot of the cost assumptions used, for the audit trail. */
+  assumptions: {
+    paperRateId: string;
+    paperRateName: string;
+    paperType: string;
+    gsm: string;
+    pricePerTon: number;
+    costProfileId: string;
+    costProfileName: string;
+    wastagePercent: number;
+  };
+  /** Computed prices per break quantity at approval/snapshot time. */
+  breaks: ProductPriceBreakSnapshot[];
+  note: string;
+  createdAt: string;
+  createdByName: string;
+  approvedAt: string;
+  approvedByName: string;
+}
+
+/**
+ * Client-specific override for a standard product's price (phase 33).
+ *
+ * Either a margin override (recompute cost-plus at this margin for the client)
+ * or a fixed agreed unit price. Optional minimum quantity scopes the deal to a
+ * break. Private — never published to the Aman OS connector.
+ */
+export type ClientProductPriceMode = 'margin' | 'fixedPrice';
+
+export interface ClientProductPrice {
+  id: string;
+  clientId: string;
+  clientName: string;
+  productId: string;
+  productName: string;
+  mode: ClientProductPriceMode;
+  /** Used when mode = 'margin'. */
+  marginPercent: number;
+  /** Used when mode = 'fixedPrice'. */
+  fixedUnitPrice: number;
+  /** Optional: this deal applies from this quantity upward. 0 = all quantities. */
+  minQuantity: number;
+  note: string;
+  active: boolean;
+  createdAt: string;
+  createdByName: string;
 }
 
 export interface JobCard {
@@ -4360,6 +4483,8 @@ export interface AppData {
   pricingTiers: PricingTier[];
   clients: Client[];
   products: Product[];
+  productPriceVersions: ProductPriceVersion[];
+  clientProductPrices: ClientProductPrice[];
   jobs: JobCard[];
   finishedGoodsStock: FinishedGoodsStock[];
   spareParts: SparePart[];
@@ -4853,6 +4978,23 @@ export interface ProductFormState {
   defaultGsm: string;
   notes: string;
   active: boolean;
+  /** Phase 33 — standard pricing spec (all as form strings). */
+  pricingEnabled: boolean;
+  bagWidthMm: string;
+  bagHeightMm: string;
+  gussetMm: string;
+  handleType: HandleType;
+  printMethod: PrintMethod;
+  colors: string;
+  printAreaCm2: string;
+  coverageBand: PrintCoverageBand;
+  paperRateId: string;
+  costProfileId: string;
+  plateBilling: PlateBillingMode;
+  baseMarginPercent: string;
+  baseQuantity: string;
+  /** Comma-separated MOQ break quantities, e.g. "5000, 10000, 25000". */
+  breakQuantities: string;
 }
 
 export interface JobFormState {

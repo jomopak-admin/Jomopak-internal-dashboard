@@ -67,6 +67,8 @@ import { PaperLogPage } from './pages/PaperLog/PaperLogPage';
 import { PermissionsPage } from './pages/Permissions/PermissionsPage';
 import { PricingTiersPage } from './pages/PricingTiers/PricingTiersPage';
 import { ProductsPage } from './pages/Products/ProductsPage';
+import { PriceListPage, ClientPriceDraft } from './pages/PriceList/PriceListPage';
+import { formToPricingSpec, buildPriceVersionDraft } from './utils/productPricing';
 import { ProductionLogsPage } from './pages/ProductionLogs/ProductionLogsPage';
 import { QuotesPage } from './pages/Quotes/QuotesPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
@@ -228,6 +230,8 @@ import {
   PricingTierFilters,
   PricingTierFormState,
   Product,
+  ProductPriceVersion,
+  ClientProductPrice,
   ProductFilters,
   ProductFormState,
   ProductionFilters,
@@ -1179,6 +1183,21 @@ const createInitialProductForm = (): ProductFormState => ({
   defaultGsm: '',
   notes: '',
   active: true,
+  pricingEnabled: false,
+  bagWidthMm: '',
+  bagHeightMm: '',
+  gussetMm: '',
+  handleType: 'None',
+  printMethod: 'Plain',
+  colors: '0',
+  printAreaCm2: '',
+  coverageBand: 'None',
+  paperRateId: '',
+  costProfileId: '',
+  plateBilling: 'amortized',
+  baseMarginPercent: '',
+  baseQuantity: '1000',
+  breakQuantities: '5000, 10000, 25000',
 });
 
 function App() {
@@ -5241,9 +5260,20 @@ function App() {
     }
     const linkedSupplier = productForm.defaultSupplierId ? suppliersById.get(productForm.defaultSupplierId) : undefined;
     const payload = {
-      ...productForm,
+      name: productForm.name,
+      sku: productForm.sku,
+      category: productForm.category,
+      supplyType: productForm.supplyType,
       defaultSupplierId: linkedSupplier?.id ?? '',
       defaultSupplierName: linkedSupplier?.name ?? '',
+      brandingAllowed: productForm.brandingAllowed,
+      defaultUnit: productForm.defaultUnit,
+      defaultPaperType: productForm.defaultPaperType,
+      defaultGsm: productForm.defaultGsm,
+      notes: productForm.notes,
+      active: productForm.active,
+      pricingEnabled: productForm.pricingEnabled,
+      pricingSpec: productForm.pricingEnabled ? formToPricingSpec(productForm) : undefined,
     };
     if (productEditingId) {
       setData((current) => ({ ...current, products: current.products.map((product) => product.id === productEditingId ? { ...product, ...payload } : product) }));
@@ -5307,6 +5337,64 @@ function App() {
       return;
     }
     handleDeleteProduct(product);
+  }
+
+  // ── Price List (phase 33) ──────────────────────────────────────────────
+  function handleApproveProductPrice(productId: string, note: string) {
+    const product = data.products.find((p) => p.id === productId);
+    if (!product || !product.pricingSpec) {
+      return;
+    }
+    const refs = { pricingTiers: data.pricingTiers, paperRates: data.paperRates, costProfiles: data.costProfiles };
+    const existing = data.productPriceVersions.filter((v) => v.productId === productId);
+    const nextNumber = existing.reduce((max, v) => Math.max(max, v.versionNumber), 0) + 1;
+    const now = new Date().toISOString();
+    const actor = profile?.fullName || profile?.email || 'Unknown user';
+    const draft = buildPriceVersionDraft(product, refs, { versionNumber: nextNumber, createdByName: actor, createdAt: now, note });
+    if (!draft) {
+      setProductMessage('Could not compute a price — check the product has a paper rate and cost profile selected.');
+      return;
+    }
+    const approved: ProductPriceVersion = { ...draft, status: 'Approved', approvedAt: now, approvedByName: actor };
+    setData((current) => ({
+      ...current,
+      productPriceVersions: [
+        approved,
+        ...current.productPriceVersions.map((v) =>
+          v.productId === productId && v.status === 'Approved' ? { ...v, status: 'Superseded' as const } : v,
+        ),
+      ],
+    }));
+  }
+
+  function handleAddClientPrice(draft: ClientPriceDraft) {
+    const client = data.clients.find((c) => c.id === draft.clientId);
+    const product = data.products.find((p) => p.id === draft.productId);
+    if (!client || !product) {
+      return;
+    }
+    const now = new Date().toISOString();
+    const actor = profile?.fullName || profile?.email || 'Unknown user';
+    const record: ClientProductPrice = {
+      id: `cpp-${Date.now()}`,
+      clientId: client.id,
+      clientName: client.name,
+      productId: product.id,
+      productName: product.name,
+      mode: draft.mode,
+      marginPercent: draft.marginPercent,
+      fixedUnitPrice: draft.fixedUnitPrice,
+      minQuantity: draft.minQuantity,
+      note: draft.note,
+      active: true,
+      createdAt: now,
+      createdByName: actor,
+    };
+    setData((current) => ({ ...current, clientProductPrices: [record, ...current.clientProductPrices] }));
+  }
+
+  function handleDeleteClientPrice(id: string) {
+    setData((current) => ({ ...current, clientProductPrices: current.clientProductPrices.filter((o) => o.id !== id) }));
   }
 
   function handleSaveMaterial() {
@@ -7324,6 +7412,7 @@ function App() {
 
   function editProduct(product: Product) {
     setProductEditingId(product.id);
+    const spec = product.pricingSpec;
     setProductForm({
       name: product.name,
       sku: product.sku,
@@ -7336,6 +7425,21 @@ function App() {
       defaultGsm: product.defaultGsm,
       notes: product.notes,
       active: product.active,
+      pricingEnabled: product.pricingEnabled ?? false,
+      bagWidthMm: spec ? String(spec.bagWidthMm) : '',
+      bagHeightMm: spec ? String(spec.bagHeightMm) : '',
+      gussetMm: spec ? String(spec.gussetMm) : '',
+      handleType: spec?.handleType ?? 'None',
+      printMethod: spec?.printMethod ?? 'Plain',
+      colors: spec ? String(spec.colors) : '0',
+      printAreaCm2: spec ? String(spec.printAreaCm2) : '',
+      coverageBand: spec?.coverageBand ?? 'None',
+      paperRateId: spec?.paperRateId ?? '',
+      costProfileId: spec?.costProfileId ?? '',
+      plateBilling: spec?.plateBilling ?? 'amortized',
+      baseMarginPercent: spec ? String(spec.baseMarginPercent) : '',
+      baseQuantity: spec ? String(spec.baseQuantity) : '1000',
+      breakQuantities: spec ? spec.breakQuantities.join(', ') : '5000, 10000, 25000',
     });
     setView('products');
   }
@@ -8130,6 +8234,9 @@ function App() {
         <ProductsPage
           suppliers={data.suppliers}
           canSeeSupplier={profile?.role === 'admin' || profile?.role === 'ops'}
+          paperRates={data.paperRates}
+          costProfiles={data.costProfiles}
+          pricingTiers={data.pricingTiers}
           productForm={productForm}
           setProductForm={setProductForm}
           productEditingId={productEditingId}
@@ -8141,6 +8248,22 @@ function App() {
           filteredProducts={filteredProducts}
           onEdit={editProduct}
           onDelete={handleDeleteCurrentProduct}
+        />
+      )}
+
+      {view === 'priceList' && (
+        <PriceListPage
+          products={data.products}
+          paperRates={data.paperRates}
+          costProfiles={data.costProfiles}
+          pricingTiers={data.pricingTiers}
+          clients={data.clients}
+          productPriceVersions={data.productPriceVersions}
+          clientProductPrices={data.clientProductPrices}
+          canApprove={profile?.role === 'admin' || profile?.role === 'accounts'}
+          onApproveProduct={handleApproveProductPrice}
+          onAddClientPrice={handleAddClientPrice}
+          onDeleteClientPrice={handleDeleteClientPrice}
         />
       )}
 

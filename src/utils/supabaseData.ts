@@ -22,6 +22,8 @@ import {
   PaperRate,
   PricingTier,
   Product,
+  ProductPriceVersion,
+  ClientProductPrice,
   ProductionLogEntry,
   QuoteEstimate,
   SparePart,
@@ -498,6 +500,47 @@ function mapProduct(row: any): Product {
     defaultGsm: row.default_gsm ?? '',
     notes: row.notes ?? '',
     active: row.active !== false,
+    pricingEnabled: Boolean(row.pricing_enabled),
+    pricingSpec: row.pricing_spec ?? undefined,
+  };
+}
+
+function mapProductPriceVersion(row: any): ProductPriceVersion {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productName: row.product_name ?? '',
+    versionNumber: Number(row.version_number) || 0,
+    status: row.status ?? 'Draft',
+    baseMarginPercent: Number(row.base_margin_percent) || 0,
+    assumptions: row.assumptions ?? {
+      paperRateId: '', paperRateName: '', paperType: '', gsm: '',
+      pricePerTon: 0, costProfileId: '', costProfileName: '', wastagePercent: 0,
+    },
+    breaks: Array.isArray(row.breaks) ? row.breaks : [],
+    note: row.note ?? '',
+    createdAt: row.created_at ?? '',
+    createdByName: row.created_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    approvedByName: row.approved_by_name ?? '',
+  };
+}
+
+function mapClientProductPrice(row: any): ClientProductPrice {
+  return {
+    id: row.id,
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    productId: row.product_id ?? '',
+    productName: row.product_name ?? '',
+    mode: row.mode ?? 'margin',
+    marginPercent: Number(row.margin_percent) || 0,
+    fixedUnitPrice: Number(row.fixed_unit_price) || 0,
+    minQuantity: Number(row.min_quantity) || 0,
+    note: row.note ?? '',
+    active: row.active !== false,
+    createdAt: row.created_at ?? '',
+    createdByName: row.created_by_name ?? '',
   };
 }
 
@@ -1832,6 +1875,8 @@ export async function fetchAppData(): Promise<AppData> {
     journalEntryRows,
     fixedAssetRows,
     maintenanceWorkOrderRows,
+    productPriceVersionRows,
+    clientProductPriceRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1905,6 +1950,9 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('fixed_assets'),
     // Phase 30 — Maintenance work orders.
     safeSelect('maintenance_work_orders'),
+    // Phase 33 — Standard-product pricing (versions + client-specific deals).
+    safeSelect('product_price_versions'),
+    safeSelect('client_product_prices'),
   ]);
 
   return {
@@ -1927,6 +1975,8 @@ export async function fetchAppData(): Promise<AppData> {
     pricingTiers: pricingTiers.map(mapPricingTier),
     clients: clients.map(mapClient),
     products: products.map(mapProduct),
+    productPriceVersions: productPriceVersionRows.map(mapProductPriceVersion),
+    clientProductPrices: clientProductPriceRows.map(mapClientProductPrice),
     jobs: jobs.map(mapJob),
     finishedGoodsStock: finishedGoodsStock.map(mapFinishedGoodsStock),
     spareParts: spareParts.map(mapSparePart),
@@ -2277,6 +2327,38 @@ export async function syncAppData(data: AppData): Promise<void> {
       default_gsm: product.defaultGsm || null,
       notes: product.notes || null,
       active: product.active,
+      pricing_enabled: product.pricingEnabled ?? false,
+      pricing_spec: product.pricingSpec ?? null,
+    }))),
+    safeUpsert('product_price_versions', data.productPriceVersions.map((v) => ({
+      id: v.id,
+      product_id: v.productId,
+      product_name: v.productName || null,
+      version_number: v.versionNumber,
+      status: v.status,
+      base_margin_percent: v.baseMarginPercent,
+      assumptions: v.assumptions,
+      breaks: v.breaks,
+      note: v.note || null,
+      created_at: v.createdAt || null,
+      created_by_name: v.createdByName || null,
+      approved_at: v.approvedAt || null,
+      approved_by_name: v.approvedByName || null,
+    }))),
+    safeUpsert('client_product_prices', data.clientProductPrices.map((o) => ({
+      id: o.id,
+      client_id: o.clientId,
+      client_name: o.clientName || null,
+      product_id: o.productId,
+      product_name: o.productName || null,
+      mode: o.mode,
+      margin_percent: o.marginPercent,
+      fixed_unit_price: o.fixedUnitPrice,
+      min_quantity: o.minQuantity,
+      note: o.note || null,
+      active: o.active,
+      created_at: o.createdAt || null,
+      created_by_name: o.createdByName || null,
     }))),
     safeUpsert('jobs', data.jobs.map((job) => ({
       id: job.id,
