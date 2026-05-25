@@ -2572,6 +2572,20 @@ th {
   margin-top: 4px !important;
 }
 
+/* Settings → Templates: per-document groups */
+.settings-template-groups {
+  display: grid;
+  gap: 1.5rem;
+}
+.settings-template-group {
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(16, 34, 26, 0.08);
+}
+.settings-template-group:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
 .printable-doc-footer {
   margin-top: 14mm;
   text-align: center;

@@ -316,88 +316,112 @@ interface TemplatesTabProps {
 
 function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
   return (
-    <div className="form-grid">
-      <label className="full-span">
-        <span>Invoice footer (one line per row)</span>
-        <textarea
-          rows={5}
-          value={templates.invoiceFooterLines}
-          onChange={(e) => patchTemplates({ invoiceFooterLines: e.target.value })}
-          placeholder={'50% deposit to be made…\nPlease send POP when payment is made.\nLimited Stock available.'}
-        />
-        <small className="muted">Shown at the bottom of every invoice unless the invoice has its own footer notes.</small>
-      </label>
-      <label className="full-span">
-        <span>Delivery note footer (one line per row)</span>
-        <textarea
-          rows={4}
-          value={templates.deliveryNoteFooterLines}
-          onChange={(e) => patchTemplates({ deliveryNoteFooterLines: e.target.value })}
-          placeholder={'Please inspect goods on receipt…'}
-        />
-      </label>
-      <label className="full-span">
-        <span>Production spec footer (one line per row)</span>
-        <textarea
-          rows={3}
-          value={templates.productionSpecFooterLines}
-          onChange={(e) => patchTemplates({ productionSpecFooterLines: e.target.value })}
-          placeholder={'Specs are confidential and intended only for internal production handover.'}
-        />
-      </label>
-      <label className="full-span">
-        <span>Default payment terms</span>
-        <input
-          value={templates.defaultPaymentTerms}
-          onChange={(e) => patchTemplates({ defaultPaymentTerms: e.target.value })}
-          placeholder="50% deposit, balance on collection."
-        />
-      </label>
-      <label className="full-span">
-        <span>Default invoice notes (internal)</span>
-        <textarea
-          rows={2}
-          value={templates.defaultInvoiceNotes}
-          onChange={(e) => patchTemplates({ defaultInvoiceNotes: e.target.value })}
-        />
-      </label>
-      <label className="full-span">
-        <span>Default delivery note notes (internal)</span>
-        <textarea
-          rows={2}
-          value={templates.defaultDeliveryNoteNotes}
-          onChange={(e) => patchTemplates({ defaultDeliveryNoteNotes: e.target.value })}
-        />
-      </label>
-      <label className="full-span">
-        <span>Default customer note (prints on invoices, quotes &amp; delivery notes)</span>
-        <textarea
-          rows={2}
-          value={templates.defaultCustomerNote}
-          onChange={(e) => patchTemplates({ defaultCustomerNote: e.target.value })}
-          placeholder="Thank you for your business…"
-        />
-        <small className="muted">Pre-fills the customer note on new documents — editable per document.</small>
-      </label>
-      <label className="full-span">
-        <span>Basic terms (prints on quotes &amp; invoices)</span>
-        <textarea
-          rows={3}
-          value={templates.termsAndConditions}
-          onChange={(e) => patchTemplates({ termsAndConditions: e.target.value })}
-          placeholder="Quotes valid 30 days. 50% deposit to commence production, balance before dispatch. Printed colours may vary slightly from proofs. E&OE."
-        />
-        <small className="muted">Keep this short — just the essentials. Your full T&Cs live online (see the line below). Delivery notes don't show terms.</small>
-      </label>
-      <label className="full-span">
-        <span>Full T&amp;Cs reference line (prints on quotes &amp; invoices)</span>
-        <input
-          value={templates.termsReferenceLine}
-          onChange={(e) => patchTemplates({ termsReferenceLine: e.target.value })}
-          placeholder="Full terms & conditions are available at jomopak.co.za/terms"
-        />
-        <small className="muted">A one-line pointer to your full terms online.</small>
-      </label>
+    <div className="settings-template-groups">
+      <section className="settings-template-group">
+        <h4 className="accounting-group-head"><span className="sars-tag">Customer note &amp; terms</span></h4>
+        <p className="muted" style={{ marginTop: 0, fontSize: '0.78rem' }}>Shared across customer-facing documents — set once.</p>
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Default customer note (prints on quotes, invoices &amp; delivery notes)</span>
+            <textarea
+              rows={2}
+              value={templates.defaultCustomerNote}
+              onChange={(e) => patchTemplates({ defaultCustomerNote: e.target.value })}
+              placeholder="Thank you for your business…"
+            />
+            <small className="muted">Pre-fills the customer note on new documents — editable per document.</small>
+          </label>
+          <label className="full-span">
+            <span>Basic terms (prints on quotes &amp; invoices)</span>
+            <textarea
+              rows={3}
+              value={templates.termsAndConditions}
+              onChange={(e) => patchTemplates({ termsAndConditions: e.target.value })}
+              placeholder="Quotes valid 30 days. 50% deposit to commence production, balance before dispatch. Printed colours may vary slightly from proofs. E&OE."
+            />
+            <small className="muted">Keep this short — just the essentials. Your full T&Cs live online (see the line below). Delivery notes don't show terms.</small>
+          </label>
+          <label className="full-span">
+            <span>Full T&amp;Cs reference line (prints on quotes &amp; invoices)</span>
+            <input
+              value={templates.termsReferenceLine}
+              onChange={(e) => patchTemplates({ termsReferenceLine: e.target.value })}
+              placeholder="Full terms & conditions are available at jomopak.co.za/terms"
+            />
+            <small className="muted">A one-line pointer to your full terms online.</small>
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-template-group">
+        <h4 className="accounting-group-head"><span className="sars-tag">Invoice</span></h4>
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Invoice footer (one line per row)</span>
+            <textarea
+              rows={4}
+              value={templates.invoiceFooterLines}
+              onChange={(e) => patchTemplates({ invoiceFooterLines: e.target.value })}
+              placeholder={'50% deposit to be made…\nPlease send POP when payment is made.\nLimited Stock available.'}
+            />
+            <small className="muted">Shown at the bottom of every invoice unless the invoice has its own footer notes.</small>
+          </label>
+          <label className="full-span">
+            <span>Default payment terms</span>
+            <input
+              value={templates.defaultPaymentTerms}
+              onChange={(e) => patchTemplates({ defaultPaymentTerms: e.target.value })}
+              placeholder="50% deposit, balance on collection."
+            />
+          </label>
+          <label className="full-span">
+            <span>Default invoice notes (internal)</span>
+            <textarea
+              rows={2}
+              value={templates.defaultInvoiceNotes}
+              onChange={(e) => patchTemplates({ defaultInvoiceNotes: e.target.value })}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-template-group">
+        <h4 className="accounting-group-head"><span className="sars-tag">Delivery note</span></h4>
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Delivery note footer (one line per row)</span>
+            <textarea
+              rows={4}
+              value={templates.deliveryNoteFooterLines}
+              onChange={(e) => patchTemplates({ deliveryNoteFooterLines: e.target.value })}
+              placeholder={'Please inspect goods on receipt…'}
+            />
+          </label>
+          <label className="full-span">
+            <span>Default delivery note notes (internal)</span>
+            <textarea
+              rows={2}
+              value={templates.defaultDeliveryNoteNotes}
+              onChange={(e) => patchTemplates({ defaultDeliveryNoteNotes: e.target.value })}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-template-group">
+        <h4 className="accounting-group-head"><span className="sars-tag">Production spec</span></h4>
+        <div className="form-grid">
+          <label className="full-span">
+            <span>Production spec footer (one line per row)</span>
+            <textarea
+              rows={3}
+              value={templates.productionSpecFooterLines}
+              onChange={(e) => patchTemplates({ productionSpecFooterLines: e.target.value })}
+              placeholder={'Specs are confidential and intended only for internal production handover.'}
+            />
+          </label>
+        </div>
+      </section>
     </div>
   );
 }
