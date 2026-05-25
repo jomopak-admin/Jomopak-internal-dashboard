@@ -3840,9 +3840,12 @@ export interface AppSettingsTemplates {
   /** Phase 34 — default customer-facing note that pre-fills new invoices,
    *  quotes, and delivery notes (editable per document). */
   defaultCustomerNote: string;
-  /** Phase 34 — one global Terms & Conditions block printed on invoices,
-   *  quotes, and delivery notes. */
+  /** Phase 34 — SHORT "basic terms" blurb printed on quotes & invoices only
+   *  (the full T&Cs live online / in Word — see termsReferenceLine). */
   termsAndConditions: string;
+  /** Phase 34 — one-line pointer to the full T&Cs, e.g. "Full terms &
+   *  conditions available at jomopak.co.za/terms". Printed under basic terms. */
+  termsReferenceLine: string;
 }
 
 /**
@@ -3931,11 +3934,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultDeliveryNoteNotes: '',
     defaultCustomerNote: 'Thank you for your business. Please reference the document number on all correspondence and payments.',
     termsAndConditions:
-      'All goods remain the property of JomoPak until paid for in full. '
-      + 'Quotations are valid for 30 days from the date of issue. '
-      + 'A 50% deposit is required to commence production; the balance is due before collection or delivery. '
-      + 'Claims for shortages or damage must be made in writing within 24 hours of receipt. '
+      'Quotes valid 30 days. 50% deposit to commence production, balance before dispatch. '
       + 'Printed colours may vary slightly from proofs. E&OE.',
+    termsReferenceLine: 'Full terms & conditions are available on request or at jomopak.co.za.',
   },
   stockHolding: {
     defaultMaxDays: 90,
@@ -3979,6 +3980,7 @@ export interface AppSettingsFormState {
     defaultDeliveryNoteNotes: string;
     defaultCustomerNote: string;
     termsAndConditions: string;
+    termsReferenceLine: string;
   };
   stockHolding: {
     defaultMaxDays: string;

@@ -2567,6 +2567,10 @@ th {
   line-height: 1.45;
   color: #6b7280;
 }
+.printable-doc-terms-ref {
+  font-style: italic;
+  margin-top: 4px !important;
+}
 
 .printable-doc-footer {
   margin-top: 14mm;

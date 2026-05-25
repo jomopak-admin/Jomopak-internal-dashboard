@@ -91,6 +91,7 @@ function mapAppSettings(row: any): AppSettings {
       defaultDeliveryNoteNotes: row.default_delivery_note_notes ?? row.defaultDeliveryNoteNotes ?? '',
       defaultCustomerNote: row.default_customer_note ?? row.defaultCustomerNote ?? '',
       termsAndConditions: row.terms_and_conditions ?? row.termsAndConditions ?? '',
+      termsReferenceLine: row.terms_reference_line ?? row.termsReferenceLine ?? '',
     },
     stockHolding: {
       defaultMaxDays: row.default_stock_holding_max_days ?? row.defaultMaxDays,
@@ -2749,6 +2750,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       default_delivery_note_notes: data.appSettings.templates.defaultDeliveryNoteNotes,
       default_customer_note: data.appSettings.templates.defaultCustomerNote,
       terms_and_conditions: data.appSettings.templates.termsAndConditions,
+      terms_reference_line: data.appSettings.templates.termsReferenceLine,
       default_stock_holding_max_days: data.appSettings.stockHolding.defaultMaxDays,
       default_stock_holding_review_cadence_days: data.appSettings.stockHolding.defaultReviewCadenceDays,
       default_stock_holding_terms: data.appSettings.stockHolding.defaultAgreementTermsText,

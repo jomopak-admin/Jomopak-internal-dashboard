@@ -15,10 +15,11 @@ interface QuotePrintProps {
   company?: AppSettingsCompany;
   defaultFooterLines?: string[];
   termsAndConditions?: string;
+  termsReferenceLine?: string;
   onClose: () => void;
 }
 
-export function QuotePrint({ quote, client, company, defaultFooterLines, termsAndConditions, onClose }: QuotePrintProps) {
+export function QuotePrint({ quote, client, company, defaultFooterLines, termsAndConditions, termsReferenceLine, onClose }: QuotePrintProps) {
   const meta: PrintableDocumentMeta[] = [
     { label: 'QUOTE #', value: quote.quoteNumber },
     { label: 'DATE', value: quote.quoteDate ? formatDate(quote.quoteDate) : '—' },
@@ -52,6 +53,7 @@ export function QuotePrint({ quote, client, company, defaultFooterLines, termsAn
       defaultFooterLines={defaultFooterLines}
       customerNote={quote.customerNote}
       termsAndConditions={termsAndConditions}
+      termsReferenceLine={termsReferenceLine}
       toolbar={
         <>
           <button type="button" className="ghost-button" onClick={onClose}>Close</button>

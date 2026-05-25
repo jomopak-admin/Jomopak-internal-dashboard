@@ -46,8 +46,10 @@ interface PrintableDocumentProps {
   toolbar?: ReactNode;
   /** Phase 34 — customer-facing note for this specific document. */
   customerNote?: string;
-  /** Phase 34 — global Terms & Conditions block (from Settings). */
+  /** Phase 34 — short "basic terms" blurb (from Settings). */
   termsAndConditions?: string;
+  /** Phase 34 — one-line pointer to the full T&Cs online. */
+  termsReferenceLine?: string;
   /**
    * Editable company details from Settings → Branding. Falls back to the
    * legacy hardcoded `JOMOPAK_COMPANY_DETAILS` so callers that haven't been
@@ -68,6 +70,7 @@ export function PrintableDocument({
   company,
   customerNote,
   termsAndConditions,
+  termsReferenceLine,
 }: PrintableDocumentProps) {
   const branded = company ?? JOMOPAK_COMPANY_DETAILS;
   return (
@@ -129,12 +132,15 @@ export function PrintableDocument({
           </section>
         ) : null}
 
-        {termsAndConditions && termsAndConditions.trim() ? (
+        {(termsAndConditions && termsAndConditions.trim()) || (termsReferenceLine && termsReferenceLine.trim()) ? (
           <section className="printable-doc-terms">
-            <span className="printable-doc-label">TERMS &amp; CONDITIONS</span>
-            {termsAndConditions.split('\n').map((line, idx) => (
+            <span className="printable-doc-label">TERMS</span>
+            {(termsAndConditions ?? '').split('\n').filter((line) => line.trim()).map((line, idx) => (
               <p key={idx}>{line}</p>
             ))}
+            {termsReferenceLine && termsReferenceLine.trim() ? (
+              <p className="printable-doc-terms-ref">{termsReferenceLine}</p>
+            ) : null}
           </section>
         ) : null}
 

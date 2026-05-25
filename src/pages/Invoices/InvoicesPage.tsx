@@ -485,6 +485,7 @@ function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit }: I
         defaultFooterLines={settings.templates.invoiceFooterLines}
         customerNote={invoice.customerNote}
         termsAndConditions={settings.templates.termsAndConditions}
+        termsReferenceLine={settings.templates.termsReferenceLine}
         meta={[
           { label: 'INVOICE', value: invoice.invoiceNumber },
           { label: 'DATE', value: invoice.invoiceDate ? formatDate(invoice.invoiceDate) : '—' },

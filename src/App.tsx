@@ -1059,6 +1059,7 @@ const buildSettingsForm = (settings: AppSettings): AppSettingsFormState => ({
     defaultDeliveryNoteNotes: settings.templates.defaultDeliveryNoteNotes,
     defaultCustomerNote: settings.templates.defaultCustomerNote ?? '',
     termsAndConditions: settings.templates.termsAndConditions ?? '',
+    termsReferenceLine: settings.templates.termsReferenceLine ?? '',
   },
   stockHolding: {
     defaultMaxDays: String(settings.stockHolding.defaultMaxDays),
@@ -2683,6 +2684,7 @@ function App() {
         defaultDeliveryNoteNotes: settingsForm.templates.defaultDeliveryNoteNotes,
         defaultCustomerNote: settingsForm.templates.defaultCustomerNote,
         termsAndConditions: settingsForm.templates.termsAndConditions,
+        termsReferenceLine: settingsForm.templates.termsReferenceLine,
       },
       stockHolding: {
         defaultMaxDays: numeric(settingsForm.stockHolding.defaultMaxDays, data.appSettings.stockHolding.defaultMaxDays),
@@ -9566,7 +9568,6 @@ function App() {
         }
         allDeliveryNotes={data.deliveryNotes}
         company={data.appSettings.company}
-        termsAndConditions={data.appSettings.templates.termsAndConditions}
         onClose={() => setDeliveryNotePrintTarget(null)}
       />
     ) : null}

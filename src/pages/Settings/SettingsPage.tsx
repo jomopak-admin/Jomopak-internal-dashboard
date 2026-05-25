@@ -380,14 +380,23 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
         <small className="muted">Pre-fills the customer note on new documents — editable per document.</small>
       </label>
       <label className="full-span">
-        <span>Terms &amp; Conditions (prints on invoices, quotes &amp; delivery notes)</span>
+        <span>Basic terms (prints on quotes &amp; invoices)</span>
         <textarea
-          rows={6}
+          rows={3}
           value={templates.termsAndConditions}
           onChange={(e) => patchTemplates({ termsAndConditions: e.target.value })}
-          placeholder="All goods remain the property of JomoPak until paid for in full…"
+          placeholder="Quotes valid 30 days. 50% deposit to commence production, balance before dispatch. Printed colours may vary slightly from proofs. E&OE."
         />
-        <small className="muted">One global block, printed at the bottom of every customer-facing document.</small>
+        <small className="muted">Keep this short — just the essentials. Your full T&Cs live online (see the line below). Delivery notes don't show terms.</small>
+      </label>
+      <label className="full-span">
+        <span>Full T&amp;Cs reference line (prints on quotes &amp; invoices)</span>
+        <input
+          value={templates.termsReferenceLine}
+          onChange={(e) => patchTemplates({ termsReferenceLine: e.target.value })}
+          placeholder="Full terms & conditions are available at jomopak.co.za/terms"
+        />
+        <small className="muted">A one-line pointer to your full terms online.</small>
       </label>
     </div>
   );

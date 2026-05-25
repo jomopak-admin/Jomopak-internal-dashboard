@@ -735,6 +735,7 @@ export function normalizeAppSettings(raw: any): AppSettings {
       defaultDeliveryNoteNotes: templates.defaultDeliveryNoteNotes ?? DEFAULT_APP_SETTINGS.templates.defaultDeliveryNoteNotes,
       defaultCustomerNote: templates.defaultCustomerNote ?? DEFAULT_APP_SETTINGS.templates.defaultCustomerNote,
       termsAndConditions: templates.termsAndConditions ?? DEFAULT_APP_SETTINGS.templates.termsAndConditions,
+      termsReferenceLine: templates.termsReferenceLine ?? DEFAULT_APP_SETTINGS.templates.termsReferenceLine,
     },
     stockHolding: {
       defaultMaxDays: Number(stockHolding.defaultMaxDays ?? DEFAULT_APP_SETTINGS.stockHolding.defaultMaxDays),
