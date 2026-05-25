@@ -18,6 +18,20 @@ import { supabase } from '../../utils/supabase';
  * `settings.company.logoUrl`.
  */
 
+/** Turn a stored ISO timestamp into a readable local string, e.g. "25 May 2026, 17:06". */
+function formatSavedAt(iso: string): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString('en-ZA', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 type SettingsTab = 'account' | 'branding' | 'templates' | 'stockHolding' | 'permissions' | 'access';
 
 const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
@@ -285,7 +299,7 @@ function BrandingTab({ company, patchCompany, updatedAt, updatedBy }: BrandingTa
 
       {updatedAt ? (
         <p className="muted" style={{ marginTop: '12px' }}>
-          Last saved {updatedAt}
+          Last saved {formatSavedAt(updatedAt)}
           {updatedBy ? ` by ${updatedBy}` : ''}
         </p>
       ) : null}
