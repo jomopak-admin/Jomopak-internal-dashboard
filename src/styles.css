@@ -2572,6 +2572,51 @@ th {
   margin-top: 4px !important;
 }
 
+/* Permissions → Section access, grouped by area */
+.perm-groups {
+  display: grid;
+  gap: 1rem;
+}
+.perm-group {
+  border: 1px solid rgba(16, 34, 26, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(16, 34, 26, 0.02);
+}
+.perm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.perm-group-title {
+  font-weight: 600;
+  color: var(--jp-ink);
+  font-size: 0.9rem;
+}
+.perm-group-count {
+  font-size: 0.72rem;
+  color: rgba(16, 34, 26, 0.5);
+}
+.perm-group-toggle {
+  margin-left: auto;
+  border: 1px solid rgba(16, 34, 26, 0.18);
+  background: #fff;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  padding: 3px 12px;
+  cursor: pointer;
+  color: var(--jp-ink);
+}
+.perm-group-toggle:hover {
+  background: rgba(16, 34, 26, 0.06);
+}
+.perm-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 14px;
+}
+
 /* Settings → Templates: per-document groups */
 .settings-template-groups {
   display: grid;

@@ -50,6 +50,74 @@ const initialCreateUserForm = (): CreateUserFormState => ({
   dashboardWidgets: ROLE_DEFAULT_DASHBOARD_WIDGETS.artwork,
 });
 
+/** Section-access grouped by area, with a Select all / Clear per group. */
+const PERMISSION_GROUPS: Array<{ title: string; views: View[] }> = [
+  { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
+  { title: 'Sales & CRM', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'customerStatements', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs', 'costMasters'] },
+  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'machines', 'maintenance', 'production', 'waste', 'paper'] },
+  { title: 'Materials & Stock', views: ['materials', 'shipments', 'invoiceInbox', 'finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'spares', 'products', 'suppliers', 'dispatch', 'driverPod', 'deliveryNotes'] },
+  { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
+  { title: 'Payroll', views: ['payroll', 'employees'] },
+  { title: 'Food Safety & Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog', 'chemicalRegister', 'foodSafeMaterials', 'cleaningLogs'] },
+  { title: 'Admin', views: ['documentVault', 'osConnector', 'permissions', 'settings'] },
+];
+
+function SectionAccessGrid({ selected, role, onChange }: {
+  selected: View[];
+  role: UserProfile['role'];
+  onChange: (next: View[]) => void;
+}) {
+  const selectedSet = new Set(selected);
+  const used = new Set<View>();
+  const groups = PERMISSION_GROUPS
+    .map((g) => {
+      const views = g.views.filter((v): v is View => v in VIEW_LABELS);
+      views.forEach((v) => used.add(v));
+      return { title: g.title, views };
+    })
+    .filter((g) => g.views.length);
+  const leftover = (Object.keys(VIEW_LABELS) as View[]).filter((v) => !used.has(v));
+  if (leftover.length) groups.push({ title: 'Other', views: leftover });
+
+  function setMany(views: View[], on: boolean) {
+    const next = new Set(selected);
+    views.forEach((v) => (on ? next.add(v) : next.delete(v)));
+    onChange(normalizeProfilePermissions(role, Array.from(next)));
+  }
+  function toggleOne(view: View) {
+    const next = selected.includes(view) ? selected.filter((v) => v !== view) : [...selected, view];
+    onChange(normalizeProfilePermissions(role, next));
+  }
+
+  return (
+    <div className="perm-groups">
+      {groups.map((group) => {
+        const onCount = group.views.filter((v) => selectedSet.has(v)).length;
+        const allOn = onCount === group.views.length;
+        return (
+          <div className="perm-group" key={group.title}>
+            <div className="perm-group-head">
+              <span className="perm-group-title">{group.title}</span>
+              <span className="perm-group-count">{onCount}/{group.views.length}</span>
+              <button type="button" className="perm-group-toggle" onClick={() => setMany(group.views, !allOn)}>
+                {allOn ? 'Clear' : 'Select all'}
+              </button>
+            </div>
+            <div className="perm-group-grid">
+              {group.views.map((view) => (
+                <label key={view} className="permission-check">
+                  <input type="checkbox" checked={selectedSet.has(view)} onChange={() => toggleOne(view)} />
+                  <span>{VIEW_LABELS[view]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: PermissionsPageProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -66,11 +134,6 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [message, setMessage] = useState('');
 
-  function togglePermission(selected: View[], permission: View, role: UserProfile['role']) {
-    const exists = selected.includes(permission);
-    const next = exists ? selected.filter((entry) => entry !== permission) : [...selected, permission];
-    return normalizeProfilePermissions(role, next);
-  }
 
   function toggleDashboardWidget(selected: DashboardWidget[], widget: DashboardWidget, role: UserProfile['role']) {
     const exists = selected.includes(widget);
@@ -250,26 +313,11 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
               <strong>Section Access</strong>
               <span className="table-subtext">Tick exactly what this user can see in the dashboard.</span>
             </div>
-            <div className="permission-grid">
-              {Object.entries(VIEW_LABELS).map(([key, label]) => {
-                const permission = key as View;
-                return (
-                  <label key={permission} className="permission-check">
-                    <input
-                      type="checkbox"
-                      checked={createUserForm.permissions.includes(permission)}
-                      onChange={() =>
-                        setCreateUserForm({
-                          ...createUserForm,
-                          permissions: togglePermission(createUserForm.permissions, permission, createUserForm.role),
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <SectionAccessGrid
+              selected={createUserForm.permissions}
+              role={createUserForm.role}
+              onChange={(next) => setCreateUserForm({ ...createUserForm, permissions: next })}
+            />
           </div>
           <div className="permission-panel">
             <div className="permission-panel-header">
@@ -395,21 +443,11 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser }: Per
                       <strong>Section Access</strong>
                       <span className="table-subtext">Tick the sections this user can access.</span>
                     </div>
-                    <div className="permission-grid">
-                      {Object.entries(VIEW_LABELS).map(([key, label]) => {
-                        const permission = key as View;
-                        return (
-                          <label key={permission} className="permission-check">
-                            <input
-                              type="checkbox"
-                              checked={draftPermissions.includes(permission)}
-                              onChange={() => setDraftPermissions(togglePermission(draftPermissions, permission, draftRole))}
-                            />
-                            <span>{label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                    <SectionAccessGrid
+                      selected={draftPermissions}
+                      role={draftRole}
+                      onChange={setDraftPermissions}
+                    />
                   </div>
                   <div className="permission-panel">
                     <div className="permission-panel-header">
