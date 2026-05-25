@@ -326,6 +326,7 @@ export function InvoicesPage({
           <label><span>Payment terms</span><select value={invoiceForm.termsType} onChange={(e) => setInvoiceForm({ ...invoiceForm, termsType: e.target.value as InvoiceFormState['termsType'] })}><option>Full Payment Up Front</option><option>50% Deposit</option><option>Net 7</option><option>Net 14</option><option>Net 30</option><option>Net 60</option><option>On Delivery</option></select></label>
           <label><span>Terms detail (printed)</span><input value={invoiceForm.termsText} onChange={(e) => setInvoiceForm({ ...invoiceForm, termsText: e.target.value })} placeholder="Eg. 50% deposit, balance on collection" /></label>
           <label className="full-span"><span>Notes (internal)</span><textarea value={invoiceForm.notes} onChange={(e) => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} /></label>
+          <label className="full-span"><span>Customer note (prints on invoice)</span><textarea value={invoiceForm.customerNote} onChange={(e) => setInvoiceForm({ ...invoiceForm, customerNote: e.target.value })} placeholder="Defaults from Settings → Templates; edit for this invoice." /></label>
           <label className="full-span"><span>Footer notes (printed on invoice)</span><textarea value={invoiceForm.footerNotes} onChange={(e) => setInvoiceForm({ ...invoiceForm, footerNotes: e.target.value })} /></label>
           <label className="inline-toggle"><input type="checkbox" checked={invoiceForm.clientVisible} onChange={(e) => setInvoiceForm({ ...invoiceForm, clientVisible: e.target.checked })} /><span>Visible to client portal</span></label>
         </div>
@@ -482,6 +483,8 @@ function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit }: I
         documentTitle="Invoice"
         company={settings.company}
         defaultFooterLines={settings.templates.invoiceFooterLines}
+        customerNote={invoice.customerNote}
+        termsAndConditions={settings.templates.termsAndConditions}
         meta={[
           { label: 'INVOICE', value: invoice.invoiceNumber },
           { label: 'DATE', value: invoice.invoiceDate ? formatDate(invoice.invoiceDate) : '—' },

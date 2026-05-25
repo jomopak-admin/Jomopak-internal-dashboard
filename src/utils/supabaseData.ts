@@ -89,6 +89,8 @@ function mapAppSettings(row: any): AppSettings {
       defaultPaymentTerms: row.default_payment_terms ?? row.defaultPaymentTerms,
       defaultInvoiceNotes: row.default_invoice_notes ?? row.defaultInvoiceNotes ?? '',
       defaultDeliveryNoteNotes: row.default_delivery_note_notes ?? row.defaultDeliveryNoteNotes ?? '',
+      defaultCustomerNote: row.default_customer_note ?? row.defaultCustomerNote ?? '',
+      termsAndConditions: row.terms_and_conditions ?? row.termsAndConditions ?? '',
     },
     stockHolding: {
       defaultMaxDays: row.default_stock_holding_max_days ?? row.defaultMaxDays,
@@ -223,6 +225,7 @@ export function mapQuoteEstimate(row: any): QuoteEstimate {
     totalQuote: Number(row.total_quote ?? 0),
     status: row.status ?? 'Draft',
     notes: row.notes ?? '',
+    customerNote: row.customer_note ?? '',
   };
 }
 
@@ -334,6 +337,7 @@ function mapDeliveryNote(row: any): DeliveryNote {
       invoiceLineItemId: item.invoiceLineItemId ?? item.invoice_line_item_id ?? undefined,
     })) : [],
     notes: row.notes ?? '',
+    customerNote: row.customer_note ?? '',
     parentInvoiceId: row.parent_invoice_id ?? '',
     parentInvoiceNumber: row.parent_invoice_number ?? '',
     receiptMode: row.receipt_mode ?? 'Pending',
@@ -1063,6 +1067,7 @@ export function mapInvoice(row: any): any {
     termsText: row.terms_text ?? '',
     notes: row.notes ?? '',
     footerNotes: row.footer_notes ?? '',
+    customerNote: row.customer_note ?? '',
     status: row.status ?? 'Draft',
     currency: row.currency ?? 'ZAR',
     exchangeRate: Number(row.exchange_rate ?? 1) || 1,
@@ -2126,6 +2131,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       total_quote: quote.totalQuote,
       status: quote.status,
       notes: quote.notes || null,
+      customer_note: quote.customerNote || null,
     }))),
     safeUpsert('artwork_records', data.artworkRecords.map((artwork) => ({
       id: artwork.id,
@@ -2187,6 +2193,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       client_visible: note.clientVisible,
       line_items: note.lineItems,
       notes: note.notes || null,
+      customer_note: note.customerNote || null,
     }))),
     safeUpsert('paper_rates', data.paperRates.map((rate) => ({
       id: rate.id,
@@ -2740,6 +2747,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       default_payment_terms: data.appSettings.templates.defaultPaymentTerms,
       default_invoice_notes: data.appSettings.templates.defaultInvoiceNotes,
       default_delivery_note_notes: data.appSettings.templates.defaultDeliveryNoteNotes,
+      default_customer_note: data.appSettings.templates.defaultCustomerNote,
+      terms_and_conditions: data.appSettings.templates.termsAndConditions,
       default_stock_holding_max_days: data.appSettings.stockHolding.defaultMaxDays,
       default_stock_holding_review_cadence_days: data.appSettings.stockHolding.defaultReviewCadenceDays,
       default_stock_holding_terms: data.appSettings.stockHolding.defaultAgreementTermsText,
@@ -2800,6 +2809,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       production_spec_number: inv.productionSpecNumber || null,
       customer_reference: inv.customerReference, terms_type: inv.termsType,
       terms_text: inv.termsText, notes: inv.notes, footer_notes: inv.footerNotes,
+      customer_note: inv.customerNote || null,
       status: inv.status, currency: inv.currency, exchange_rate: inv.exchangeRate ?? 1,
       line_items: inv.lineItems, subtotal_excl_vat: inv.subtotalExclVat,
       vat_total: inv.vatTotal, total_incl_vat: inv.totalInclVat,

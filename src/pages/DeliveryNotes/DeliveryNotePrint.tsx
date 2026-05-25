@@ -36,6 +36,7 @@ interface DeliveryNotePrintProps {
   allDeliveryNotes: DeliveryNote[];
   company?: AppSettingsCompany;
   defaultFooterLines?: string[];
+  termsAndConditions?: string;
   onClose: () => void;
 }
 
@@ -45,6 +46,7 @@ export function DeliveryNotePrint({
   allDeliveryNotes,
   company,
   defaultFooterLines,
+  termsAndConditions,
   onClose,
 }: DeliveryNotePrintProps) {
   // ----- Stock-holding context (only if linked to a parent invoice) -----
@@ -125,6 +127,8 @@ export function DeliveryNotePrint({
       billTo={billTo}
       company={company}
       defaultFooterLines={defaultFooterLines}
+      customerNote={note.customerNote}
+      termsAndConditions={termsAndConditions}
       toolbar={
         <>
           <button type="button" className="ghost-button" onClick={onClose}>Close</button>

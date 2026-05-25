@@ -14,10 +14,11 @@ interface QuotePrintProps {
   client?: Client;
   company?: AppSettingsCompany;
   defaultFooterLines?: string[];
+  termsAndConditions?: string;
   onClose: () => void;
 }
 
-export function QuotePrint({ quote, client, company, defaultFooterLines, onClose }: QuotePrintProps) {
+export function QuotePrint({ quote, client, company, defaultFooterLines, termsAndConditions, onClose }: QuotePrintProps) {
   const meta: PrintableDocumentMeta[] = [
     { label: 'QUOTE #', value: quote.quoteNumber },
     { label: 'DATE', value: quote.quoteDate ? formatDate(quote.quoteDate) : '—' },
@@ -49,6 +50,8 @@ export function QuotePrint({ quote, client, company, defaultFooterLines, onClose
       billTo={billTo}
       company={company}
       defaultFooterLines={defaultFooterLines}
+      customerNote={quote.customerNote}
+      termsAndConditions={termsAndConditions}
       toolbar={
         <>
           <button type="button" className="ghost-button" onClick={onClose}>Close</button>
@@ -100,23 +103,6 @@ export function QuotePrint({ quote, client, company, defaultFooterLines, onClose
           <tr><td colSpan={3} className="align-right"><strong>Total (incl VAT)</strong></td><td className="align-right"><strong>R {formatNumber(totalIncl, 2)}</strong></td></tr>
         </tfoot>
       </table>
-
-      {quote.notes ? (
-        <section style={{ margin: '16px 0' }}>
-          <h3 className="work-ticket-print-section-h">Notes</h3>
-          <p style={{ fontSize: 13 }}>{quote.notes}</p>
-        </section>
-      ) : null}
-
-      <section style={{ margin: '20px 0 8px' }}>
-        <h3 className="work-ticket-print-section-h">Terms</h3>
-        <ul style={{ fontSize: 12, lineHeight: 1.7, paddingLeft: 18 }}>
-          <li>Quote valid for 30 days from issue date.</li>
-          <li>Payment terms as per existing agreement, or 50% deposit on order confirmation, balance on collection / delivery.</li>
-          <li>Production lead time confirmed on order.</li>
-          <li>Customer artwork to be supplied print-ready unless artwork prep is included.</li>
-        </ul>
-      </section>
 
       <section className="work-ticket-print-signoff">
         <div>

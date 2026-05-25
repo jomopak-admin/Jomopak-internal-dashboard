@@ -194,7 +194,8 @@ export function QuotesPage({
       body: (
         <div className="form-grid">
           <label><span>Status</span><select value={quoteForm.status} onChange={(event) => setQuoteForm({ ...quoteForm, status: event.target.value as QuoteEstimateFormState['status'] })}><option value="Draft">Draft</option><option value="Quoted">Quoted</option><option value="Approved">Approved</option><option value="Converted to Job">Converted to Job</option><option value="Lost">Lost</option></select></label>
-          <label className="full-span"><span>Notes</span><textarea value={quoteForm.notes} onChange={(event) => setQuoteForm({ ...quoteForm, notes: event.target.value })} /></label>
+          <label className="full-span"><span>Notes (internal)</span><textarea value={quoteForm.notes} onChange={(event) => setQuoteForm({ ...quoteForm, notes: event.target.value })} /></label>
+          <label className="full-span"><span>Customer note (prints on quote)</span><textarea value={quoteForm.customerNote} onChange={(event) => setQuoteForm({ ...quoteForm, customerNote: event.target.value })} placeholder="Defaults from Settings → Templates; edit for this quote." /></label>
         </div>
       ),
     },

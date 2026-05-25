@@ -369,6 +369,26 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
           onChange={(e) => patchTemplates({ defaultDeliveryNoteNotes: e.target.value })}
         />
       </label>
+      <label className="full-span">
+        <span>Default customer note (prints on invoices, quotes &amp; delivery notes)</span>
+        <textarea
+          rows={2}
+          value={templates.defaultCustomerNote}
+          onChange={(e) => patchTemplates({ defaultCustomerNote: e.target.value })}
+          placeholder="Thank you for your business…"
+        />
+        <small className="muted">Pre-fills the customer note on new documents — editable per document.</small>
+      </label>
+      <label className="full-span">
+        <span>Terms &amp; Conditions (prints on invoices, quotes &amp; delivery notes)</span>
+        <textarea
+          rows={6}
+          value={templates.termsAndConditions}
+          onChange={(e) => patchTemplates({ termsAndConditions: e.target.value })}
+          placeholder="All goods remain the property of JomoPak until paid for in full…"
+        />
+        <small className="muted">One global block, printed at the bottom of every customer-facing document.</small>
+      </label>
     </div>
   );
 }

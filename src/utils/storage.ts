@@ -285,6 +285,7 @@ function normalizeQuoteEstimate(raw: any): QuoteEstimate {
     totalQuote: Number(raw.totalQuote ?? 0),
     status: raw.status ?? 'Draft',
     notes: raw.notes ?? '',
+    customerNote: raw.customerNote ?? '',
   };
 }
 
@@ -405,6 +406,7 @@ function normalizeDeliveryNote(raw: any): DeliveryNote {
       ? (raw.lineItems ?? raw.line_items).map((item: any, index: number) => normalizeDeliveryNoteLineItem(item, index))
       : [],
     notes: raw.notes ?? '',
+    customerNote: raw.customerNote ?? raw.customer_note ?? '',
     parentInvoiceId: raw.parentInvoiceId ?? raw.parent_invoice_id ?? '',
     parentInvoiceNumber: raw.parentInvoiceNumber ?? raw.parent_invoice_number ?? '',
     receiptMode: raw.receiptMode ?? raw.receipt_mode ?? 'Pending',
@@ -731,6 +733,8 @@ export function normalizeAppSettings(raw: any): AppSettings {
       defaultPaymentTerms: templates.defaultPaymentTerms ?? DEFAULT_APP_SETTINGS.templates.defaultPaymentTerms,
       defaultInvoiceNotes: templates.defaultInvoiceNotes ?? DEFAULT_APP_SETTINGS.templates.defaultInvoiceNotes,
       defaultDeliveryNoteNotes: templates.defaultDeliveryNoteNotes ?? DEFAULT_APP_SETTINGS.templates.defaultDeliveryNoteNotes,
+      defaultCustomerNote: templates.defaultCustomerNote ?? DEFAULT_APP_SETTINGS.templates.defaultCustomerNote,
+      termsAndConditions: templates.termsAndConditions ?? DEFAULT_APP_SETTINGS.templates.termsAndConditions,
     },
     stockHolding: {
       defaultMaxDays: Number(stockHolding.defaultMaxDays ?? DEFAULT_APP_SETTINGS.stockHolding.defaultMaxDays),

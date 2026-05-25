@@ -740,6 +740,8 @@ export interface QuoteEstimate {
   totalQuote: number;
   status: QuoteStatus;
   notes: string;
+  /** Phase 34 — customer-facing note printed on the quote. */
+  customerNote?: string;
 }
 
 export interface Lead {
@@ -3619,6 +3621,8 @@ export interface DeliveryNote {
   collectedByName: string;
   collectedByDate: string;
   collectedByIdNumber: string;
+  /** Phase 34 — customer-facing note printed on the delivery note. */
+  customerNote?: string;
 }
 
 export interface InvoiceLineItem {
@@ -3702,6 +3706,8 @@ export interface Invoice {
   /** Linked delivery note IDs that have drawn from this invoice. */
   deliveryNoteIds: string[];
   clientVisible: boolean;
+  /** Phase 34 — customer-facing note printed on the invoice. */
+  customerNote?: string;
 }
 
 export interface ProductionSpec {
@@ -3831,6 +3837,12 @@ export interface AppSettingsTemplates {
   defaultPaymentTerms: string;
   defaultInvoiceNotes: string;
   defaultDeliveryNoteNotes: string;
+  /** Phase 34 — default customer-facing note that pre-fills new invoices,
+   *  quotes, and delivery notes (editable per document). */
+  defaultCustomerNote: string;
+  /** Phase 34 — one global Terms & Conditions block printed on invoices,
+   *  quotes, and delivery notes. */
+  termsAndConditions: string;
 }
 
 /**
@@ -3917,6 +3929,13 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultPaymentTerms: '50% deposit, balance on collection.',
     defaultInvoiceNotes: '',
     defaultDeliveryNoteNotes: '',
+    defaultCustomerNote: 'Thank you for your business. Please reference the document number on all correspondence and payments.',
+    termsAndConditions:
+      'All goods remain the property of JomoPak until paid for in full. '
+      + 'Quotations are valid for 30 days from the date of issue. '
+      + 'A 50% deposit is required to commence production; the balance is due before collection or delivery. '
+      + 'Claims for shortages or damage must be made in writing within 24 hours of receipt. '
+      + 'Printed colours may vary slightly from proofs. E&OE.',
   },
   stockHolding: {
     defaultMaxDays: 90,
@@ -3958,6 +3977,8 @@ export interface AppSettingsFormState {
     defaultPaymentTerms: string;
     defaultInvoiceNotes: string;
     defaultDeliveryNoteNotes: string;
+    defaultCustomerNote: string;
+    termsAndConditions: string;
   };
   stockHolding: {
     defaultMaxDays: string;
@@ -4632,6 +4653,7 @@ export interface QuoteEstimateFormState {
   totalQuote: string;
   status: QuoteStatus;
   notes: string;
+  customerNote: string;
 }
 
 export interface ArtworkFormState {
@@ -4679,6 +4701,7 @@ export interface DeliveryNoteFormState {
   clientVisible: boolean;
   lineItems: DeliveryNoteLineItem[];
   notes: string;
+  customerNote: string;
   parentInvoiceId: string;
   receiptMode: DeliveryReceiptMode;
   signedByName: string;
@@ -5253,6 +5276,7 @@ export interface InvoiceFormState {
   termsText: string;
   notes: string;
   footerNotes: string;
+  customerNote: string;
   status: InvoiceStatus;
   currency: CurrencyCode;
   lineItems: InvoiceLineItemFormState[];

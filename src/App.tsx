@@ -514,6 +514,7 @@ const createInitialQuoteForm = (): QuoteEstimateFormState => ({
   totalQuote: '',
   status: 'Draft',
   notes: '',
+  customerNote: '',
 });
 
 const createInitialLeadForm = (): LeadFormState => ({
@@ -764,6 +765,7 @@ const createInitialDeliveryNoteForm = (): DeliveryNoteFormState => ({
   clientVisible: true,
   lineItems: [],
   notes: '',
+  customerNote: '',
   parentInvoiceId: '',
   receiptMode: 'Pending',
   signedByName: '',
@@ -1030,6 +1032,7 @@ const createInitialInvoiceForm = (): InvoiceFormState => ({
   termsText: '50% deposit, balance on collection / delivery.',
   notes: '',
   footerNotes: '',
+  customerNote: '',
   status: 'Draft',
   currency: 'ZAR',
   lineItems: [],
@@ -1054,6 +1057,8 @@ const buildSettingsForm = (settings: AppSettings): AppSettingsFormState => ({
     defaultPaymentTerms: settings.templates.defaultPaymentTerms,
     defaultInvoiceNotes: settings.templates.defaultInvoiceNotes,
     defaultDeliveryNoteNotes: settings.templates.defaultDeliveryNoteNotes,
+    defaultCustomerNote: settings.templates.defaultCustomerNote ?? '',
+    termsAndConditions: settings.templates.termsAndConditions ?? '',
   },
   stockHolding: {
     defaultMaxDays: String(settings.stockHolding.defaultMaxDays),
@@ -2647,11 +2652,11 @@ function App() {
   function resetSupplierEditor() { setSupplierForm(createInitialSupplierForm()); setSupplierEditingId(null); setSupplierMessage(''); }
   function resetMachineEditor() { setMachineForm(createInitialMachineForm()); setMachineEditingId(null); setMachineMessage(''); }
   function resetLeadEditor() { setLeadForm(createInitialLeadForm()); setLeadEditingId(null); setLeadMessage(''); }
-  function resetQuoteEditor() { setQuoteForm(createInitialQuoteForm()); setQuoteEditingId(null); setQuoteMessage(''); }
+  function resetQuoteEditor() { setQuoteForm({ ...createInitialQuoteForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setQuoteEditingId(null); setQuoteMessage(''); }
   function resetArtworkEditor() { setArtworkForm(createInitialArtworkForm()); setArtworkEditingId(null); setArtworkMessage(''); }
   function resetCustomerStockReleaseEditor() { setCustomerStockReleaseForm(createInitialCustomerStockReleaseForm()); setCustomerStockReleaseEditingId(null); setCustomerStockReleaseMessage(''); }
-  function resetDeliveryNoteEditor() { setDeliveryNoteForm(createInitialDeliveryNoteForm()); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
-  function resetInvoiceEditor() { setInvoiceForm(createInitialInvoiceForm()); setInvoiceEditingId(null); setInvoiceMessage(''); }
+  function resetDeliveryNoteEditor() { setDeliveryNoteForm({ ...createInitialDeliveryNoteForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
+  function resetInvoiceEditor() { setInvoiceForm({ ...createInitialInvoiceForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setInvoiceEditingId(null); setInvoiceMessage(''); }
   function resetProductionSpecEditor() { setProductionSpecForm(createInitialProductionSpecForm()); setProductionSpecEditingId(null); setProductionSpecMessage(''); }
   function resetSettingsEditor() {
     setSettingsForm(buildSettingsForm(data.appSettings));
@@ -2676,6 +2681,8 @@ function App() {
         defaultPaymentTerms: settingsForm.templates.defaultPaymentTerms,
         defaultInvoiceNotes: settingsForm.templates.defaultInvoiceNotes,
         defaultDeliveryNoteNotes: settingsForm.templates.defaultDeliveryNoteNotes,
+        defaultCustomerNote: settingsForm.templates.defaultCustomerNote,
+        termsAndConditions: settingsForm.templates.termsAndConditions,
       },
       stockHolding: {
         defaultMaxDays: numeric(settingsForm.stockHolding.defaultMaxDays, data.appSettings.stockHolding.defaultMaxDays),
@@ -2940,6 +2947,7 @@ function App() {
       totalQuote: Number(quoteForm.totalQuote || 0),
       status: quoteForm.status,
       notes: quoteForm.notes,
+      customerNote: quoteForm.customerNote,
     };
     if (quoteEditingId) {
       setData((current) => ({
@@ -3443,6 +3451,7 @@ function App() {
       clientVisible: deliveryNoteForm.clientVisible,
       lineItems: deliveryNoteForm.lineItems,
       notes: deliveryNoteForm.notes,
+      customerNote: deliveryNoteForm.customerNote,
       parentInvoiceId: deliveryNoteForm.parentInvoiceId,
       parentInvoiceNumber: deliveryNoteForm.parentInvoiceId
         ? (data.invoices.find((inv) => inv.id === deliveryNoteForm.parentInvoiceId)?.invoiceNumber ?? '')
@@ -3561,6 +3570,7 @@ function App() {
       termsText: invoiceForm.termsText,
       notes: invoiceForm.notes,
       footerNotes: invoiceForm.footerNotes,
+      customerNote: invoiceForm.customerNote,
       status: invoiceForm.status,
       currency: invoiceForm.currency,
       exchangeRate: getRate(invoiceForm.currency, data.appSettings.currencyConfig),
@@ -7249,6 +7259,7 @@ function App() {
       totalQuote: String(quote.totalQuote),
       status: quote.status,
       notes: quote.notes,
+      customerNote: quote.customerNote ?? '',
     });
     setView('quotes');
   }
@@ -7577,6 +7588,7 @@ function App() {
       clientVisible: note.clientVisible,
       lineItems: note.lineItems,
       notes: note.notes,
+      customerNote: note.customerNote ?? '',
       parentInvoiceId: note.parentInvoiceId || '',
       receiptMode: note.receiptMode || 'Pending',
       signedByName: note.signedByName || '',
@@ -7652,6 +7664,7 @@ function App() {
       termsText: invoice.termsText,
       notes: invoice.notes,
       footerNotes: invoice.footerNotes,
+      customerNote: invoice.customerNote ?? '',
       status: invoice.status,
       currency: invoice.currency,
       lineItems: invoice.lineItems.map((line) => ({
@@ -9531,6 +9544,7 @@ function App() {
         quote={quotePrintTarget}
         client={data.clients.find((c) => c.id === quotePrintTarget.clientId)}
         company={data.appSettings.company}
+        termsAndConditions={data.appSettings.templates.termsAndConditions}
         onClose={() => setQuotePrintTarget(null)}
       />
     ) : null}
@@ -9552,6 +9566,7 @@ function App() {
         }
         allDeliveryNotes={data.deliveryNotes}
         company={data.appSettings.company}
+        termsAndConditions={data.appSettings.templates.termsAndConditions}
         onClose={() => setDeliveryNotePrintTarget(null)}
       />
     ) : null}

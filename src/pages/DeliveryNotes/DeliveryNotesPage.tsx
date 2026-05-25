@@ -345,8 +345,12 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
             Client can view this delivery note
           </label>
           <label className="full-span">
-            <span>Notes</span>
+            <span>Notes (internal)</span>
             <textarea value={deliveryNoteForm.notes} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, notes: event.target.value })} />
+          </label>
+          <label className="full-span">
+            <span>Customer note (prints on delivery note)</span>
+            <textarea value={deliveryNoteForm.customerNote} onChange={(event) => setDeliveryNoteForm({ ...deliveryNoteForm, customerNote: event.target.value })} placeholder="Defaults from Settings → Templates; edit for this delivery note." />
           </label>
         </div>
       ),
