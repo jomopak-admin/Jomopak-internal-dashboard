@@ -7,6 +7,7 @@ interface AppLayoutProps {
   navItems: Array<{ key: View; label: string }>;
   profile: UserProfile | null;
   onSignOut: () => void;
+  onChangePassword: () => void;
   topbarAction?: ReactNode;
   topbarSummary?: ReactNode;
   /** Opens the global search / command palette. Rendered next to the menu
@@ -42,10 +43,14 @@ function readStoredOpenGroups(): Set<string> | null {
   }
 }
 
-export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, topbarAction, topbarSummary, onOpenSearch, children }: AppLayoutProps) {
+export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, onChangePassword, topbarAction, topbarSummary, onOpenSearch, children }: AppLayoutProps) {
   const accountName = profile?.fullName || profile?.email || 'Signed in';
+  const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
   const currentItem = navItems.find((item) => item.key === view);
+  const canOpenSettings = navItems.some((item) => item.key === 'settings');
+  const canOpenPermissions = navItems.some((item) => item.key === 'permissions');
+  const [accountOpen, setAccountOpen] = useState(false);
   // Mobile drawer state — sidebar is hidden by default on narrow viewports
   // and toggled open via the hamburger in the topbar. On desktop the
   // drawer state is ignored (CSS keeps the sidebar always visible).
@@ -54,6 +59,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
   // open over the page they just jumped to.
   useEffect(() => {
     setDrawerOpen(false);
+    setAccountOpen(false);
   }, [view]);
   const groupedNav = useMemo(
     () =>
@@ -197,12 +203,46 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, to
           </div>
           <div className="topbar-actions">
             {topbarAction}
-            <div className="topbar-account">
-              <div>
-                <strong>{accountName}</strong>
-                <p className="muted">{accountRole}</p>
-              </div>
-              <button className="ghost-button" onClick={onSignOut}>Sign Out</button>
+            <div className="account-menu">
+              <button
+                type="button"
+                className="account-menu-trigger"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen((open) => !open)}
+              >
+                <span className="account-avatar account-avatar-sm" aria-hidden="true">{accountName.charAt(0).toUpperCase()}</span>
+                <span className="account-menu-id">
+                  <strong>{accountName}</strong>
+                  <span className="muted">{accountRole}</span>
+                </span>
+                <span className="account-menu-caret" aria-hidden="true">{accountOpen ? '▴' : '▾'}</span>
+              </button>
+              {accountOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="account-menu-backdrop"
+                    aria-label="Close account menu"
+                    onClick={() => setAccountOpen(false)}
+                  />
+                  <div className="account-menu-dropdown" role="menu">
+                    <div className="account-menu-header">
+                      <strong>{accountName}</strong>
+                      <span>{accountEmail}</span>
+                      <small>{accountRole}</small>
+                    </div>
+                    {canOpenSettings ? (
+                      <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onViewChange('settings'); }}>Account &amp; settings</button>
+                    ) : null}
+                    {canOpenPermissions ? (
+                      <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onViewChange('permissions'); }}>Permissions</button>
+                    ) : null}
+                    <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onChangePassword(); }}>Change password</button>
+                    <button type="button" role="menuitem" className="account-menu-item account-menu-item-danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </header>

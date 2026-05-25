@@ -1589,6 +1589,23 @@ function App() {
     await supabase.auth.signOut();
   }
 
+  async function handleChangePassword() {
+    const newPassword = window.prompt('Enter a new password (at least 6 characters):');
+    if (newPassword === null) return; // cancelled
+    if (newPassword.length < 6) {
+      window.alert('Password must be at least 6 characters.');
+      return;
+    }
+    const confirmPassword = window.prompt('Re-enter the new password to confirm:');
+    if (confirmPassword === null) return;
+    if (confirmPassword !== newPassword) {
+      window.alert('The passwords did not match — nothing was changed.');
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    window.alert(error ? `Could not change password: ${error.message}` : 'Your password has been updated.');
+  }
+
   const monthOptions = useMemo(() => getMonthOptions(data), [data]);
   const suppliersById = useMemo(() => new Map(data.suppliers.map((supplier) => [supplier.id, supplier])), [data.suppliers]);
   const machinesById = useMemo(() => new Map(data.machines.map((machine) => [machine.id, machine])), [data.machines]);
@@ -7806,6 +7823,7 @@ function App() {
       navItems={navItems}
       profile={profile}
       onSignOut={handleSignOut}
+      onChangePassword={handleChangePassword}
       topbarAction={topbarAction}
       topbarSummary={topbarSummary}
       onOpenSearch={() => setPaletteOpen(true)}
