@@ -50,7 +50,7 @@ export function OsConnectorPage({ data, connectorConfig, today, onSaveConfig, on
     try {
       onSaveConfig(draft);
       await onPublishNow();
-      setMessage('Published. Aman OS will see the latest tiles on its next read.');
+      setMessage('Published. Connected systems will see the latest data on their next read.');
     } catch (e) {
       setMessage(`Publish failed: ${String(e)}`);
     } finally {
@@ -67,18 +67,18 @@ export function OsConnectorPage({ data, connectorConfig, today, onSaveConfig, on
   return (
     <div className="page-stack">
       <SectionTitle
-        title="Aman OS Connector"
-        subtitle="Control exactly what this dashboard shares with your Aman OS. Curated metrics only — read-only, never raw data."
+        title="API Access"
+        subtitle="A secure read-only API for connecting this dashboard to other systems — the Aman OS, another dashboard, or your website. You control exactly what's shared; curated metrics only, never raw data."
       />
 
       <section className="card accounting-toolbar">
-        <label className="accounting-check"><input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} /><span>Connector enabled</span></label>
+        <label className="accounting-check"><input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} /><span>API enabled</span></label>
         <span className="muted" style={{ alignSelf: 'center' }}>{publishedCount} of {tiles.length} tiles published · last published {connectorConfig.lastPublishedAt ? new Date(connectorConfig.lastPublishedAt).toLocaleString('en-ZA') : 'never'}</span>
       </section>
 
       <section className="card">
-        <h3>Read-only endpoint (for Aman OS)</h3>
-        <p className="muted" style={{ marginTop: 0 }}>Aman OS reads this with a <code>GET</code> and header <code>x-connector-key: &lt;your key&gt;</code>. The key is the <code>CONNECTOR_API_KEY</code> function secret. It cannot write anything back.</p>
+        <h3>Read-only API endpoint</h3>
+        <p className="muted" style={{ marginTop: 0 }}>Any system you authorise reads this with a <code>GET</code> and header <code>x-connector-key: &lt;your key&gt;</code>. The key is the <code>CONNECTOR_API_KEY</code> function secret. It cannot write anything back.</p>
         <code style={{ display: 'block', padding: '0.6rem 0.8rem', background: 'rgba(16,34,26,0.05)', borderRadius: 8, wordBreak: 'break-all', fontSize: '0.82rem' }}>{endpoint}</code>
       </section>
 

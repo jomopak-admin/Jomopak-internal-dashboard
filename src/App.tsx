@@ -1108,6 +1108,7 @@ const createInitialPricingTierForm = (): PricingTierFormState => ({
 const createInitialClientForm = (): ClientFormState => ({
   name: '',
   companyName: '',
+  accountManagerName: '',
   code: '',
   pricingTierId: '',
   brandingDefault: false,
@@ -1210,6 +1211,16 @@ function App() {
   const { session, profile, loading: authLoading, recoveryMode, clearRecoveryMode } = useAuth();
   const { profiles, loading: profilesLoading, saveProfile, createUser } = useProfiles(profile?.role === 'admin');
   const { data, setData, loading } = useProductionData(!authLoading && Boolean(session));
+  // Internal staff names — used for client account-manager + handover dropdowns.
+  const staffOptions = useMemo(
+    () => Array.from(new Set(
+      profiles
+        .filter((p) => p.accountType === 'internal')
+        .map((p) => p.fullName || p.email)
+        .filter((n): n is string => Boolean(n)),
+    )).sort((a, b) => a.localeCompare(b)),
+    [profiles],
+  );
   const [view, setView] = useState<View>('dashboard');
   const [dashboardMonth, setDashboardMonth] = useState(currentMonth);
 
@@ -3158,6 +3169,22 @@ function App() {
           assignedMachineId: newMachineId,
         };
       }),
+    }));
+  }
+
+  /** Hand over a leaving rep's selected clients, open leads and open jobs to a
+   *  new owner in one shot (phase 35). */
+  function handleHandoverOwner(payload: { toName: string; clientIds: string[]; leadIds: string[]; jobIds: string[] }) {
+    const { toName } = payload;
+    const cs = new Set(payload.clientIds);
+    const ls = new Set(payload.leadIds);
+    const js = new Set(payload.jobIds);
+    if (!toName || (!cs.size && !ls.size && !js.size)) return;
+    setData((current) => ({
+      ...current,
+      clients: current.clients.map((c) => (cs.has(c.id) ? { ...c, accountManagerName: toName } : c)),
+      leads: current.leads.map((l) => (ls.has(l.id) ? { ...l, assignedTo: toName } : l)),
+      jobs: current.jobs.map((j) => (js.has(j.id) ? { ...j, salesOwnerName: toName } : j)),
     }));
   }
 
@@ -5204,6 +5231,7 @@ function App() {
     const payload = {
       name: clientForm.name,
       companyName: clientForm.companyName,
+      accountManagerName: clientForm.accountManagerName,
       code: clientForm.code,
       pricingTierId: clientForm.pricingTierId,
       pricingTierName: tier?.name ?? '',
@@ -7369,6 +7397,7 @@ function App() {
     setClientForm({
       name: client.name,
       companyName: client.companyName ?? '',
+      accountManagerName: client.accountManagerName ?? '',
       code: client.code,
       pricingTierId: client.pricingTierId,
       brandingDefault: client.brandingDefault,
@@ -8042,6 +8071,11 @@ function App() {
           loading={profilesLoading}
           onSave={saveProfile}
           onCreateUser={createUser}
+          staffOptions={staffOptions}
+          clients={data.clients}
+          leads={data.leads}
+          jobs={data.jobs}
+          onHandover={handleHandoverOwner}
         />
       )}
 
@@ -8306,6 +8340,7 @@ function App() {
 
       {view === 'clients' && (
         <ClientsPage
+          staffOptions={staffOptions}
           pricingTiers={data.pricingTiers}
           invoices={data.invoices}
           deliveryNotes={data.deliveryNotes}

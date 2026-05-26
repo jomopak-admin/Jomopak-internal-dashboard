@@ -100,7 +100,7 @@ export const VIEW_LABELS: Record<View, string> = {
   leads: 'Leads',
   permissions: 'Permissions',
   settings: 'Settings',
-  osConnector: 'Aman OS Connector',
+  osConnector: 'API Access',
   suppliers: 'Suppliers',
   quotes: 'Quotes & Estimates',
   artwork: 'Artwork',
@@ -1093,6 +1093,9 @@ export interface Client {
   /** Server-side update timestamp. */
   rowUpdatedAt?: string;
   companyName: string;
+  /** Phase 35 — staff member who owns/manages this client (display name).
+   *  Drives the rep-handover tool. Optional so legacy records load. */
+  accountManagerName?: string;
   code: string;
   pricingTierId: string;
   pricingTierName: string;
@@ -4913,6 +4916,7 @@ export interface CalculatorState {
 export interface ClientFormState {
   name: string;
   companyName: string;
+  accountManagerName: string;
   code: string;
   pricingTierId: string;
   brandingDefault: boolean;

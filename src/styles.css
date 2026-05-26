@@ -2616,6 +2616,17 @@ th {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 6px 14px;
 }
+.perm-info {
+  margin-left: 4px;
+  color: rgba(16, 34, 26, 0.4);
+  font-size: 0.78rem;
+  cursor: help;
+}
+.perm-info:hover,
+.perm-info:focus {
+  color: var(--jp-orange);
+  outline: none;
+}
 
 /* Settings → Templates: per-document groups */
 .settings-template-groups {

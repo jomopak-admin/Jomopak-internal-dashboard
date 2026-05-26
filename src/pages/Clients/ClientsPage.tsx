@@ -10,6 +10,7 @@ import { formatNumber } from '../../utils/calculations';
 import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
 
 interface ClientsPageProps {
+  staffOptions: string[];
   pricingTiers: PricingTier[];
   invoices: Invoice[];
   deliveryNotes: DeliveryNote[];
@@ -29,6 +30,7 @@ interface ClientsPageProps {
 }
 
 export function ClientsPage({
+  staffOptions,
   pricingTiers,
   invoices,
   deliveryNotes,
@@ -136,6 +138,15 @@ export function ClientsPage({
             <input value={clientForm.name} onChange={(event) => setClientForm({ ...clientForm, name: event.target.value })} />
           </label>
           <label><span>Company name</span><input value={clientForm.companyName} onChange={(event) => setClientForm({ ...clientForm, companyName: event.target.value })} /></label>
+          <label><span>Account manager</span>
+            <select value={clientForm.accountManagerName} onChange={(event) => setClientForm({ ...clientForm, accountManagerName: event.target.value })}>
+              <option value="">— Unassigned —</option>
+              {clientForm.accountManagerName && !staffOptions.includes(clientForm.accountManagerName) ? (
+                <option value={clientForm.accountManagerName}>{clientForm.accountManagerName}</option>
+              ) : null}
+              {staffOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
           <label><span>Code</span><input value={clientForm.code} onChange={(event) => setClientForm({ ...clientForm, code: event.target.value })} /></label>
           <label><span>Website</span><input value={clientForm.website} onChange={(event) => setClientForm({ ...clientForm, website: event.target.value })} /></label>
           <label><span>Title</span><input value={clientForm.title} onChange={(event) => setClientForm({ ...clientForm, title: event.target.value })} /></label>
