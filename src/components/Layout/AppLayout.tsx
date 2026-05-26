@@ -24,8 +24,8 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   { title: 'Payroll', views: ['payroll', 'employees'] },
-  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog'] },
-  { title: 'Admin', views: ['documentVault', 'osConnector', 'permissions', 'settings'] },
+  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'contaminationControl', 'toolBladeControl', 'visitorLog'] },
+  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';

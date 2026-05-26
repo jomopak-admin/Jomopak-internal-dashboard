@@ -44,6 +44,8 @@ import { PestControlPage } from './pages/Phase4/PestControlPage';
 import { ForeignObjectPage } from './pages/Phase4/ForeignObjectPage';
 import { ToolBladePage } from './pages/Phase4/ToolBladePage';
 import { VisitorLogPage } from './pages/Phase4/VisitorLogPage';
+import { VisitorKioskPage } from './pages/VisitorKiosk/VisitorKioskPage';
+import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
 import { DeliveryNotePrint } from './pages/DeliveryNotes/DeliveryNotePrint';
@@ -844,6 +846,8 @@ const createInitialPpeForm = (): PpeIssueFormState => ({
   returnDate: '',
   replacementDueDate: '',
   notes: '',
+  items: [],
+  employeeSignatureDataUrl: '',
 });
 
 const createInitialPestForm = (): PestControlFormState => ({
@@ -922,6 +926,9 @@ const createInitialVisitorForm = (): VisitorLogFormState => ({
   ppeIssued: '',
   enteredFoodContactArea: false,
   notes: '',
+  phoneNumber: '',
+  vehicleRegistration: '',
+  signatureDataUrl: '',
 });
 
 const createInitialHaccpForm = (): HaccpHazardFormState => ({
@@ -1556,9 +1563,18 @@ function App() {
   });
 
   const navItems = useMemo(
-    () => [...(profile?.permissions ?? [])]
-      .sort((left, right) => VIEW_ORDER.indexOf(left) - VIEW_ORDER.indexOf(right))
-      .map((permission) => ({ key: permission, label: VIEW_LABELS[permission] })),
+    () => {
+      const perms = [...(profile?.permissions ?? [])];
+      // Phase 38b: surface the combined Contamination Control nav entry for
+      // anyone with either underlying permission — they still go to the same
+      // wrapper page; the tabs inside gate by their actual access.
+      if ((perms.includes('foreignObjectControl') || perms.includes('pestControl')) && !perms.includes('contaminationControl')) {
+        perms.push('contaminationControl');
+      }
+      return perms
+        .sort((left, right) => VIEW_ORDER.indexOf(left) - VIEW_ORDER.indexOf(right))
+        .map((permission) => ({ key: permission, label: VIEW_LABELS[permission] }));
+    },
     [profile?.permissions],
   );
   const allowedViews = useMemo(() => new Set(navItems.map((item) => item.key)), [navItems]);
@@ -6810,11 +6826,18 @@ function App() {
   // ----- Phase 4: PPE issue -----
   function editPpe(r: PpeIssueRecord) {
     setPpeEditingId(r.id);
+    // If a record was saved with the new multi-item shape use that;
+    // otherwise wrap the legacy single-item fields as a one-line list.
+    const items = (r.items && r.items.length > 0)
+      ? r.items
+      : [{ type: r.itemType, description: r.itemDescription, quantity: r.quantity || 1 }];
     setPpeForm({
       staffName: r.staffName, staffRole: r.staffRole, itemType: r.itemType,
       itemDescription: r.itemDescription, quantity: String(r.quantity),
       issuedByName: r.issuedByName, issuedDate: r.issuedDate, status: r.status,
       returnDate: r.returnDate, replacementDueDate: r.replacementDueDate, notes: r.notes,
+      items,
+      employeeSignatureDataUrl: r.employeeSignatureDataUrl ?? '',
     });
     setView('ppeControl');
   }
@@ -6824,18 +6847,27 @@ function App() {
     setData((current) => {
       const today = getToday();
       const existingNumbers = current.ppeIssueRecords.map((r) => r.issueNumber);
+      // If the form has the new multi-item list, use it; the legacy singular
+      // fields are still populated from the first line so old code paths
+      // (reports, the list table) keep working.
+      const items = ppeForm.items.length > 0
+        ? ppeForm.items
+        : [{ type: ppeForm.itemType, description: ppeForm.itemDescription.trim(), quantity: Number(ppeForm.quantity || 1) }];
+      const first = items[0];
       const payload: Omit<PpeIssueRecord, 'id' | 'issueNumber' | 'createdAt'> = {
         staffName: ppeForm.staffName.trim(),
         staffRole: ppeForm.staffRole.trim(),
-        itemType: ppeForm.itemType,
-        itemDescription: ppeForm.itemDescription.trim(),
-        quantity: Number(ppeForm.quantity || 1),
+        itemType: first.type,
+        itemDescription: first.description,
+        quantity: first.quantity,
         issuedByName: ppeForm.issuedByName.trim(),
         issuedDate: ppeForm.issuedDate,
         status: ppeForm.status,
         returnDate: ppeForm.returnDate,
         replacementDueDate: ppeForm.replacementDueDate,
         notes: ppeForm.notes,
+        items,
+        employeeSignatureDataUrl: ppeForm.employeeSignatureDataUrl || undefined,
       };
       if (ppeEditingId) {
         return { ...current, ppeIssueRecords: current.ppeIssueRecords.map((r) => r.id === ppeEditingId ? { ...r, ...payload } : r) };
@@ -7001,6 +7033,9 @@ function App() {
       areasVisited: [...r.areasVisited], timeIn: r.timeIn, timeOut: r.timeOut,
       hygieneAcknowledged: r.hygieneAcknowledged, ppeIssued: r.ppeIssued,
       enteredFoodContactArea: r.enteredFoodContactArea, notes: r.notes,
+      phoneNumber: r.phoneNumber ?? '',
+      vehicleRegistration: r.vehicleRegistration ?? '',
+      signatureDataUrl: r.signatureDataUrl ?? '',
     });
     setView('visitorLog');
   }
@@ -7038,6 +7073,55 @@ function App() {
     });
     setVisitorMessage(visitorEditingId ? 'Visitor entry updated.' : 'Visitor logged.');
     resetVisitorEditor();
+  }
+
+  // ----- Phase 37: Reception kiosk -----
+  function handleKioskCheckIn(payload: Omit<VisitorLogEntry, 'id' | 'createdAt' | 'visitNumber'>) {
+    setData((current) => {
+      const visitNumber = generateCode('VIS', current.visitorLogEntries.map((r) => r.visitNumber), payload.visitDate);
+      const newRec: VisitorLogEntry = {
+        id: `vis-${Date.now().toString(36)}`,
+        visitNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, visitorLogEntries: [newRec, ...current.visitorLogEntries] };
+    });
+  }
+  function handleKioskSignOut(id: string, signatureDataUrl: string) {
+    const timeStr = new Date().toTimeString().slice(0, 5);
+    setData((current) => ({
+      ...current,
+      visitorLogEntries: current.visitorLogEntries.map((v) =>
+        v.id === id
+          ? {
+              ...v,
+              timeOut: v.timeOut || timeStr,
+              signatureDataUrl: signatureDataUrl || v.signatureDataUrl,
+              kioskCheckout: true,
+            }
+          : v,
+      ),
+    }));
+  }
+  /** Reception confirms a kiosk check-in: assigns PPE + allowed areas and stamps verification. */
+  function handleVerifyVisitor(id: string, payload: { ppeIssued: string; areasVisited: FactoryArea[] }) {
+    const actor = profile?.fullName || profile?.email || 'Reception';
+    setData((current) => ({
+      ...current,
+      visitorLogEntries: current.visitorLogEntries.map((v) =>
+        v.id === id
+          ? {
+              ...v,
+              ppeIssued: payload.ppeIssued,
+              areasVisited: payload.areasVisited,
+              staffVerified: true,
+              verifiedByName: actor,
+              verifiedAt: new Date().toISOString(),
+            }
+          : v,
+      ),
+    }));
   }
 
   // ----- Phase 5.6: SOPs -----
@@ -7860,6 +7944,15 @@ function App() {
       </div>
     ) : !session || recoveryMode ? (
       <LoginPage recoveryMode={recoveryMode} onRecoveryComplete={clearRecoveryMode} />
+    ) : view === 'visitorKiosk' ? (
+      <VisitorKioskPage
+        visitors={data.visitorLogEntries}
+        staffOptions={staffOptions}
+        company={data.appSettings.company}
+        onCheckIn={handleKioskCheckIn}
+        onSignOut={handleKioskSignOut}
+        onExitKiosk={() => setView('dashboard')}
+      />
     ) : (
     <AppLayout
       view={view}
@@ -8579,7 +8672,12 @@ function App() {
           documents={data.documents}
           suppliers={data.suppliers}
           clients={data.clients}
+          invoices={data.invoices}
+          jobs={data.jobs}
+          quoteEstimates={data.quoteEstimates}
+          deliveryNotes={data.deliveryNotes}
           uploaderName={profile?.fullName || profile?.email || ''}
+          currentUserRole={profile?.role || 'ops'}
           onUploadFile={(file, docId) => uploadDocumentFile(file, docId)}
           onSave={(doc: DocumentRecord) => {
             setData((current) => {
@@ -9333,6 +9431,41 @@ function App() {
         />
       )}
 
+      {view === 'contaminationControl' && (
+        <ContaminationControlPage
+          canForeign={allowedViews.has('foreignObjectControl')}
+          canPest={allowedViews.has('pestControl')}
+          foreignContent={
+            <ForeignObjectPage
+              records={data.foreignObjectRecords}
+              filters={foreignObjectFilters}
+              setFilters={setForeignObjectFilters}
+              form={foreignObjectForm}
+              setForm={setForeignObjectForm}
+              editingId={foreignObjectEditingId}
+              message={foreignObjectMessage}
+              onSave={handleSaveForeignObject}
+              onReset={resetForeignObjectEditor}
+              onEdit={editForeignObject}
+            />
+          }
+          pestContent={
+            <PestControlPage
+              records={data.pestControlRecords}
+              filters={pestFilters}
+              setFilters={setPestFilters}
+              form={pestForm}
+              setForm={setPestForm}
+              editingId={pestEditingId}
+              message={pestMessage}
+              onSave={handleSavePest}
+              onReset={resetPestEditor}
+              onEdit={editPest}
+            />
+          }
+        />
+      )}
+
       {view === 'toolBladeControl' && (
         <ToolBladePage
           records={data.toolBladeRecords}
@@ -9360,6 +9493,7 @@ function App() {
           onSave={handleSaveVisitor}
           onReset={resetVisitorEditor}
           onEdit={editVisitor}
+          onVerify={handleVerifyVisitor}
         />
       )}
 

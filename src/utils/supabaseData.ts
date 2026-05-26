@@ -1419,6 +1419,8 @@ function mapPpeIssueRecord(row: any): any {
     returnDate: row.return_date ?? '',
     replacementDueDate: row.replacement_due_date ?? '',
     notes: row.notes ?? '',
+    items: Array.isArray(row.items) ? row.items : undefined,
+    employeeSignatureDataUrl: row.employee_signature_data_url ?? undefined,
   };
 }
 
@@ -1501,6 +1503,14 @@ function mapVisitorLogEntry(row: any): any {
     ppeIssued: row.ppe_issued ?? '',
     enteredFoodContactArea: Boolean(row.entered_food_contact_area),
     notes: row.notes ?? '',
+    phoneNumber: row.phone_number ?? undefined,
+    vehicleRegistration: row.vehicle_registration ?? undefined,
+    signatureDataUrl: row.signature_data_url ?? undefined,
+    kioskCheckin: row.kiosk_checkin ?? undefined,
+    kioskCheckout: row.kiosk_checkout ?? undefined,
+    staffVerified: row.staff_verified ?? undefined,
+    verifiedByName: row.verified_by_name ?? undefined,
+    verifiedAt: row.verified_at ?? undefined,
   };
 }
 
@@ -1624,6 +1634,11 @@ function mapDocumentRecord(row: any): any {
     expiryDate: row.expiry_date ?? '',
     uploadedByName: row.uploaded_by_name ?? '',
     notes: row.notes ?? '',
+    linkedInvoiceId: row.linked_invoice_id ?? undefined,
+    linkedJobId: row.linked_job_id ?? undefined,
+    linkedQuoteId: row.linked_quote_id ?? undefined,
+    linkedDeliveryNoteId: row.linked_delivery_note_id ?? undefined,
+    visibleToRoles: Array.isArray(row.visible_to_roles) ? row.visible_to_roles : undefined,
   };
 }
 
@@ -3028,6 +3043,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       return_date: r.returnDate || null,
       replacement_due_date: r.replacementDueDate || null,
       notes: r.notes,
+      items: r.items ?? null,
+      employee_signature_data_url: r.employeeSignatureDataUrl || null,
     }))),
     safeUpsert('pest_control_records', data.pestControlRecords.map((r) => ({
       id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
@@ -3074,6 +3091,14 @@ export async function syncAppData(data: AppData): Promise<void> {
       ppe_issued: r.ppeIssued,
       entered_food_contact_area: r.enteredFoodContactArea,
       notes: r.notes,
+      phone_number: r.phoneNumber || null,
+      vehicle_registration: r.vehicleRegistration || null,
+      signature_data_url: r.signatureDataUrl || null,
+      kiosk_checkin: r.kioskCheckin ?? false,
+      kiosk_checkout: r.kioskCheckout ?? false,
+      staff_verified: r.staffVerified ?? false,
+      verified_by_name: r.verifiedByName || null,
+      verified_at: r.verifiedAt || null,
     }))),
     // Phase 17 — Driver POD + Invoice Inbox upserts.
     // We push only rows that have already been uploaded (signature lives in
@@ -3158,6 +3183,11 @@ export async function syncAppData(data: AppData): Promise<void> {
       expiry_date: d.expiryDate || '',
       uploaded_by_name: d.uploadedByName || '',
       notes: d.notes || '',
+      linked_invoice_id: d.linkedInvoiceId || null,
+      linked_job_id: d.linkedJobId || null,
+      linked_quote_id: d.linkedQuoteId || null,
+      linked_delivery_note_id: d.linkedDeliveryNoteId || null,
+      visible_to_roles: d.visibleToRoles ?? null,
     }))),
     safeUpsert('invoice_inbox_items', data.invoiceInboxItems.map((r) => ({
       id: r.id,

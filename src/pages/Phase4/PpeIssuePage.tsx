@@ -9,10 +9,12 @@ import { useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
+import { SignaturePad } from '../../components/SignaturePad';
 import {
   PPE_ITEM_TYPES,
   PpeIssueFilters,
   PpeIssueFormState,
+  PpeIssueLineItem,
   PpeIssueRecord,
   PpeIssueStatus,
   PpeItemType,
@@ -53,23 +55,71 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
     return { total: records.length, active, lost, damaged };
   }, [records]);
 
+  // Multi-item helpers (phase 39) — tick a PPE type to add it to the issue,
+  // then enter quantity + description per item. Defaults to qty 1.
+  const itemForType = (t: PpeItemType): PpeIssueLineItem | undefined => form.items.find((i) => i.type === t);
+  function toggleItem(t: PpeItemType) {
+    const next = itemForType(t)
+      ? form.items.filter((i) => i.type !== t)
+      : [...form.items, { type: t, description: '', quantity: 1 }];
+    setForm({ ...form, items: next });
+  }
+  function updateItem(t: PpeItemType, patch: Partial<PpeIssueLineItem>) {
+    setForm({ ...form, items: form.items.map((i) => (i.type === t ? { ...i, ...patch } : i)) });
+  }
+
   const sections: FormWizardSection[] = [{
     key: 'issue', title: 'PPE issue',
     missingRequired: [
       ...(form.staffName.trim() ? [] : ['Staff name']),
       ...(form.issuedDate ? [] : ['Issue date']),
+      ...(form.items.length > 0 ? [] : ['At least one PPE item']),
     ],
     body: (
       <div className="form-grid">
         <label><span>Staff name <RequiredMarker /></span><input value={form.staffName} onChange={(e) => setForm({ ...form, staffName: e.target.value })} /></label>
         <label><span>Role</span><input value={form.staffRole} onChange={(e) => setForm({ ...form, staffRole: e.target.value })} /></label>
-        <label><span>Item type</span>
-          <select value={form.itemType} onChange={(e) => setForm({ ...form, itemType: e.target.value as PpeItemType })}>
-            {PPE_ITEM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
-        <label><span>Quantity</span><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
-        <label className="full-span"><span>Item description / size</span><input value={form.itemDescription} onChange={(e) => setForm({ ...form, itemDescription: e.target.value })} placeholder="e.g. Size L nitrile gloves, blue" /></label>
+
+        <div className="full-span">
+          <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>
+            PPE items issued <RequiredMarker /> <span className="muted" style={{ fontWeight: 400 }}>· tick what you handed over, adjust qty / size as needed</span>
+          </span>
+          <div className="ppe-issue-rows">
+            {PPE_ITEM_TYPES.map((t) => {
+              const current = itemForType(t);
+              const ticked = Boolean(current);
+              return (
+                <div key={t} className={`ppe-issue-row ${ticked ? 'is-active' : ''}`}>
+                  <label className="ppe-issue-tick">
+                    <input type="checkbox" checked={ticked} onChange={() => toggleItem(t)} />
+                    <span>{t}</span>
+                  </label>
+                  {ticked ? (
+                    <>
+                      <input
+                        type="number"
+                        min="1"
+                        className="ppe-issue-qty"
+                        value={current!.quantity}
+                        onChange={(e) => updateItem(t, { quantity: Number(e.target.value) || 1 })}
+                        aria-label={`${t} quantity`}
+                      />
+                      <input
+                        type="text"
+                        className="ppe-issue-desc"
+                        value={current!.description}
+                        onChange={(e) => updateItem(t, { description: e.target.value })}
+                        placeholder="Size / colour / brand (optional)"
+                        aria-label={`${t} description`}
+                      />
+                    </>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <label><span>Issued by</span><input value={form.issuedByName} onChange={(e) => setForm({ ...form, issuedByName: e.target.value })} /></label>
         <label><span>Issue date <RequiredMarker /></span><input type="date" value={form.issuedDate} onChange={(e) => setForm({ ...form, issuedDate: e.target.value })} /></label>
         <label><span>Status</span>
@@ -80,6 +130,14 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
         <label><span>Replacement due</span><input type="date" value={form.replacementDueDate} onChange={(e) => setForm({ ...form, replacementDueDate: e.target.value })} /></label>
         <label><span>Return date</span><input type="date" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></label>
         <label className="full-span"><span>Notes</span><textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+
+        <div className="full-span">
+          <SignaturePad
+            onChange={(d) => setForm({ ...form, employeeSignatureDataUrl: d })}
+            label="Employee signature (acknowledges receipt of the items above)"
+            height={160}
+          />
+        </div>
       </div>
     ),
   }];
@@ -132,18 +190,28 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
               <table>
                 <thead><tr><th>#</th><th>Staff</th><th>Item</th><th>Qty</th><th>Issued</th><th>Status</th><th>Replacement due</th><th>Actions</th></tr></thead>
                 <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id}>
-                      <td><strong>{r.issueNumber}</strong></td>
-                      <td>{r.staffName}<div className="table-subtext">{r.staffRole}</div></td>
-                      <td>{r.itemType}{r.itemDescription ? <div className="table-subtext">{r.itemDescription}</div> : null}</td>
-                      <td>{r.quantity}</td>
-                      <td>{formatDate(r.issuedDate)}</td>
-                      <td><span className={r.status === 'Lost' || r.status === 'Damaged' ? 'badge badge-danger' : r.status === 'Issued' ? 'badge badge-success' : 'badge'}>{r.status}</span></td>
-                      <td>{r.replacementDueDate ? formatDate(r.replacementDueDate) : '—'}</td>
-                      <td><button className="table-button" onClick={() => { onEdit(r); setMode('form'); }}>Edit</button></td>
-                    </tr>
-                  ))}
+                  {filtered.map((r) => {
+                    const items = r.items && r.items.length > 0 ? r.items : [{ type: r.itemType, description: r.itemDescription, quantity: r.quantity }];
+                    const totalQty = items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+                    const itemSummary = items.length === 1
+                      ? `${items[0].type}${items[0].description ? ` · ${items[0].description}` : ''}`
+                      : `${items.length} items: ${items.map((i) => `${i.type}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`).join(', ')}`;
+                    return (
+                      <tr key={r.id}>
+                        <td><strong>{r.issueNumber}</strong></td>
+                        <td>{r.staffName}<div className="table-subtext">{r.staffRole}</div></td>
+                        <td>{itemSummary}</td>
+                        <td>{totalQty}</td>
+                        <td>{formatDate(r.issuedDate)}</td>
+                        <td>
+                          <span className={r.status === 'Lost' || r.status === 'Damaged' ? 'badge badge-danger' : r.status === 'Issued' ? 'badge badge-success' : 'badge'}>{r.status}</span>
+                          {r.employeeSignatureDataUrl ? <div className="table-subtext" style={{ color: 'var(--jp-orange)' }}>✓ Signed</div> : null}
+                        </td>
+                        <td>{r.replacementDueDate ? formatDate(r.replacementDueDate) : '—'}</td>
+                        <td><button className="table-button" onClick={() => { onEdit(r); setMode('form'); }}>Edit</button></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

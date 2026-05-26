@@ -36,8 +36,10 @@ export type View =
   | 'ppeControl'
   | 'pestControl'
   | 'foreignObjectControl'
+  | 'contaminationControl'
   | 'toolBladeControl'
   | 'visitorLog'
+  | 'visitorKiosk'
   | 'traceability'
   | 'complaints'
   | 'agedDebtors'
@@ -128,8 +130,10 @@ export const VIEW_LABELS: Record<View, string> = {
   ppeControl: 'PPE Issue & Control',
   pestControl: 'Pest Control Register',
   foreignObjectControl: 'Foreign Object Register',
+  contaminationControl: 'Contamination Control',
   toolBladeControl: 'Tools & Blade Control',
   visitorLog: 'Visitor & Contractor Log',
+  visitorKiosk: 'Reception Kiosk',
   traceability: 'Batch Traceability',
   complaints: 'Complaints & Recall',
   agedDebtors: 'Aged Debtors',
@@ -210,6 +214,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'foreignObjectControl',
     'toolBladeControl',
     'visitorLog',
+    'visitorKiosk',
     'traceability',
     'complaints',
     'agedDebtors',
@@ -2957,12 +2962,25 @@ export const PPE_ITEM_TYPES: PpeItemType[] = [
 
 export type PpeIssueStatus = 'Issued' | 'Returned' | 'Damaged' | 'Lost';
 
+/**
+ * Phase 39 — one line per PPE item in a multi-item issue. Lets a single
+ * record cover everything handed to a staff member at the same time
+ * (e.g. hairnet, gloves, hi-vis all on one signed slip).
+ */
+export interface PpeIssueLineItem {
+  type: PpeItemType;
+  description: string;
+  quantity: number;
+}
+
 export interface PpeIssueRecord {
   id: string;
   issueNumber: string;
   createdAt: string;
   staffName: string;
   staffRole: string;
+  /** Legacy single-item fields — still populated for back-compat. New records
+   *  also write the full set into `items`; reader code prefers items when present. */
   itemType: PpeItemType;
   itemDescription: string;
   quantity: number;
@@ -2973,6 +2991,10 @@ export interface PpeIssueRecord {
   /** When the PPE expires / needs replacement. */
   replacementDueDate: string;
   notes: string;
+  /** Phase 39 — multi-item issue. Empty/undefined for legacy single-item rows. */
+  items?: PpeIssueLineItem[];
+  /** Phase 39 — employee's on-screen signature acknowledging receipt. */
+  employeeSignatureDataUrl?: string;
 }
 
 export interface PpeIssueFormState {
@@ -2987,6 +3009,8 @@ export interface PpeIssueFormState {
   returnDate: string;
   replacementDueDate: string;
   notes: string;
+  items: PpeIssueLineItem[];
+  employeeSignatureDataUrl: string;
 }
 
 export interface PpeIssueFilters {
@@ -3195,6 +3219,18 @@ export interface VisitorLogEntry {
   /** Whether they entered any food-contact area. */
   enteredFoodContactArea: boolean;
   notes: string;
+  /** Phase 37 — captured at the reception kiosk. Optional so existing rows load. */
+  phoneNumber?: string;
+  vehicleRegistration?: string;
+  signatureDataUrl?: string;
+  /** True when the entry was created/closed via the reception kiosk (audit). */
+  kioskCheckin?: boolean;
+  kioskCheckout?: boolean;
+  /** Phase 38 — reception verifies kiosk check-ins (confirms details, assigns
+   *  PPE and allowed areas). Pending = not yet verified. */
+  staffVerified?: boolean;
+  verifiedByName?: string;
+  verifiedAt?: string;
 }
 
 export interface VisitorLogFormState {
@@ -3211,6 +3247,9 @@ export interface VisitorLogFormState {
   ppeIssued: string;
   enteredFoodContactArea: boolean;
   notes: string;
+  phoneNumber: string;
+  vehicleRegistration: string;
+  signatureDataUrl: string;
 }
 
 export interface VisitorLogFilters {
@@ -3999,9 +4038,10 @@ export interface AppSettingsFormState {
  * The file lives in Supabase Storage; the row holds metadata + an optional
  * expiry date so the notification bell can warn before a cert lapses.
  * ────────────────────────────────────────────────────────────────────────*/
-export type DocumentOwnerType = 'supplier' | 'client';
+export type DocumentOwnerType = 'supplier' | 'client' | 'internal';
 
 export type DocumentCategory =
+  // Compliance / on-file docs (client + supplier)
   | 'Certification'
   | 'FSC Certificate'
   | 'ISO Certificate'
@@ -4014,19 +4054,63 @@ export type DocumentCategory =
   | 'Signed Terms / Contract'
   | 'Price List'
   | 'Tax / VAT Certificate'
+  // Operational (mostly client-linked)
+  | 'Delivery Note'
+  | 'Credit Note'
+  | 'Signed POD'
+  | 'Proof of Payment'
+  | 'Invoice Copy'
+  | 'Quote Copy'
+  | 'Job Card'
+  // Internal company docs
+  | 'HR Document'
+  | 'Staff Handbook'
+  | 'Factory Policy'
+  | 'Health & Safety'
+  | 'Insurance'
+  | 'Lease / Property'
+  | 'License / Permit'
+  | 'Tax / Compliance'
+  | 'Accounting Record'
+  | 'Other Internal'
   | 'Other';
 
 export const DOCUMENT_CATEGORIES: DocumentCategory[] = [
   'Certification', 'FSC Certificate', 'ISO Certificate', 'Food Safety / HACCP',
   'MSDS', 'Credit Application', 'Stock-Level Agreement', 'ID Document',
-  'Bank Details', 'Signed Terms / Contract', 'Price List',
-  'Tax / VAT Certificate', 'Other',
+  'Bank Details', 'Signed Terms / Contract', 'Price List', 'Tax / VAT Certificate',
+  'Delivery Note', 'Credit Note', 'Signed POD', 'Proof of Payment',
+  'Invoice Copy', 'Quote Copy', 'Job Card',
+  'HR Document', 'Staff Handbook', 'Factory Policy', 'Health & Safety',
+  'Insurance', 'Lease / Property', 'License / Permit', 'Tax / Compliance',
+  'Accounting Record', 'Other Internal',
+  'Other',
 ];
+
+/**
+ * Sensible default roles that can VIEW each internal document category.
+ * 'admin' always implicitly sees everything; the page filters by these for
+ * non-admin roles. Empty = everyone sees it (used for factory-wide policies).
+ * Uploader can override per document.
+ */
+export const DOCUMENT_CATEGORY_ROLE_DEFAULTS: Partial<Record<DocumentCategory, UserRole[]>> = {
+  'HR Document': ['admin'],
+  'Staff Handbook': [],                                            // everyone
+  'Factory Policy': [],                                            // everyone
+  'Health & Safety': [],                                           // everyone
+  'Insurance': ['admin'],
+  'Lease / Property': ['admin'],
+  'License / Permit': ['admin', 'accounts'],
+  'Tax / Compliance': ['admin', 'accounts'],
+  'Accounting Record': ['admin', 'accounts'],
+  'Other Internal': ['admin'],
+};
 
 export interface DocumentRecord {
   id: string;
   createdAt: string;
   ownerType: DocumentOwnerType;
+  /** Empty when ownerType = 'internal'. */
   ownerId: string;
   ownerName: string;
   category: DocumentCategory;
@@ -4041,6 +4125,17 @@ export interface DocumentRecord {
   expiryDate: string;
   uploadedByName: string;
   notes: string;
+  /** Phase 36 — for client-owned operational docs, optionally tie to the
+   *  specific invoice / job / quote / delivery note so it shows on that record. */
+  linkedInvoiceId?: string;
+  linkedJobId?: string;
+  linkedQuoteId?: string;
+  linkedDeliveryNoteId?: string;
+  /** Phase 36 — role-based visibility for internal documents.
+   *  - Empty array = visible to everyone (e.g. factory policies).
+   *  - Non-empty = visible only to listed roles (+ admin always).
+   *  Ignored for client/supplier-owned docs (those are gated by the owner). */
+  visibleToRoles?: UserRole[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

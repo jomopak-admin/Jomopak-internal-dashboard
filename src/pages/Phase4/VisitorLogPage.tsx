@@ -31,13 +31,37 @@ interface VisitorLogPageProps {
   onSave: () => void;
   onReset: () => void;
   onEdit: (r: VisitorLogEntry) => void;
+  /** Phase 38 — reception confirms a kiosk check-in and assigns PPE + areas. */
+  onVerify?: (id: string, payload: { ppeIssued: string; areasVisited: FactoryArea[] }) => void;
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const VISITOR_TYPES: VisitorType[] = ['Customer', 'Supplier', 'Contractor', 'Auditor', 'Maintenance', 'Pest Control', 'Other'];
 
-export function VisitorLogPage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit }: VisitorLogPageProps) {
+export function VisitorLogPage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit, onVerify }: VisitorLogPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
+  const [verifyDrafts, setVerifyDrafts] = useState<Record<string, { ppeIssued: string; areasVisited: FactoryArea[] }>>({});
+
+  const pendingRecords = useMemo(
+    () => records.filter((r) => r.kioskCheckin && !r.staffVerified).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [records],
+  );
+  function draftFor(r: VisitorLogEntry) {
+    return verifyDrafts[r.id] ?? { ppeIssued: r.ppeIssued || '', areasVisited: r.areasVisited || [] };
+  }
+  function setDraft(id: string, patch: Partial<{ ppeIssued: string; areasVisited: FactoryArea[] }>) {
+    setVerifyDrafts((s) => ({ ...s, [id]: { ...(s[id] ?? { ppeIssued: '', areasVisited: [] }), ...patch } }));
+  }
+  function toggleVerifyArea(r: VisitorLogEntry, a: FactoryArea) {
+    const cur = draftFor(r).areasVisited;
+    setDraft(r.id, { areasVisited: cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a] });
+  }
+  function confirmVerify(r: VisitorLogEntry) {
+    if (!onVerify) return;
+    const d = draftFor(r);
+    onVerify(r.id, d);
+    setVerifyDrafts((s) => { const next = { ...s }; delete next[r.id]; return next; });
+  }
 
   const filtered = useMemo(() => records.filter((r) => {
     const q = filters.search.trim().toLowerCase();
@@ -138,6 +162,61 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
           saveLabel="Save entry"
         />
       ) : (
+        <>
+        {pendingRecords.length > 0 && onVerify ? (
+          <section className="card" style={{ borderLeft: '4px solid var(--jp-orange)' }}>
+            <SectionTitle
+              title={`Visitors waiting to be confirmed (${pendingRecords.length})`}
+              subtitle="These visitors signed themselves in at reception. Confirm the details and assign PPE before they head onto the floor."
+            />
+            <div className="page-stack">
+              {pendingRecords.map((r) => {
+                const d = draftFor(r);
+                return (
+                  <div key={r.id} className="card" style={{ background: 'rgba(255,140,60,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-start' }}>
+                      <div>
+                        <strong style={{ fontSize: '1.05rem' }}>{r.visitorName}</strong>
+                        <div className="muted" style={{ fontSize: '0.82rem' }}>
+                          {r.company || r.visitorType} · seeing <strong>{r.hostName || '—'}</strong> · {r.purpose || 'No purpose given'}
+                        </div>
+                        <div className="muted" style={{ fontSize: '0.76rem', marginTop: 2 }}>
+                          Signed in {r.timeIn || '—'}
+                          {r.phoneNumber ? ` · ☎ ${r.phoneNumber}` : ''}
+                          {r.vehicleRegistration ? ` · 🚚 ${r.vehicleRegistration}` : ''}
+                          {r.enteredFoodContactArea ? ' · ⚠ Food-contact area' : ''}
+                          {!r.hygieneAcknowledged ? ' · ⚠ No hygiene ack' : ''}
+                        </div>
+                      </div>
+                      <span className="badge badge-warning">Pending</span>
+                    </div>
+                    <div className="form-grid" style={{ marginTop: '0.6rem' }}>
+                      <label className="full-span">
+                        <span>PPE issued</span>
+                        <input value={d.ppeIssued} onChange={(e) => setDraft(r.id, { ppeIssued: e.target.value })} placeholder="Hairnet, hi-vis, ear plugs…" />
+                      </label>
+                      <div className="full-span">
+                        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>Areas they're allowed in</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {FACTORY_AREAS.map((a) => (
+                            <label key={a} className={`kiosk-chip ${d.areasVisited.includes(a) ? 'is-active' : ''}`}>
+                              <input type="checkbox" checked={d.areasVisited.includes(a)} onChange={() => toggleVerifyArea(r, a)} />
+                              <span>{a}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="accounting-actions" style={{ gap: '0.6rem', marginTop: '0.6rem' }}>
+                      <button className="ghost-button" type="button" onClick={() => { onEdit(r); setMode('form'); }}>Edit full record</button>
+                      <button className="primary-button" type="button" onClick={() => confirmVerify(r)}>Confirm &amp; let host know</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
         <section className="card">
           <SectionTitle title="Visitor & Contractor Log" subtitle={`${filtered.length} of ${records.length} entry(ies) shown`} />
           <div className="food-safety-stats">
@@ -185,6 +264,7 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
             </div>
           )}
         </section>
+        </>
       )}
     </>
   );

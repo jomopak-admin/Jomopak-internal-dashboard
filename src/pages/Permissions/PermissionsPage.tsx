@@ -209,8 +209,8 @@ const PERMISSION_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Materials & Stock', views: ['materials', 'shipments', 'invoiceInbox', 'finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'spares', 'products', 'suppliers', 'dispatch', 'driverPod', 'deliveryNotes'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   { title: 'Payroll', views: ['payroll', 'employees'] },
-  { title: 'Food Safety & Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog', 'chemicalRegister', 'foodSafeMaterials', 'cleaningLogs'] },
-  { title: 'Admin', views: ['documentVault', 'osConnector', 'permissions', 'settings'] },
+  { title: 'Food Safety & Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'contaminationControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog', 'chemicalRegister', 'foodSafeMaterials', 'cleaningLogs'] },
+  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'permissions', 'settings'] },
 ];
 
 /** Short, plain-English explanation of what each section is, shown as a hover
@@ -253,8 +253,10 @@ const VIEW_DESCRIPTIONS: Partial<Record<View, string>> = {
   ppeControl: 'PPE issue and control.',
   pestControl: 'Pest control register.',
   foreignObjectControl: 'Foreign object control register.',
+  contaminationControl: 'Umbrella menu item that opens the Foreign-object register and Pest control on one screen with tabs. Auto-shown to anyone with either underlying register; no need to tick separately.',
   toolBladeControl: 'Tools and blade control / accountability.',
   visitorLog: 'Visitor and contractor sign-in log.',
+  visitorKiosk: 'Full-screen reception kiosk for visitor self check-in / sign-out (lock an Android tablet to this).',
   traceability: 'Batch traceability and recall.',
   complaints: 'Customer complaints and recall handling.',
   agedDebtors: 'Aged debtors — who owes you and how overdue.',
