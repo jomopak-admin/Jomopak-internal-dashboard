@@ -24,6 +24,7 @@ interface CreateUserResultRow {
   username?: string | null;
   phone_number?: string | null;
   client_id?: string | null;
+  linked_employee_id?: string | null;
   account_type?: string | null;
   public_display_name?: string | null;
   public_display_role?: string | null;
@@ -85,6 +86,7 @@ export function useProfiles(enabled: boolean) {
             username: row.username ?? '',
             phoneNumber: row.phone_number ?? '',
             clientId: row.client_id ?? '',
+            linkedEmployeeId: row.linked_employee_id ?? undefined,
             accountType: row.account_type === 'client' ? 'client' : 'internal',
             publicDisplayName: row.public_display_name ?? row.full_name ?? '',
             publicDisplayRole: row.public_display_role ?? row.role ?? '',
@@ -118,6 +120,7 @@ export function useProfiles(enabled: boolean) {
       username: nextProfile.username || null,
       phone_number: nextProfile.phoneNumber || null,
       client_id: nextProfile.clientId || null,
+      linked_employee_id: nextProfile.linkedEmployeeId || null,
       account_type: nextProfile.accountType,
       public_display_name: nextProfile.publicDisplayName || null,
       public_display_role: nextProfile.publicDisplayRole || null,
@@ -127,6 +130,12 @@ export function useProfiles(enabled: boolean) {
     };
 
     let { error } = await supabase.from('profiles').upsert(payload);
+    if (error && String(error.message || '').includes('linked_employee_id')) {
+      // Column not migrated yet — retry without it. Phase 40 SQL adds it.
+      const { linked_employee_id: _drop, ...rest } = payload;
+      void _drop;
+      ({ error } = await supabase.from('profiles').upsert(rest));
+    }
     if (error && String(error.message || '').includes('dashboard_widgets')) {
       const overrides = loadDashboardWidgetOverrides();
       overrides[nextProfile.id] = nextProfile.dashboardWidgets;

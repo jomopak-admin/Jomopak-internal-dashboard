@@ -73,7 +73,9 @@ export type View =
   | 'waste'
   | 'paper'
   | 'dispatch'
-  | 'reports';
+  | 'reports'
+  | 'myPortal'
+  | 'notices';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts';
 export type DashboardWidget =
   | 'stats'
@@ -168,6 +170,8 @@ export const VIEW_LABELS: Record<View, string> = {
   paper: 'Paper Log',
   dispatch: 'Dispatch',
   reports: 'Reports',
+  myPortal: 'My Stuff',
+  notices: 'Notice Board',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -246,9 +250,12 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'financialStatements',
     'fixedAssets',
     'currencies',
+    'myPortal',
+    'notices',
   ],
   ops: [
     'dashboard',
+    'myPortal',
     'leads',
     'calculator',
     'workTicket',
@@ -302,6 +309,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   ],
   production: [
     'dashboard',
+    'myPortal',
     'jobs',
     'productionSchedule',
     'materialRequirements',
@@ -321,6 +329,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   ],
   sales: [
     'dashboard',
+    'myPortal',
     'salesDesk',
     'salesPipeline',
     'leadAnalytics',
@@ -419,10 +428,11 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
     ? permissions
     : ROLE_DEFAULT_VIEWS[role];
   const valid = source.filter((permission): permission is View => permission in VIEW_LABELS);
-  const required = new Set<View>(['dashboard']);
+  const required = new Set<View>(['dashboard', 'myPortal']);
   if (role === 'admin') {
     required.add('permissions');
     required.add('settings');
+    required.add('notices');
   }
   required.forEach((permission) => {
     if (!valid.includes(permission)) {
@@ -1088,6 +1098,9 @@ export interface UserProfile {
   role: UserRole;
   permissions: View[];
   dashboardWidgets: DashboardWidget[];
+  /** Phase 40 — staff portal. Links this login to an Employee row so the
+   *  staff member can see their own payslips, training, SOPs, and notices. */
+  linkedEmployeeId?: string;
 }
 
 export interface Client {
@@ -4646,7 +4659,38 @@ export interface AppData {
   materialOrderRequests: MaterialOrderRequest[];
   inventoryMovements: InventoryMovement[];
   biEvents: BiEvent[];
+  notices: Notice[];
   appSettings: AppSettings;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 40 — Staff portal: company notices.
+ *
+ * Admin posts a notice → every relevant staff member sees it on their "My
+ * Stuff" page until it expires or is taken down. Optional audienceRoles
+ * scopes who sees it (empty = everyone).
+ * ────────────────────────────────────────────────────────────────────────*/
+export interface Notice {
+  id: string;
+  title: string;
+  body: string;
+  /** When the notice was posted. */
+  postedAt: string;
+  postedByName: string;
+  /** Optional auto-expiry — after this date the notice drops off staff feeds. */
+  expiresAt?: string;
+  /** Empty = everyone; otherwise visible only to the listed roles (admin always sees). */
+  audienceRoles?: UserRole[];
+  /** Pinned notices sort to the top of My Stuff. */
+  pinned?: boolean;
+}
+
+export interface NoticeFormState {
+  title: string;
+  body: string;
+  expiresAt: string;
+  audienceRoles: UserRole[];
+  pinned: boolean;
 }
 
 export interface MaterialOrderRequest {

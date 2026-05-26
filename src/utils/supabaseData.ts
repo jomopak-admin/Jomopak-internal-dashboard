@@ -982,6 +982,25 @@ function mapBiEvent(row: any): BiEvent {
   };
 }
 
+/**
+ * Phase 40 — Notice board (staff portal).
+ * One row per posted notice. audience_roles is a jsonb array; null/empty
+ * means "everyone". expires_at is a date (no time) — past dates hide the
+ * notice on staff portal but keep the row so admin still sees it.
+ */
+function mapNotice(row: any): any {
+  return {
+    id: row.id,
+    title: row.title ?? '',
+    body: row.body ?? '',
+    postedAt: row.posted_at ?? row.created_at ?? '',
+    postedByName: row.posted_by_name ?? '',
+    expiresAt: row.expires_at ?? undefined,
+    audienceRoles: Array.isArray(row.audience_roles) ? row.audience_roles : undefined,
+    pinned: Boolean(row.pinned),
+  };
+}
+
 // ============================================================================
 // Phase 15 mappers — new tables added by schema-phase15-full-data-model.sql
 // ============================================================================
@@ -1899,6 +1918,7 @@ export async function fetchAppData(): Promise<AppData> {
     maintenanceWorkOrderRows,
     productPriceVersionRows,
     clientProductPriceRows,
+    noticeRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1975,6 +1995,8 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 33 — Standard-product pricing (versions + client-specific deals).
     safeSelect('product_price_versions'),
     safeSelect('client_product_prices'),
+    // Phase 40 — Staff-portal notice board.
+    safeSelect('notices'),
   ]);
 
   return {
@@ -2039,6 +2061,7 @@ export async function fetchAppData(): Promise<AppData> {
     materialOrderRequests: materialOrderRequests.map(mapMaterialOrderRequest),
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
     biEvents: biEvents.map(mapBiEvent),
+    notices: noticeRows.map(mapNotice),
     appSettings: mapAppSettings(appSettingsRow),
   };
 }
@@ -2384,6 +2407,17 @@ export async function syncAppData(data: AppData): Promise<void> {
       active: o.active,
       created_at: o.createdAt || null,
       created_by_name: o.createdByName || null,
+    }))),
+    // Phase 40 — notice board.
+    safeUpsert('notices', (data.notices ?? []).map((n) => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      posted_at: n.postedAt || null,
+      posted_by_name: n.postedByName || null,
+      expires_at: n.expiresAt || null,
+      audience_roles: n.audienceRoles ?? null,
+      pinned: !!n.pinned,
     }))),
     safeUpsert('jobs', data.jobs.map((job) => ({
       id: job.id,

@@ -17,6 +17,7 @@ interface AppLayoutProps {
 }
 
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
+  { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance'] },
@@ -25,7 +26,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   { title: 'Payroll', views: ['payroll', 'employees'] },
   { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'contaminationControl', 'toolBladeControl', 'visitorLog'] },
-  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'permissions', 'settings'] },
+  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'notices', 'permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';

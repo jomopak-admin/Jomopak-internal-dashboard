@@ -63,6 +63,7 @@ export function buildSeedData(): AppData {
     materialOrderRequests: [],
     inventoryMovements: [],
     biEvents: [],
+    notices: [],
     appSettings: DEFAULT_APP_SETTINGS,
   };
 }

@@ -45,6 +45,8 @@ import { ForeignObjectPage } from './pages/Phase4/ForeignObjectPage';
 import { ToolBladePage } from './pages/Phase4/ToolBladePage';
 import { VisitorLogPage } from './pages/Phase4/VisitorLogPage';
 import { VisitorKioskPage } from './pages/VisitorKiosk/VisitorKioskPage';
+import { NoticesPage } from './pages/Notices/NoticesPage';
+import { StaffPortalPage } from './pages/StaffPortal/StaffPortalPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -187,6 +189,8 @@ import {
   StaffTrainingRecord,
   StaffTrainingFilters,
   StaffTrainingFormState,
+  Notice,
+  NoticeFormState,
   PpeIssueRecord,
   PpeIssueFilters,
   PpeIssueFormState,
@@ -834,6 +838,14 @@ const createInitialTrainingForm = (): StaffTrainingFormState => ({
   notes: '',
 });
 
+const createInitialNoticeForm = (): NoticeFormState => ({
+  title: '',
+  body: '',
+  expiresAt: '',
+  audienceRoles: [],
+  pinned: false,
+});
+
 const createInitialPpeForm = (): PpeIssueFormState => ({
   staffName: '',
   staffRole: '',
@@ -1464,6 +1476,11 @@ function App() {
   const [ppeEditingId, setPpeEditingId] = useState<string | null>(null);
   const [ppeMessage, setPpeMessage] = useState('');
   const [ppeFilters, setPpeFilters] = useState<PpeIssueFilters>({ search: '', itemType: '', status: '' });
+
+  // Phase 40 — staff portal (notices)
+  const [noticeForm, setNoticeForm] = useState<NoticeFormState>(createInitialNoticeForm);
+  const [noticeEditingId, setNoticeEditingId] = useState<string | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState('');
 
   const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
   const [pestEditingId, setPestEditingId] = useState<string | null>(null);
@@ -6884,6 +6901,74 @@ function App() {
     resetPpeEditor();
   }
 
+  // ----- Phase 40: Notice board -----
+  function resetNoticeEditor() {
+    setNoticeForm(createInitialNoticeForm());
+    setNoticeEditingId(null);
+    setNoticeMessage('');
+  }
+  function editNotice(n: Notice) {
+    setNoticeEditingId(n.id);
+    setNoticeForm({
+      title: n.title,
+      body: n.body,
+      expiresAt: n.expiresAt ?? '',
+      audienceRoles: n.audienceRoles ?? [],
+      pinned: !!n.pinned,
+    });
+    setNoticeMessage('');
+  }
+  function handleSaveNotice() {
+    if (!noticeForm.title.trim()) { setNoticeMessage('Title is required.'); return; }
+    if (!noticeForm.body.trim()) { setNoticeMessage('Message is required.'); return; }
+    setData((current) => {
+      const payload: Omit<Notice, 'id' | 'postedAt' | 'postedByName'> = {
+        title: noticeForm.title.trim(),
+        body: noticeForm.body.trim(),
+        expiresAt: noticeForm.expiresAt || undefined,
+        audienceRoles: noticeForm.audienceRoles.length > 0 ? noticeForm.audienceRoles : undefined,
+        pinned: noticeForm.pinned,
+      };
+      const existing = current.notices ?? [];
+      if (noticeEditingId) {
+        return { ...current, notices: existing.map((n) => n.id === noticeEditingId ? { ...n, ...payload } : n) };
+      }
+      const newNotice: Notice = {
+        id: `notice-${Date.now().toString(36)}`,
+        postedAt: new Date().toISOString(),
+        postedByName: profile?.fullName || profile?.email || 'Admin',
+        ...payload,
+      };
+      return { ...current, notices: [newNotice, ...existing] };
+    });
+    setNoticeMessage(noticeEditingId ? 'Notice updated.' : 'Notice posted.');
+    resetNoticeEditor();
+  }
+  function handleDeleteNotice(id: string) {
+    setData((current) => ({ ...current, notices: (current.notices ?? []).filter((n) => n.id !== id) }));
+  }
+
+  // ----- Phase 40: Staff acknowledgements -----
+  function handleAcknowledgeTraining(trainingId: string) {
+    setData((current) => ({
+      ...current,
+      staffTrainingRecords: current.staffTrainingRecords.map((t) => t.id === trainingId
+        ? { ...t, acknowledged: true, acknowledgedDate: getToday() }
+        : t),
+    }));
+  }
+  function handleAcknowledgeSop(sopId: string, staffName: string) {
+    if (!staffName.trim()) return;
+    setData((current) => ({
+      ...current,
+      sopDocuments: current.sopDocuments.map((s) => {
+        if (s.id !== sopId) return s;
+        if (s.acknowledgements.some((a) => a.staffName.trim().toLowerCase() === staffName.trim().toLowerCase())) return s;
+        return { ...s, acknowledgements: [...s.acknowledgements, { staffName: staffName.trim(), acknowledgedDate: getToday() }] };
+      }),
+    }));
+  }
+
   // ----- Phase 4: Pest control -----
   function editPest(r: PestControlRecord) {
     setPestEditingId(r.id);
@@ -8168,6 +8253,7 @@ function App() {
           clients={data.clients}
           leads={data.leads}
           jobs={data.jobs}
+          employees={data.employees}
           onHandover={handleHandoverOwner}
         />
       )}
@@ -9383,6 +9469,34 @@ function App() {
           onSave={handleSaveTraining}
           onReset={resetTrainingEditor}
           onEdit={editTraining}
+        />
+      )}
+
+      {view === 'myPortal' && profile && (
+        <StaffPortalPage
+          profile={profile}
+          role={profile.role}
+          notices={data.notices ?? []}
+          trainingRecords={data.staffTrainingRecords}
+          sopDocuments={data.sopDocuments}
+          payrollRuns={data.payrollRuns}
+          employees={data.employees}
+          onAcknowledgeTraining={handleAcknowledgeTraining}
+          onAcknowledgeSop={handleAcknowledgeSop}
+        />
+      )}
+
+      {view === 'notices' && (
+        <NoticesPage
+          notices={data.notices ?? []}
+          form={noticeForm}
+          setForm={setNoticeForm}
+          editingId={noticeEditingId}
+          message={noticeMessage}
+          onSave={handleSaveNotice}
+          onReset={resetNoticeEditor}
+          onEdit={editNotice}
+          onDelete={handleDeleteNotice}
         />
       )}
 

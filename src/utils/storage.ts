@@ -937,6 +937,7 @@ export function loadAppData(): AppData {
       materialOrderRequests: (parsed.materialOrderRequests ?? []).map(normalizeMaterialOrderRequest),
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),
       biEvents: parsed.biEvents ?? [],
+      notices: (parsed.notices ?? []) as AppData['notices'],
       appSettings: normalizeAppSettings(parsed.appSettings),
     };
   } catch {

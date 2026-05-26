@@ -5,6 +5,7 @@ import {
   Client,
   DASHBOARD_WIDGET_LABELS,
   DashboardWidget,
+  Employee,
   JobCard,
   Lead,
   normalizeDashboardWidgets,
@@ -183,6 +184,7 @@ interface PermissionsPageProps {
   clients: Client[];
   leads: Lead[];
   jobs: JobCard[];
+  employees: Employee[];
   onHandover: (payload: HandoverPayload) => void;
 }
 
@@ -210,6 +212,7 @@ const PERMISSION_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   { title: 'Payroll', views: ['payroll', 'employees'] },
   { title: 'Food Safety & Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'contaminationControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog', 'chemicalRegister', 'foodSafeMaterials', 'cleaningLogs'] },
+  { title: 'Staff portal', views: ['myPortal', 'notices'] },
   { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'permissions', 'settings'] },
 ];
 
@@ -291,6 +294,8 @@ const VIEW_DESCRIPTIONS: Partial<Record<View, string>> = {
   paper: 'Paper usage log.',
   dispatch: 'Dispatch records.',
   reports: 'Reports and exports.',
+  myPortal: 'Personal staff portal — pinned notices, training to acknowledge, SOP sign-offs and a link to their payslips.',
+  notices: 'Post notices to the whole team or specific roles (admin only).',
 };
 
 function SectionAccessGrid({ selected, role, onChange }: {
@@ -352,12 +357,13 @@ function SectionAccessGrid({ selected, role, onChange }: {
   );
 }
 
-export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staffOptions, clients, leads, jobs, onHandover }: PermissionsPageProps) {
+export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staffOptions, clients, leads, jobs, employees, onHandover }: PermissionsPageProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draftUsername, setDraftUsername] = useState('');
   const [draftPhoneNumber, setDraftPhoneNumber] = useState('');
   const [draftClientId, setDraftClientId] = useState('');
+  const [draftLinkedEmployeeId, setDraftLinkedEmployeeId] = useState('');
   const [draftAccountType, setDraftAccountType] = useState<UserProfile['accountType']>('internal');
   const [draftPublicDisplayName, setDraftPublicDisplayName] = useState('');
   const [draftPublicDisplayRole, setDraftPublicDisplayRole] = useState('');
@@ -387,6 +393,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
         username: draftUsername,
         phoneNumber: draftPhoneNumber,
         clientId: draftClientId,
+        linkedEmployeeId: draftLinkedEmployeeId || undefined,
         accountType: draftAccountType,
         publicDisplayName: draftPublicDisplayName,
         publicDisplayRole: draftPublicDisplayRole,
@@ -408,6 +415,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
     setDraftUsername(profile.username);
     setDraftPhoneNumber(profile.phoneNumber);
     setDraftClientId(profile.clientId);
+    setDraftLinkedEmployeeId(profile.linkedEmployeeId ?? '');
     setDraftAccountType(profile.accountType);
     setDraftPublicDisplayName(profile.publicDisplayName);
     setDraftPublicDisplayRole(profile.publicDisplayRole);
@@ -645,6 +653,15 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
                   <label>
                     <span>Linked client ID</span>
                     <input value={draftClientId} onChange={(event) => setDraftClientId(event.target.value)} placeholder="Only for client accounts" />
+                  </label>
+                  <label>
+                    <span>Linked employee (for payslips)</span>
+                    <select value={draftLinkedEmployeeId} onChange={(event) => setDraftLinkedEmployeeId(event.target.value)}>
+                      <option value="">— not linked —</option>
+                      {employees.filter((e) => e.active !== false).map((e) => (
+                        <option key={e.id} value={e.id}>{e.firstName} {e.lastName}{e.jobTitle ? ` · ${e.jobTitle}` : ''}</option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     <span>Account type</span>
