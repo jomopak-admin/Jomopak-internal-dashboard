@@ -6063,6 +6063,20 @@ function App() {
     setView('spares');
   }
 
+  /**
+   * Mark a job as Completed in one click. Used from the Job Cards list and
+   * the Job Detail panel — gives ops a fast way to close out overdue or
+   * finished jobs without opening the full edit form.
+   */
+  function handleMarkJobComplete(job: JobCard) {
+    setData((current) => ({
+      ...current,
+      jobs: current.jobs.map((j) => j.id === job.id
+        ? { ...j, status: 'Completed' as const }
+        : j),
+    }));
+  }
+
   function duplicateJob(job: JobCard) {
     setJobEditingId(null);
     setJobForm({
@@ -8476,6 +8490,7 @@ function App() {
           cleaningLogs={data.cleaningLogs}
           onPrintFoodSafeCertificate={(job) => setFoodSafeCertificateJob(job)}
           onPrintJobCard={(job) => setJobCardPrintTarget(job)}
+          onMarkComplete={handleMarkJobComplete}
           currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
         />
       )}

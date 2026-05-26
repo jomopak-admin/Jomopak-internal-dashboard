@@ -120,6 +120,8 @@ interface JobCardsPageProps {
   onPrintFoodSafeCertificate?: (job: JobCard) => void;
   /** Open the printable Job Card overlay for the foreman. Optional. */
   onPrintJobCard?: (job: JobCard) => void;
+  /** Mark the job as Completed in one click (close it out). */
+  onMarkComplete?: (job: JobCard) => void;
 }
 
 export function JobCardsPage(props: JobCardsPageProps) {
@@ -162,6 +164,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
     cleaningLogs = [],
     onPrintFoodSafeCertificate,
     onPrintJobCard,
+    onMarkComplete,
     currentUser,
   } = props;
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
@@ -1146,6 +1149,15 @@ export function JobCardsPage(props: JobCardsPageProps) {
                               FS Cert
                             </button>
                           ) : null}
+                          {onMarkComplete && job.status !== 'Completed' ? (
+                            <button
+                              className="table-button table-button-promote"
+                              onClick={() => { if (confirm(`Mark job ${job.jobNumber} as Completed?`)) onMarkComplete(job); }}
+                              title="Mark this job as Completed — closes it out and moves it off the open list"
+                            >
+                              ✓ Done
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -1170,6 +1182,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
             onQuickAddPaper={onQuickAddPaper}
             onQuickAddDispatch={onQuickAddDispatch}
             onOpenHistory={onOpenHistory}
+            onMarkComplete={onMarkComplete}
           />
         ) : null}
         <BulkActionsBar

@@ -20,6 +20,8 @@ interface JobDetailPanelProps {
   onQuickAddPaper: (job: JobCard) => void;
   onQuickAddDispatch: (job: JobCard) => void;
   onOpenHistory?: (target: HistoryDrawerTarget) => void;
+  /** Mark this job as Completed in one click. */
+  onMarkComplete?: (job: JobCard) => void;
 }
 
 const TABS: Array<{ key: JobDetailTab; label: string }> = [
@@ -43,6 +45,7 @@ export function JobDetailPanel({
   onQuickAddPaper,
   onQuickAddDispatch,
   onOpenHistory,
+  onMarkComplete,
 }: JobDetailPanelProps) {
   const [tab, setTab] = useState<JobDetailTab>('overview');
 
@@ -61,6 +64,16 @@ export function JobDetailPanel({
             <button className="ghost-button" onClick={() => onQuickAddWaste(job)}>Add Waste</button>
             <button className="ghost-button" onClick={() => onQuickAddPaper(job)}>Add Paper Usage</button>
             <button className="ghost-button" onClick={() => onQuickAddDispatch(job)}>Add Dispatch</button>
+            {onMarkComplete && job.status !== 'Completed' ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => { if (confirm(`Mark job ${job.jobNumber} as Completed?`)) onMarkComplete(job); }}
+                title="Close this job out — moves it off the open list"
+              >
+                ✓ Mark complete
+              </button>
+            ) : null}
             {onOpenHistory ? (
               <button
                 type="button"
