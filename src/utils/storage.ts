@@ -943,6 +943,7 @@ export function loadAppData(): AppData {
       leaveRequests: (parsed.leaveRequests ?? []) as AppData['leaveRequests'],
       staffLoans: (parsed.staffLoans ?? []) as AppData['staffLoans'],
       expenseClaims: (parsed.expenseClaims ?? []) as AppData['expenseClaims'],
+      companies: (parsed.companies ?? []) as AppData['companies'],
       appSettings: normalizeAppSettings(parsed.appSettings),
     };
   } catch {

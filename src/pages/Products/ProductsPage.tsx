@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
 import { CostProfile, PaperRate, PricingTier, Product, ProductFilters, ProductFormState, Supplier } from '../../types';
 import { formatNumber } from '../../utils/calculations';
@@ -217,6 +218,16 @@ export function ProductsPage({
       body: (
         <div className="form-grid">
           <label className="full-span"><span>Notes</span><textarea value={productForm.notes} onChange={(event) => setProductForm({ ...productForm, notes: event.target.value })} /></label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={productForm.photoUrls ?? []}
+              onChange={(urls) => setProductForm({ ...productForm, photoUrls: urls })}
+              recordType="products"
+              recordId={productEditingId || `draft-${Date.now()}`}
+              label="Product photos (artwork, dieline, finished sample)"
+              max={6}
+            />
+          </div>
         </div>
       ),
     },

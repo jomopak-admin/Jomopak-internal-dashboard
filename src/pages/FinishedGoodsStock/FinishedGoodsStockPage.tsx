@@ -3,6 +3,7 @@ import { CommercialFlags } from '../../components/Badge';
 import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, Product, StockChangeLog } from '../../types';
 import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
@@ -219,13 +220,23 @@ export function FinishedGoodsStockPage({
     },
     {
       key: 'notes',
-      title: 'Notes',
+      title: 'Notes & photos',
       body: (
         <div className="form-grid">
           <label className="full-span">
             <span>Notes</span>
             <textarea value={stockForm.notes} onChange={(event) => setStockForm({ ...stockForm, notes: event.target.value })} />
           </label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={stockForm.photoUrls ?? []}
+              onChange={(urls) => setStockForm({ ...stockForm, photoUrls: urls })}
+              recordType="finished_stock"
+              recordId={stockEditingId || `draft-${Date.now()}`}
+              label="Batch photos (pallet shot, labelling, condition on storage)"
+              max={6}
+            />
+          </div>
         </div>
       ),
     },

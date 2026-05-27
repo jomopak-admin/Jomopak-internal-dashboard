@@ -4,6 +4,7 @@ import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/
 import { SectionTitle } from '../../components/SectionTitle';
 import { JobCard, Machine, SparePart, SparePartFilters, SparePartFormState, STOCK_ITEM_CATEGORIES, StockCount, StockCountFormState, StockIssue, StockIssueFilters, StockIssueFormState, StockItemCategory, Supplier } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
+import { PhotoUploader } from '../../components/PhotoUploader';
 
 interface SparePartsPageProps {
   machines: Machine[];
@@ -283,6 +284,16 @@ export function SparePartsPage({
       body: (
         <div className="form-grid">
           <label className="full-span"><span>Notes</span><textarea value={spareForm.notes} onChange={(event) => setSpareForm({ ...spareForm, notes: event.target.value })} /></label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={spareForm.photoUrls ?? []}
+              onChange={(urls) => setSpareForm({ ...spareForm, photoUrls: urls })}
+              recordType="spares"
+              recordId={spareEditingId || `draft-${Date.now()}`}
+              label="Photos (helps techs ID the part)"
+              max={6}
+            />
+          </div>
         </div>
       ),
     },

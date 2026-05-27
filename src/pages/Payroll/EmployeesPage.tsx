@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import { Employee, PayCycle } from '../../types';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { formatNumber } from '../../utils/calculations';
 
 interface EmployeesPageProps {
@@ -28,6 +29,11 @@ function emptyEmployee(): Employee {
     bankName: '', bankAccountNumber: '', bankBranchCode: '', accountType: 'Cheque',
     uifContributor: true, startDate: new Date().toISOString().slice(0, 10), endDate: '',
     active: true, notes: '',
+    // Phase 56 — SMETA: hourly rate + standard hours. Defaults to BCEA 173.33
+    // hours/month so the payslip shows a defensible "Rates & Quantities" line
+    // even if you forget to set it.
+    hourlyRate: 0,
+    standardMonthlyHours: 173.33,
   };
 }
 
@@ -165,6 +171,14 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
               </select>
             </label>
             <label><span>Basic pay (gross / period)</span><input type="number" value={draft.basicSalary} onChange={(e) => update({ basicSalary: Number(e.target.value) })} /></label>
+            <label>
+              <span>Standard monthly hours <span className="muted" style={{ fontSize: '0.78rem' }}>(BCEA default 173.33)</span></span>
+              <input type="number" step="0.01" value={draft.standardMonthlyHours ?? 173.33} onChange={(e) => update({ standardMonthlyHours: Number(e.target.value) || 0 })} />
+            </label>
+            <label>
+              <span>Hourly rate (R) <span className="muted" style={{ fontSize: '0.78rem' }}>(leave 0 to auto-compute from basic ÷ std hours)</span></span>
+              <input type="number" step="0.01" value={draft.hourlyRate ?? 0} onChange={(e) => update({ hourlyRate: Number(e.target.value) || 0 })} />
+            </label>
             <label className="accounting-check"><input type="checkbox" checked={draft.uifContributor} onChange={(e) => update({ uifContributor: e.target.checked })} /><span>UIF contributor</span></label>
             <label><span>Start date</span><input type="date" value={draft.startDate} onChange={(e) => update({ startDate: e.target.value })} /></label>
             <label><span>End date</span><input type="date" value={draft.endDate} onChange={(e) => update({ endDate: e.target.value })} /></label>
@@ -185,6 +199,16 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
             </label>
           </div>
           <label style={{ display: 'block', marginTop: '0.75rem' }}><span>Notes</span><input value={draft.notes} onChange={(e) => update({ notes: e.target.value })} /></label>
+          <div style={{ marginTop: '0.75rem' }}>
+            <PhotoUploader
+              urls={draft.photoUrls ?? []}
+              onChange={(urls) => update({ photoUrls: urls })}
+              recordType="employees"
+              recordId={draft.id || `draft-${editingId || 'new'}`}
+              label="Profile photo(s)"
+              max={3}
+            />
+          </div>
           <div className="accounting-actions">
             <button className="primary-button" onClick={save} disabled={!draft.firstName.trim() && !draft.lastName.trim()}>Save employee</button>
           </div>

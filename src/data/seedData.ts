@@ -69,6 +69,7 @@ export function buildSeedData(): AppData {
     leaveRequests: [],
     staffLoans: [],
     expenseClaims: [],
+    companies: [],
     appSettings: DEFAULT_APP_SETTINGS,
   };
 }

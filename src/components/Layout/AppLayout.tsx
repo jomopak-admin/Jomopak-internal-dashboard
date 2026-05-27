@@ -19,7 +19,7 @@ interface AppLayoutProps {
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
-  { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
+  { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance'] },
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },

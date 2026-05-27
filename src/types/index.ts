@@ -86,7 +86,8 @@ export type View =
   | 'irp5Centre'
   | 'expenseClaims'
   | 'expenseClaimsApprove'
-  | 'stockStatements';
+  | 'stockStatements'
+  | 'companies';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts';
 export type DashboardWidget =
   | 'stats'
@@ -194,6 +195,7 @@ export const VIEW_LABELS: Record<View, string> = {
   expenseClaims: 'Expense Claims',
   expenseClaimsApprove: 'Approve Expense Claims',
   stockStatements: 'Stock Statements',
+  companies: 'Companies',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -285,6 +287,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'expenseClaims',
     'expenseClaimsApprove',
     'stockStatements',
+    'companies',
   ],
   ops: [
     'dashboard',
@@ -711,6 +714,8 @@ export interface SupplierProductLink {
 
 export interface Supplier {
   id: string;
+  /** Phase 57 — optional pointer back to the unified Company record. */
+  companyId?: string;
   name: string;
   contactPerson: string;
   phone: string;
@@ -1145,8 +1150,119 @@ export interface UserProfile {
   linkedEmployeeId?: string;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 57 — Unified Company / Business Partner architecture
+ * ----------------------------------------------------------------------
+ * A real-world business entity (e.g. "Sappi (Pty) Ltd"). One Company can
+ * play multiple roles at once — Client, Supplier, Manufacturer, Logistics
+ * provider, etc. Shared data (legal name, VAT, contacts, address, banking,
+ * default currency) lives here ONCE. Role-specific data (credit limit on
+ * the client side, lead times on the supplier side) lives on per-role
+ * Client / Supplier records that link back via companyId.
+ *
+ * Separate Company records when:
+ *   • legally separate entities (different VAT registration)
+ *   • branches with separate banking / billing
+ * Otherwise: one Company, multiple roles.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type CompanyRole = 'Client' | 'Supplier' | 'Manufacturer' | 'Logistics' | 'Partner' | 'Other';
+export const COMPANY_ROLES: CompanyRole[] = ['Client', 'Supplier', 'Manufacturer', 'Logistics', 'Partner', 'Other'];
+
+export interface CompanyContact {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+}
+
+export interface Company {
+  id: string;
+  code: string;
+  createdAt: string;
+  /** Trading / friendly name. */
+  name: string;
+  /** Registered legal name (e.g. "Sava Online (Pty) Ltd t/a Jomopack"). */
+  legalName: string;
+  registrationNumber: string;
+  vatNumber: string;
+  /** Roles this company plays. Multi-select. Drives where the company
+   *  shows up in pickers (client dropdown / supplier dropdown / both). */
+  roles: CompanyRole[];
+  /** Primary contact for general correspondence. */
+  primaryContact: CompanyContact;
+  /** Extra contacts (accounts, dispatch, technical, etc.). */
+  additionalContacts: CompanyContact[];
+  // Shared physical/postal address — both invoices to them AND deliveries
+  // from them use this. Per-role overrides are stored on the role profile.
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: string;
+  // Shared banking — used for both paying them (when they're a supplier)
+  // and confirming inbound payments (when they're a client). Per-role
+  // overrides allowed on the Client / Supplier records.
+  bankName: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+  accountType: string;
+  /** Default trading currency (if foreign). */
+  defaultCurrency: string;
+  /** Default payment terms (e.g. "30 days", "On receipt"). */
+  defaultPaymentTerms: string;
+  industry: string;
+  website: string;
+  notes: string;
+  active: boolean;
+  /** Pointers to the role-specific profile records, if any have been created.
+   *  Set when admin clicks "Create Client profile" / "Create Supplier profile"
+   *  on the Companies page. Existing Clients/Suppliers can be back-linked. */
+  linkedClientId?: string;
+  linkedSupplierId?: string;
+}
+
+export interface CompanyFormState {
+  name: string;
+  legalName: string;
+  registrationNumber: string;
+  vatNumber: string;
+  roles: CompanyRole[];
+  primaryContactName: string;
+  primaryContactRole: string;
+  primaryContactEmail: string;
+  primaryContactPhone: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+  accountType: string;
+  defaultCurrency: string;
+  defaultPaymentTerms: string;
+  industry: string;
+  website: string;
+  notes: string;
+  active: boolean;
+}
+
+export interface CompanyFilters {
+  search: string;
+  role: string;
+  active: 'all' | 'yes' | 'no';
+}
+
 export interface Client {
   id: string;
+  /** Phase 57 — optional pointer back to the unified Company record.
+   *  Lets banking, contacts, address etc. be sourced from there instead
+   *  of duplicated on the client. Empty for legacy / pre-Phase-57 clients. */
+  companyId?: string;
   name: string;
   /** Optimistic concurrency token (phase 14). See JobCard.version. */
   version?: number;
@@ -1273,6 +1389,8 @@ export interface ProductPricingSpec {
 
 export interface Product {
   id: string;
+  /** Phase 59 — uploaded photos (Supabase Storage public URLs). */
+  photoUrls?: string[];
   name: string;
   sku: string;
   category: ProductCategory;
@@ -1371,6 +1489,8 @@ export interface ClientProductPrice {
 
 export interface JobCard {
   id: string;
+  /** Phase 59 — proof / sample / finished-product photos. */
+  photoUrls?: string[];
   jobNumber: string;
   /**
    * Optimistic concurrency token (phase 14). Bumped server-side on every
@@ -1472,6 +1592,8 @@ export interface JobCard {
 
 export interface FinishedGoodsStock {
   id: string;
+  /** Phase 59 — batch photos for traceability. */
+  photoUrls?: string[];
   stockNumber: string;
   barcode: string;
   createdAt: string;
@@ -1535,6 +1657,9 @@ export type ToolCondition = '' | 'Good' | 'Damaged' | 'Lost';
 
 export interface SparePart {
   id: string;
+  /** Phase 59 — uploaded photos. Especially valuable for spares
+   *  so techs can visually ID the part before swapping. */
+  photoUrls?: string[];
   /** Optimistic concurrency token (phase 14). See JobCard.version. */
   version?: number;
   /** Server-side update timestamp. */
@@ -3521,6 +3646,14 @@ export interface SopDocument {
   /** If this SOP supersedes a previous version, the previous SOP's id. */
   supersedesId: string;
   notes: string;
+  /** Phase 53 — which roles need to read & acknowledge this SOP. Empty
+   *  or undefined = no targeting (back-compat with pre-Phase-53 docs;
+   *  treated as "no one is nagged" unless mandatoryForAll is set). */
+  audienceRoles?: UserRole[];
+  /** Phase 53 — override flag. If true, the SOP is shown to every staff
+   *  member regardless of role (Code of Conduct, Fire Safety, Foreign
+   *  Object Policy etc.). */
+  mandatoryForAll?: boolean;
 }
 
 export interface SopDocumentFormState {
@@ -3537,6 +3670,8 @@ export interface SopDocumentFormState {
   acknowledgements: SopAcknowledgement[];
   supersedesId: string;
   notes: string;
+  audienceRoles: UserRole[];
+  mandatoryForAll: boolean;
 }
 
 export interface SopDocumentFilters {
@@ -4418,6 +4553,8 @@ export type PayCycle = 'Monthly' | 'Weekly';
 
 export interface Employee {
   id: string;
+  /** Phase 59 — profile photo(s). First one shows on payslip / My Stuff. */
+  photoUrls?: string[];
   employeeNumber: string;
   firstName: string;
   lastName: string;
@@ -4439,11 +4576,43 @@ export interface Employee {
   endDate: string;
   active: boolean;
   notes: string;
+  /** Phase 55 — SMETA fields. Hourly rate displayed on payslip; if 0 we
+   *  compute from basicSalary / standardMonthlyHours. */
+  hourlyRate?: number;
+  /** Standard monthly hours, BCEA default 173.33 (40hr week × 52/12). */
+  standardMonthlyHours?: number;
 }
 
 export type PayrollRunStatus = 'Draft' | 'Approved' | 'Paid';
 
 export const PAYROLL_RUN_STATUSES: PayrollRunStatus[] = ['Draft', 'Approved', 'Paid'];
+
+export interface PayslipHoursLine {
+  /** "Normal", "Overtime 1.5x", "Sunday", "Public Holiday", "Piece Work" etc. */
+  type: string;
+  /** Hours / units worked. */
+  quantity: number;
+  /** Rand per hour / unit. */
+  rate: number;
+}
+
+export interface PayslipLineItem {
+  /** Display label, e.g. "Performance bonus", "Travel allowance", "Salary advance". */
+  label: string;
+  /** Always positive — sign comes from which list it lives in. */
+  amount: number;
+}
+
+export interface PayslipLeaveSnapshot {
+  type: string;
+  balance: number;
+  /** Adjustments applied this period (manual top-ups / corrections). */
+  adjustment: number;
+  /** Days taken during this period. */
+  taken: number;
+  /** Days scheduled (approved but not yet taken). */
+  scheduled: number;
+}
 
 export interface Payslip {
   id: string;
@@ -4462,6 +4631,24 @@ export interface Payslip {
   uifEmployer: number;
   sdl: number;
   notes: string;
+  /** Phase 55 — SMETA-compliant fields (all optional for back-compat). */
+  /** Itemized hours / rates table. Required by SMETA auditors so they can
+   *  cross-reference timekeeping records against the payslip. */
+  hoursLines?: PayslipHoursLine[];
+  /** Itemized additional income (bonuses, commissions, allowances, 13th).
+   *  Shown as separate lines under Basic Salary. */
+  additionalIncome?: PayslipLineItem[];
+  /** Itemized additional deductions (loan repayments, advances, garnishees,
+   *  voluntary deductions). Shown as separate lines under PAYE / UIF. */
+  additionalDeductions?: PayslipLineItem[];
+  /** Per-leave-type balance snapshot at the end of this pay period. */
+  leaveSnapshot?: PayslipLeaveSnapshot[];
+  /** Phase 56 — overtime hours captured per run. SA BCEA premiums:
+   *  1.5× weekday OT, 2× Sunday + Public Holiday. */
+  overtime15Hours?: number;
+  overtime2Hours?: number;
+  sundayHours?: number;
+  publicHolidayHours?: number;
 }
 
 export interface PayrollRun {
@@ -4722,6 +4909,7 @@ export interface AppData {
   leaveRequests: LeaveRequest[];
   staffLoans: StaffLoan[];
   expenseClaims: ExpenseClaim[];
+  companies: Company[];
   appSettings: AppSettings;
 }
 
@@ -5245,6 +5433,8 @@ export interface MaterialOrderRequest {
 
 export interface SupplierFormState {
   name: string;
+  /** Phase 58 — optional pointer to a unified Company. */
+  companyId?: string;
   contactPerson: string;
   phone: string;
   email: string;
@@ -5581,6 +5771,10 @@ export interface CalculatorState {
 
 export interface ClientFormState {
   name: string;
+  /** Phase 58 — optional pointer to a unified Company (the parent business
+   *  entity). When set, the Client inherits shared fields visually but the
+   *  role-specific data on this record stays canonical. */
+  companyId?: string;
   companyName: string;
   accountManagerName: string;
   code: string;
@@ -5690,6 +5884,8 @@ export interface ProductFormState {
   baseQuantity: string;
   /** Comma-separated MOQ break quantities, e.g. "5000, 10000, 25000". */
   breakQuantities: string;
+  /** Phase 59 — Supabase public URLs for product photos. */
+  photoUrls?: string[];
 }
 
 export interface JobFormState {
@@ -5770,6 +5966,8 @@ export interface JobFormState {
   assignedMachineId: string;
   changeoverChecklist: ChangeoverChecklistItem[];
   qcPlan: QcStageRecord[];
+  /** Phase 59 — proof / sample photos for the job. */
+  photoUrls?: string[];
 }
 
 export interface FinishedGoodsStockFormState {
@@ -5785,10 +5983,14 @@ export interface FinishedGoodsStockFormState {
   stockStatus: FinishedStockStatus;
   brandingStatus: string;
   notes: string;
+  /** Phase 59 — batch photos. */
+  photoUrls?: string[];
 }
 
 export interface SparePartFormState {
   partName: string;
+  /** Phase 59 — uploaded photo URLs. */
+  photoUrls?: string[];
   category: StockItemCategory;
   itemType: StockItemType;
   productionUse: boolean;

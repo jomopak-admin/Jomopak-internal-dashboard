@@ -6,8 +6,66 @@
  * dashboard user.
  */
 
-import { AppSettingsCompany, Payslip, PayrollRun } from '../types';
+import { AppSettingsCompany, Employee, Payslip, PayrollRun } from '../types';
 import { supabase } from './supabase';
+
+/**
+ * YTD totals for the current SA tax year (March → February). Pass the
+ * employee's id and the full list of approved payroll runs and we sum
+ * all matching payslips up to and including the current run's pay date.
+ */
+export interface PayslipYtd {
+  income: number;
+  basicSalary: number;
+  paye: number;
+  uifEmployee: number;
+  uifEmployer: number;
+  sdl: number;
+  otherDeductions: number;
+  netPay: number;
+}
+
+export function computePayslipYtd(employeeId: string, allRuns: PayrollRun[], currentRun: PayrollRun): PayslipYtd {
+  const totals: PayslipYtd = { income: 0, basicSalary: 0, paye: 0, uifEmployee: 0, uifEmployer: 0, sdl: 0, otherDeductions: 0, netPay: 0 };
+  // SA tax year: Mar 1 → Feb 28/29 of the following year. Pick the year
+  // window that contains the current run's pay date.
+  const cur = new Date(currentRun.payDate || `${currentRun.periodYear}-${String(currentRun.periodMonth).padStart(2, '0')}-01`);
+  const taxYearStartYear = cur.getMonth() < 2 ? cur.getFullYear() - 1 : cur.getFullYear();
+  const from = new Date(`${taxYearStartYear}-03-01`);
+  const to = cur; // inclusive of current run
+  allRuns.forEach((r) => {
+    if (r.status === 'Draft') return;
+    const d = new Date(r.payDate || `${r.periodYear}-${String(r.periodMonth).padStart(2, '0')}-01`);
+    if (d < from || d > to) return;
+    r.payslips.forEach((p) => {
+      if (p.employeeId !== employeeId) return;
+      totals.income += p.grossPay || 0;
+      totals.basicSalary += p.basicSalary || 0;
+      totals.paye += p.paye || 0;
+      totals.uifEmployee += p.uifEmployee || 0;
+      totals.uifEmployer += p.uifEmployer || 0;
+      totals.sdl += p.sdl || 0;
+      totals.otherDeductions += p.otherDeductions || 0;
+      totals.netPay += p.netPay || 0;
+    });
+  });
+  return totals;
+}
+
+/** Compute the period from/to dates for a payroll run (handles Monthly /
+ *  Weekly / Fortnightly cycles). Best-effort — falls back to month bounds. */
+export function payrollPeriodRange(run: PayrollRun): { from: string; to: string } {
+  // For monthly cycles: full calendar month.
+  const month = run.periodMonth;
+  const year = run.periodYear;
+  if (!month || !year) return { from: run.payDate, to: run.payDate };
+  const fromDate = new Date(year, month - 1, 1);
+  const toDate = new Date(year, month, 0); // last day of month
+  return {
+    from: fromDate.toISOString().slice(0, 10),
+    to: toDate.toISOString().slice(0, 10),
+  };
+}
 
 export interface OutgoingEmail {
   to: string;
@@ -28,34 +86,218 @@ function money(n: number): string {
 }
 
 /** Build a clean, email-client-safe HTML payslip (inline styles, simple table). */
-export function buildPayslipHtml(slip: Payslip, run: PayrollRun, company?: AppSettingsCompany): string {
-  const row = (label: string, value: string, strong = false) =>
-    `<tr>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;${strong ? 'font-weight:700;' : ''}">${label}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;${strong ? 'font-weight:700;' : ''}">${value}</td>
+/**
+ * SMETA-compliant payslip HTML (Phase 55). Itemizes hours/rates,
+ * earnings, deductions and employer contributions with Current + YTD
+ * columns. Matches SimplePay's two-column layout so existing staff
+ * recognise it.
+ *
+ * Required by SMETA wage-and-benefit audits — every payslip must show:
+ *   • Gross + net pay (each line itemized)
+ *   • Hours worked + rate of pay (Rates & Quantities table)
+ *   • Overtime premium hours separated from normal hours
+ *   • Each deduction explained
+ *   • Bonuses / allowances as separate lines
+ */
+export function buildPayslipHtml(
+  slip: Payslip,
+  run: PayrollRun,
+  company?: AppSettingsCompany,
+  ytd?: PayslipYtd,
+  employee?: Employee,
+): string {
+  const period = payrollPeriodRange(run);
+  const safeYtd = ytd ?? { income: slip.grossPay, basicSalary: slip.basicSalary, paye: slip.paye, uifEmployee: slip.uifEmployee, uifEmployer: slip.uifEmployer, sdl: slip.sdl, otherDeductions: slip.otherDeductions, netPay: slip.netPay };
+
+  // 2-column line row with optional YTD column.
+  const line2 = (label: string, current: number, ytdVal: number, opts: { strong?: boolean; sign?: '' | '-' } = {}) => {
+    const s = opts.strong ? 'font-weight:600;' : '';
+    const sign = opts.sign || '';
+    return `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid #eee;${s}">${label}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;${s}">${sign}${money(current)}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;color:#666;${s}">${sign}${money(ytdVal)}</td>
     </tr>`;
+  };
+
+  // Heading row for a section ("Income", "Deduction", "Employer Contribution").
+  const head = (label: string) => `<tr>
+    <td colspan="3" style="padding:8px 8px 4px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">${label}</td>
+  </tr>`;
+
+  const totalIncome = (slip.basicSalary || 0) + (slip.allowances || 0) + (slip.additionalIncome ?? []).reduce((s, l) => s + l.amount, 0);
+  const totalDeductions = (slip.paye || 0) + (slip.uifEmployee || 0) + (slip.otherDeductions || 0) + (slip.additionalDeductions ?? []).reduce((s, l) => s + l.amount, 0);
+
+  const incomeRows = [
+    line2('Basic Salary', slip.basicSalary || 0, safeYtd.basicSalary),
+    ...(slip.allowances ? [line2('Allowances', slip.allowances, 0)] : []),
+    ...((slip.additionalIncome ?? []).map((l) => line2(l.label, l.amount, 0))),
+  ].join('');
+
+  const deductionRows = [
+    line2('UIF - Employee', slip.uifEmployee || 0, safeYtd.uifEmployee, { sign: '-' }),
+    line2('Tax (PAYE)', slip.paye || 0, safeYtd.paye, { sign: '-' }),
+    ...(slip.otherDeductions ? [line2('Other deductions', slip.otherDeductions, safeYtd.otherDeductions, { sign: '-' })] : []),
+    ...((slip.additionalDeductions ?? []).map((l) => line2(l.label, l.amount, 0, { sign: '-' }))),
+  ].join('');
+
+  const employerRows = [
+    line2('UIF - Employer', slip.uifEmployer || 0, safeYtd.uifEmployer),
+    ...(slip.sdl ? [line2('SDL', slip.sdl, safeYtd.sdl)] : []),
+  ].join('');
+
+  const hoursRows = (slip.hoursLines ?? []).map((h) => `<tr>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;">${h.type}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">${h.quantity.toFixed(2)}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">R ${money(h.rate)}</td>
+  </tr>`).join('');
+
+  const leaveRows = (slip.leaveSnapshot ?? []).map((l) => `<tr>
+    <td style="padding:4px 8px;">${l.type}</td>
+    <td style="padding:4px 8px;text-align:right;">${l.balance.toFixed(2)}</td>
+    <td style="padding:4px 8px;text-align:right;">${l.adjustment.toFixed(2)}</td>
+    <td style="padding:4px 8px;text-align:right;">${l.taken.toFixed(2)}</td>
+    <td style="padding:4px 8px;text-align:right;">${l.scheduled.toFixed(2)}</td>
+  </tr>`).join('');
+
+  const hourlyRate = (employee?.hourlyRate && employee.hourlyRate > 0) ? employee.hourlyRate : ((employee?.standardMonthlyHours && employee.standardMonthlyHours > 0) ? (slip.basicSalary / employee.standardMonthlyHours) : 0);
+
   return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #db5a1f;padding-bottom:10px;margin-bottom:14px;">
-      <div><strong style="font-size:18px;">${company?.name || 'JomoPak'}</strong><br/>
-        <span style="font-size:11px;color:#666;">${company?.legalName || ''}</span></div>
-      <div style="text-align:right;"><strong>PAYSLIP</strong><br/>
-        <span style="font-size:11px;color:#666;">${run.periodLabel} · paid ${run.payDate}</span></div>
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:0 auto;color:#1a1a1a;font-size:12px;">
+
+    <!-- ─── Company header ─── -->
+    <div style="text-align:center;padding:14px 0 4px;border-bottom:1px solid #ddd;">
+      <div style="font-size:15px;font-weight:600;">${company?.legalName || company?.name || 'JomoPak'}</div>
+      ${company?.addressLine1 ? `<div style="font-size:11px;color:#555;line-height:1.4;margin-top:4px;">${[company.addressLine1, company.addressLine2].filter(Boolean).join(' · ')}${(company.phone || company.email) ? `<br/>${[company.phone, company.email].filter(Boolean).join(' · ')}` : ''}</div>` : ''}
     </div>
-    <p style="font-size:13px;margin:0 0 12px;">Dear ${slip.employeeName},</p>
-    <p style="font-size:13px;margin:0 0 14px;">Please find your payslip for <strong>${run.periodLabel}</strong> below.</p>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-      ${row('Basic pay', money(slip.basicSalary))}
-      ${row('Allowances', money(slip.allowances))}
-      ${row('Gross pay', money(slip.grossPay), true)}
-      ${row('PAYE', '-' + money(slip.paye))}
-      ${row('UIF', '-' + money(slip.uifEmployee))}
-      ${row('Other deductions', '-' + money(slip.otherDeductions))}
-      ${row('Net pay', 'R ' + money(slip.netPay), true)}
-    </table>
-    <p style="font-size:11px;color:#666;margin-top:12px;">Employer contributions (not deducted): UIF ${money(slip.uifEmployer)} · SDL ${money(slip.sdl)}</p>
-    <p style="font-size:11px;color:#999;margin-top:18px;border-top:1px solid #eee;padding-top:10px;">
-      This payslip was generated by ${company?.name || 'JomoPak'}. If anything looks wrong, please contact payroll.
+
+    <!-- ─── Employee header ─── -->
+    <div style="display:table;width:100%;padding:14px 0 6px;">
+      <div style="display:table-cell;width:50%;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;">Payslip for ${slip.employeeName}</div>
+        <div style="color:#555;margin-top:2px;">Period: ${period.from} to ${period.to}</div>
+        ${employee?.idNumber ? `<div style="color:#555;">ID Number: ${employee.idNumber}</div>` : ''}
+        ${employee?.taxNumber ? `<div style="color:#555;">Tax Number: ${employee.taxNumber}</div>` : ''}
+      </div>
+      <div style="display:table-cell;width:50%;text-align:right;font-size:12px;color:#555;">
+        ${slip.employeeNumber ? `Employee Number: ${slip.employeeNumber}<br/>` : ''}
+        ${employee?.jobTitle ? `${employee.jobTitle}<br/>` : ''}
+        ${employee?.startDate ? `Employment Date: ${employee.startDate}` : ''}
+      </div>
+    </div>
+
+    <!-- ─── Two-column body: Earnings/Deductions left, Employer Contrib + Rates&Qty right ─── -->
+    <div style="display:table;width:100%;margin-top:8px;table-layout:fixed;">
+      <div style="display:table-cell;vertical-align:top;width:55%;padding-right:14px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;"></th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Current</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">YTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${head('Income')}
+            ${incomeRows}
+            <tr><td colspan="3" style="padding:6px 8px;border-top:1px solid #ccc;font-weight:600;">
+              <table style="width:100%;"><tr>
+                <td style="padding:0;">Gross Income</td>
+                <td style="padding:0;text-align:right;">${money(totalIncome)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">${money(safeYtd.income)}</td>
+              </tr></table>
+            </td></tr>
+
+            ${head('Deduction')}
+            ${deductionRows}
+            <tr><td colspan="3" style="padding:6px 8px;border-top:1px solid #ccc;font-weight:600;">
+              <table style="width:100%;"><tr>
+                <td style="padding:0;">Total Deductions</td>
+                <td style="padding:0;text-align:right;">-${money(totalDeductions)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">-${money(safeYtd.paye + safeYtd.uifEmployee + safeYtd.otherDeductions)}</td>
+              </tr></table>
+            </td></tr>
+
+            <tr><td colspan="3" style="padding:12px 8px;border-top:2px solid #333;font-weight:600;font-size:13px;background:#f7f7f7;">
+              <table style="width:100%;"><tr>
+                <td style="padding:0;">Nett Pay</td>
+                <td style="padding:0;text-align:right;">R ${money(slip.netPay)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">R ${money(safeYtd.netPay)}</td>
+              </tr></table>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:table-cell;vertical-align:top;width:45%;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;"></th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Current</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">YTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${head('Employer Contribution')}
+            ${employerRows}
+          </tbody>
+        </table>
+
+        ${hoursRows ? `
+          <div style="margin-top:18px;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:0 0 6px;">Rates &amp; Quantities</div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;">
+              <thead>
+                <tr style="background:#f5f5f5;">
+                  <th style="text-align:left;font-weight:500;font-size:11px;padding:6px 8px;">Type</th>
+                  <th style="text-align:right;font-weight:500;font-size:11px;padding:6px 8px;">Quantity</th>
+                  <th style="text-align:right;font-weight:500;font-size:11px;padding:6px 8px;">Rate</th>
+                </tr>
+              </thead>
+              <tbody>${hoursRows}</tbody>
+            </table>
+          </div>
+        ` : (hourlyRate > 0 ? `
+          <div style="margin-top:18px;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:0 0 6px;">Rates &amp; Quantities</div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;">
+              <thead>
+                <tr style="background:#f5f5f5;">
+                  <th style="text-align:left;font-weight:500;font-size:11px;padding:6px 8px;">Type</th>
+                  <th style="text-align:right;font-weight:500;font-size:11px;padding:6px 8px;">Quantity</th>
+                  <th style="text-align:right;font-weight:500;font-size:11px;padding:6px 8px;">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:5px 8px;">Normal</td><td style="padding:5px 8px;text-align:right;">${(employee?.standardMonthlyHours ?? 173.33).toFixed(2)}</td><td style="padding:5px 8px;text-align:right;">R ${hourlyRate.toFixed(2)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        ` : '')}
+      </div>
+    </div>
+
+    ${leaveRows ? `
+      <div style="margin-top:18px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Leave Type</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Balance</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Adjmt.</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Taken</th>
+              <th style="text-align:right;font-weight:400;color:#888;font-size:11px;padding:4px 8px;border-bottom:1px solid #ddd;">Sched.</th>
+            </tr>
+          </thead>
+          <tbody>${leaveRows}</tbody>
+        </table>
+      </div>
+    ` : ''}
+
+    <p style="font-size:10px;color:#999;margin-top:24px;border-top:1px solid #eee;padding-top:8px;text-align:center;">
+      This payslip is provided in accordance with the Basic Conditions of Employment Act and SMETA wage-transparency guidelines.
+      If anything looks wrong, please contact payroll within 7 days. · Paid ${run.payDate}
     </p>
   </div>`;
 }

@@ -54,6 +54,8 @@ import { StaffLoansPage } from './pages/StaffLoans/StaffLoansPage';
 import { Irp5CentrePage } from './pages/Irp5Centre/Irp5CentrePage';
 import { ExpenseClaimsPage } from './pages/ExpenseClaims/ExpenseClaimsPage';
 import { StockStatementsPage } from './pages/StockStatements/StockStatementsPage';
+import { ControlCentrePage } from './pages/ControlCentre/ControlCentrePage';
+import { CompaniesPage } from './pages/Companies/CompaniesPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -215,6 +217,9 @@ import {
   ExpenseClaimFilters,
   ExpenseClaimFormState,
   ExpenseClaimPayMethod,
+  Company,
+  CompanyFilters,
+  CompanyFormState,
   PpeIssueRecord,
   PpeIssueFilters,
   PpeIssueFormState,
@@ -880,6 +885,34 @@ const createInitialLeaveForm = (): LeaveRequestFormState => ({
   attachmentUrl: '',
 });
 
+const createInitialCompanyForm = (): CompanyFormState => ({
+  name: '',
+  legalName: '',
+  registrationNumber: '',
+  vatNumber: '',
+  roles: [],
+  primaryContactName: '',
+  primaryContactRole: '',
+  primaryContactEmail: '',
+  primaryContactPhone: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  province: '',
+  postalCode: '',
+  country: 'South Africa',
+  bankName: '',
+  bankAccountNumber: '',
+  bankBranchCode: '',
+  accountType: '',
+  defaultCurrency: 'ZAR',
+  defaultPaymentTerms: '',
+  industry: '',
+  website: '',
+  notes: '',
+  active: true,
+});
+
 const createInitialExpenseClaimForm = (): ExpenseClaimFormState => ({
   employeeId: '',
   employeeName: '',
@@ -1007,6 +1040,8 @@ const createInitialSopForm = (): SopDocumentFormState => ({
   acknowledgements: [],
   supersedesId: '',
   notes: '',
+  audienceRoles: [],
+  mandatoryForAll: false,
 });
 
 const createInitialVisitorForm = (): VisitorLogFormState => ({
@@ -1596,6 +1631,12 @@ function App() {
   const [claimEditingId, setClaimEditingId] = useState<string | null>(null);
   const [claimMessage, setClaimMessage] = useState('');
   const [claimFilters, setClaimFilters] = useState<ExpenseClaimFilters>({ search: '', status: '', category: '', employeeId: '', tab: 'mine' });
+
+  // Phase 57 — unified Company / Business Partner records
+  const [companyForm, setCompanyForm] = useState<CompanyFormState>(createInitialCompanyForm);
+  const [companyEditingId, setCompanyEditingId] = useState<string | null>(null);
+  const [companyMessage, setCompanyMessage] = useState('');
+  const [companyFilters, setCompanyFilters] = useState<CompanyFilters>({ search: '', role: '', active: 'all' });
 
   const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
   const [pestEditingId, setPestEditingId] = useState<string | null>(null);
@@ -2952,6 +2993,7 @@ function App() {
     const linkedClient = supplierForm.linkedClientId ? clientsById.get(supplierForm.linkedClientId) : undefined;
     const payload = {
       name: supplierForm.name,
+      companyId: supplierForm.companyId,
       contactPerson: supplierForm.contactPerson,
       phone: supplierForm.phone,
       email: supplierForm.email,
@@ -4109,6 +4151,7 @@ function App() {
       assignedMachineId: jobForm.assignedMachineId,
       changeoverChecklist: jobForm.changeoverChecklist,
       qcPlan: jobForm.qcPlan,
+      photoUrls: jobForm.photoUrls && jobForm.photoUrls.length > 0 ? jobForm.photoUrls : (base.photoUrls ?? []),
     });
 
     setJobMessage('');
@@ -4490,6 +4533,7 @@ function App() {
       stockStatus: stockForm.stockStatus,
       brandingStatus: stockForm.brandingStatus,
       notes: stockForm.notes,
+      photoUrls: stockForm.photoUrls ?? [],
       // Phase 2 food-safety fields. New batches default to "In Production"
       // and pick up the food-contact level from the linked job (if any).
       foodSafetyHoldStatus: (linkedJob && isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') ? 'Awaiting QC' : 'In Production') as FoodSafetyHoldStatus,
@@ -4670,6 +4714,7 @@ function App() {
       storageLocation: spareForm.storageLocation,
       lastPurchaseDate: spareForm.lastPurchaseDate,
       notes: spareForm.notes,
+      photoUrls: spareForm.photoUrls ?? [],
     };
     if (spareEditingId) {
       setData((current) => ({
@@ -5377,6 +5422,7 @@ function App() {
     const tier = clientForm.pricingTierId ? tiersById.get(clientForm.pricingTierId) : undefined;
     const payload = {
       name: clientForm.name,
+      companyId: clientForm.companyId,
       companyName: clientForm.companyName,
       accountManagerName: clientForm.accountManagerName,
       code: clientForm.code,
@@ -5478,6 +5524,7 @@ function App() {
       active: productForm.active,
       pricingEnabled: productForm.pricingEnabled,
       pricingSpec: productForm.pricingEnabled ? formToPricingSpec(productForm) : undefined,
+      photoUrls: productForm.photoUrls ?? [],
     };
     if (productEditingId) {
       setData((current) => ({ ...current, products: current.products.map((product) => product.id === productEditingId ? { ...product, ...payload } : product) }));
@@ -6130,6 +6177,7 @@ function App() {
       assignedMachineId: job.assignedMachineId ?? '',
       changeoverChecklist: job.changeoverChecklist?.length === 9 ? job.changeoverChecklist : buildBlankChangeoverChecklist(),
       qcPlan: job.qcPlan?.length === 4 ? job.qcPlan : buildBlankQcPlan(),
+      photoUrls: job.photoUrls ?? [],
     });
     setView('jobs');
   }
@@ -6149,6 +6197,7 @@ function App() {
       stockStatus: item.stockStatus,
       brandingStatus: item.brandingStatus,
       notes: item.notes,
+      photoUrls: item.photoUrls ?? [],
     });
     setView('finishedStock');
   }
@@ -6173,6 +6222,7 @@ function App() {
       storageLocation: part.storageLocation,
       lastPurchaseDate: part.lastPurchaseDate,
       notes: part.notes,
+      photoUrls: part.photoUrls ?? [],
     });
     setView('spares');
   }
@@ -7542,6 +7592,211 @@ function App() {
     }));
   }
 
+  // ----- Phase 57: Unified Companies -----
+  function resetCompanyEditor() {
+    setCompanyForm(createInitialCompanyForm());
+    setCompanyEditingId(null);
+    setCompanyMessage('');
+  }
+  function editCompany(c: Company) {
+    setCompanyEditingId(c.id);
+    setCompanyForm({
+      name: c.name,
+      legalName: c.legalName,
+      registrationNumber: c.registrationNumber,
+      vatNumber: c.vatNumber,
+      roles: c.roles ?? [],
+      primaryContactName: c.primaryContact?.name ?? '',
+      primaryContactRole: c.primaryContact?.role ?? '',
+      primaryContactEmail: c.primaryContact?.email ?? '',
+      primaryContactPhone: c.primaryContact?.phone ?? '',
+      addressLine1: c.addressLine1,
+      addressLine2: c.addressLine2,
+      city: c.city,
+      province: c.province,
+      postalCode: c.postalCode,
+      country: c.country || 'South Africa',
+      bankName: c.bankName,
+      bankAccountNumber: c.bankAccountNumber,
+      bankBranchCode: c.bankBranchCode,
+      accountType: c.accountType,
+      defaultCurrency: c.defaultCurrency || 'ZAR',
+      defaultPaymentTerms: c.defaultPaymentTerms,
+      industry: c.industry,
+      website: c.website,
+      notes: c.notes,
+      active: c.active,
+    });
+    setCompanyMessage('');
+  }
+  function handleSaveCompany() {
+    if (!companyForm.name.trim()) { setCompanyMessage('Trading name is required.'); return; }
+    if (companyForm.roles.length === 0) { setCompanyMessage('Pick at least one role (Client / Supplier / etc.).'); return; }
+    setData((current) => {
+      const existing = current.companies ?? [];
+      // Build the payload — preserve linkedClientId/linkedSupplierId on edit
+      // since those are managed by the Link buttons, not the form.
+      const editing = companyEditingId ? existing.find((c) => c.id === companyEditingId) : null;
+      const payload: Omit<Company, 'id' | 'code' | 'createdAt'> = {
+        name: companyForm.name.trim(),
+        legalName: companyForm.legalName.trim(),
+        registrationNumber: companyForm.registrationNumber.trim(),
+        vatNumber: companyForm.vatNumber.trim(),
+        roles: companyForm.roles,
+        primaryContact: {
+          name: companyForm.primaryContactName.trim(),
+          role: companyForm.primaryContactRole.trim(),
+          email: companyForm.primaryContactEmail.trim(),
+          phone: companyForm.primaryContactPhone.trim(),
+        },
+        additionalContacts: editing?.additionalContacts ?? [],
+        addressLine1: companyForm.addressLine1.trim(),
+        addressLine2: companyForm.addressLine2.trim(),
+        city: companyForm.city.trim(),
+        province: companyForm.province.trim(),
+        postalCode: companyForm.postalCode.trim(),
+        country: companyForm.country.trim(),
+        bankName: companyForm.bankName.trim(),
+        bankAccountNumber: companyForm.bankAccountNumber.trim(),
+        bankBranchCode: companyForm.bankBranchCode.trim(),
+        accountType: companyForm.accountType.trim(),
+        defaultCurrency: companyForm.defaultCurrency.trim() || 'ZAR',
+        defaultPaymentTerms: companyForm.defaultPaymentTerms.trim(),
+        industry: companyForm.industry.trim(),
+        website: companyForm.website.trim(),
+        notes: companyForm.notes.trim(),
+        active: companyForm.active,
+        linkedClientId: editing?.linkedClientId,
+        linkedSupplierId: editing?.linkedSupplierId,
+      };
+      if (companyEditingId) {
+        return { ...current, companies: existing.map((c) => c.id === companyEditingId ? { ...c, ...payload } : c) };
+      }
+      const newRec: Company = {
+        id: `co-${Date.now().toString(36)}`,
+        code: `CO-${String(existing.length + 1).padStart(4, '0')}`,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, companies: [newRec, ...existing] };
+    });
+    setCompanyMessage(companyEditingId ? 'Company updated.' : 'Company created.');
+    resetCompanyEditor();
+  }
+  function handleDeleteCompany(id: string) {
+    setData((current) => {
+      // Delete the Company record but leave linked Client / Supplier records
+      // alone. Drop the back-pointer companyId on those rows so nothing dangles.
+      const nextClients = current.clients.map((c) => c.companyId === id ? { ...c, companyId: undefined } : c);
+      const nextSuppliers = current.suppliers.map((s) => s.companyId === id ? { ...s, companyId: undefined } : s);
+      return {
+        ...current,
+        companies: (current.companies ?? []).filter((c) => c.id !== id),
+        clients: nextClients,
+        suppliers: nextSuppliers,
+      };
+    });
+  }
+  function handleLinkCompanyToClient(companyId: string, clientId: string) {
+    setData((current) => ({
+      ...current,
+      companies: (current.companies ?? []).map((c) => c.id === companyId ? { ...c, linkedClientId: clientId } : c),
+      clients: current.clients.map((c) => c.id === clientId ? { ...c, companyId } : c),
+    }));
+  }
+  function handleLinkCompanyToSupplier(companyId: string, supplierId: string) {
+    setData((current) => ({
+      ...current,
+      companies: (current.companies ?? []).map((c) => c.id === companyId ? { ...c, linkedSupplierId: supplierId } : c),
+      suppliers: current.suppliers.map((s) => s.id === supplierId ? { ...s, companyId } : s),
+    }));
+  }
+  /** Phase 58 — spin up a Company record from an existing Client, pre-filling
+   *  shared fields (name, VAT, address etc.). Auto-links both ways. Useful
+   *  when admin edits a client and realises they're also a supplier. */
+  function handleConvertClientToCompany(clientId: string) {
+    setData((current) => {
+      const client = current.clients.find((c) => c.id === clientId);
+      if (!client) return current;
+      const existing = current.companies ?? [];
+      const newCompany: Company = {
+        id: `co-${Date.now().toString(36)}`,
+        code: `CO-${String(existing.length + 1).padStart(4, '0')}`,
+        createdAt: new Date().toISOString(),
+        name: client.companyName || client.name,
+        legalName: client.companyName || '',
+        registrationNumber: '',
+        vatNumber: client.vatNumber || '',
+        roles: ['Client'],
+        primaryContact: { name: client.contactName || '', role: '', email: client.contactEmail || '', phone: client.phoneNumber || '' },
+        additionalContacts: [],
+        addressLine1: client.billingAddressLine1 || '',
+        addressLine2: client.billingAddressLine2 || '',
+        city: client.billingCity || '',
+        province: '',
+        postalCode: '',
+        country: '',
+        bankName: '',
+        bankAccountNumber: '',
+        bankBranchCode: '',
+        accountType: '',
+        defaultCurrency: client.currency || 'ZAR',
+        defaultPaymentTerms: client.paymentTerms || '',
+        industry: '',
+        website: client.website || '',
+        notes: `Auto-created from client ${client.name}`,
+        active: true,
+        linkedClientId: clientId,
+      };
+      return {
+        ...current,
+        companies: [newCompany, ...existing],
+        clients: current.clients.map((c) => c.id === clientId ? { ...c, companyId: newCompany.id } : c),
+      };
+    });
+  }
+  function handleConvertSupplierToCompany(supplierId: string) {
+    setData((current) => {
+      const supplier = current.suppliers.find((s) => s.id === supplierId);
+      if (!supplier) return current;
+      const existing = current.companies ?? [];
+      const newCompany: Company = {
+        id: `co-${Date.now().toString(36)}`,
+        code: `CO-${String(existing.length + 1).padStart(4, '0')}`,
+        createdAt: new Date().toISOString(),
+        name: supplier.name,
+        legalName: '',
+        registrationNumber: '',
+        vatNumber: '',
+        roles: ['Supplier'],
+        primaryContact: { name: supplier.contactPerson || '', role: '', email: supplier.email || '', phone: supplier.phone || '' },
+        additionalContacts: [],
+        addressLine1: supplier.address || '',
+        addressLine2: '',
+        city: supplier.city || '',
+        province: '',
+        postalCode: '',
+        country: supplier.country || '',
+        bankName: '',
+        bankAccountNumber: '',
+        bankBranchCode: '',
+        accountType: '',
+        defaultCurrency: 'ZAR',
+        defaultPaymentTerms: supplier.paymentTerms || '',
+        industry: '',
+        website: supplier.website || '',
+        notes: `Auto-created from supplier ${supplier.name}`,
+        active: true,
+        linkedSupplierId: supplierId,
+      };
+      return {
+        ...current,
+        companies: [newCompany, ...existing],
+        suppliers: current.suppliers.map((s) => s.id === supplierId ? { ...s, companyId: newCompany.id } : s),
+      };
+    });
+  }
+
   // ----- Phase 4: Pest control -----
   function editPest(r: PestControlRecord) {
     setPestEditingId(r.id);
@@ -7791,6 +8046,8 @@ function App() {
       reviewDate: d.reviewDate, documentUrl: d.documentUrl, summary: d.summary,
       status: d.status, acknowledgements: [...d.acknowledgements],
       supersedesId: d.supersedesId, notes: d.notes,
+      audienceRoles: d.audienceRoles ?? [],
+      mandatoryForAll: !!d.mandatoryForAll,
     });
     setView('sopRegister');
   }
@@ -7814,6 +8071,8 @@ function App() {
         acknowledgements: sopForm.acknowledgements.filter((a) => a.staffName.trim()),
         supersedesId: sopForm.supersedesId,
         notes: sopForm.notes,
+        audienceRoles: sopForm.audienceRoles && sopForm.audienceRoles.length > 0 ? sopForm.audienceRoles : undefined,
+        mandatoryForAll: sopForm.mandatoryForAll,
       };
       let nextDocs = current.sopDocuments;
       if (sopEditingId) {
@@ -7865,6 +8124,8 @@ function App() {
       acknowledgements: [],
       supersedesId: predecessor.id,
       notes: '',
+      audienceRoles: predecessor.audienceRoles ?? [],
+      mandatoryForAll: !!predecessor.mandatoryForAll,
     });
     setSopMessage(`Drafting new version of ${predecessor.documentNumber}. Save to mark the previous version as Superseded.`);
     setView('sopRegister');
@@ -7966,6 +8227,7 @@ function App() {
     setSupplierEditingId(supplier.id);
     setSupplierForm({
       name: supplier.name,
+      companyId: supplier.companyId,
       contactPerson: supplier.contactPerson,
       phone: supplier.phone,
       email: supplier.email,
@@ -8138,6 +8400,7 @@ function App() {
     setClientEditingId(client.id);
     setClientForm({
       name: client.name,
+      companyId: client.companyId,
       companyName: client.companyName ?? '',
       accountManagerName: client.accountManagerName ?? '',
       code: client.code,
@@ -8241,6 +8504,7 @@ function App() {
       baseMarginPercent: spec ? String(spec.baseMarginPercent) : '',
       baseQuantity: spec ? String(spec.baseQuantity) : '1000',
       breakQuantities: spec ? spec.breakQuantities.join(', ') : '5000, 10000, 25000',
+      photoUrls: product.photoUrls ?? [],
     });
     setView('products');
   }
@@ -8632,6 +8896,18 @@ function App() {
       {!loading && (
         <>
       {view === 'dashboard' && (
+        <ControlCentrePage
+          data={data}
+          profile={profile}
+          allowedViews={allowedViews}
+          onNavigate={setView}
+        />
+      )}
+
+      {/* The classic widget dashboard remains accessible at view='legacyDashboard'
+          (no menu item by default — could be exposed via Settings or Reports
+          later if anyone misses it). Kept here so we don't lose the code. */}
+      {(false as boolean) && view === 'dashboard' && (
         <DashboardPage
           dashboardMonth={dashboardMonth}
           setDashboardMonth={setDashboardMonth}
@@ -8862,6 +9138,8 @@ function App() {
           setSupplierFilters={setSupplierFilters}
           filteredSuppliers={filteredSuppliers}
           onEdit={editSupplier}
+          companies={(data.companies ?? []).map((c) => ({ id: c.id, name: c.name, roles: c.roles }))}
+          onConvertToCompany={handleConvertSupplierToCompany}
         />
       )}
 
@@ -9109,6 +9387,8 @@ function App() {
           filteredClients={filteredClients}
           onEdit={editClient}
           currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
+          companies={(data.companies ?? []).map((c) => ({ id: c.id, name: c.name, roles: c.roles }))}
+          onConvertToCompany={handleConvertClientToCompany}
         />
       )}
 
@@ -9587,36 +9867,125 @@ function App() {
           company={data.appSettings.company}
           onSave={(run: PayrollRun) => {
             setData((current) => {
-              // Phase 44: when a run is Approved (or already-approved being
-              // saved), apply active loan repayments + Phase 45 adjustments.
-              // We compute these IN PLACE so the payroll page doesn't need
-              // to know about loans/bonuses.
+              // Phase 44 + 55: on Approval, apply loans + Phase 45 adjustments
+              // AND populate the SMETA-required payslip fields (hoursLines,
+              // additionalIncome, additionalDeductions, leaveSnapshot).
+              // Without these the payslip won't pass a SMETA wage-and-benefit
+              // audit even though the maths is correct.
               const previousRun = run.id ? current.payrollRuns.find((r) => r.id === run.id) : null;
               const transitionsToApproved = run.status === 'Approved' && previousRun?.status !== 'Approved';
+              const isAlreadyApproved = run.status === 'Approved' && previousRun?.status === 'Approved';
               let nextLoans = current.staffLoans ?? [];
               let runWithDeductions = run;
-              if (transitionsToApproved) {
-                // First, walk active loans and apply this month's repayment.
-                const repaymentsByEmployee = new Map<string, number>();
-                nextLoans = nextLoans.map((loan) => {
-                  if (loan.status !== 'Active' || loan.balance <= 0) return loan;
-                  const repay = Math.min(loan.monthlyRepayment, loan.balance);
-                  if (repay <= 0) return loan;
-                  repaymentsByEmployee.set(loan.employeeId, (repaymentsByEmployee.get(loan.employeeId) || 0) + repay);
-                  const newBalance = Math.max(0, loan.balance - repay);
-                  return { ...loan, balance: newBalance, status: newBalance === 0 ? 'Settled' as const : loan.status };
+
+              // Always populate SMETA display fields (hours + leave) so the
+              // payslip renders correctly even on Draft. Money calcs only
+              // happen on the Draft→Approved transition.
+              const employeesById = new Map(current.employees.map((e) => [e.id, e]));
+              function leaveSnapshotFor(empId: string) {
+                const emp = employeesById.get(empId);
+                if (!emp) return undefined;
+                const { leaveBalanceFor } = require('./utils/leaveCalculations') as typeof import('./utils/leaveCalculations');
+                const reqs = current.leaveRequests ?? [];
+                return ['Annual', 'Sick', 'Family Responsibility'].map((t) => {
+                  const b = leaveBalanceFor(emp, t as any, reqs);
+                  return { type: t, balance: b.available, adjustment: 0, taken: b.taken, scheduled: b.pending };
                 });
-                // Apply repayments + Phase 45 adjustments to each payslip.
+              }
+              function hoursLinesFor(empId: string, slip: any) {
+                const emp = employeesById.get(empId);
+                if (!emp) return slip.hoursLines;
+                const stdHours = emp.standardMonthlyHours && emp.standardMonthlyHours > 0 ? emp.standardMonthlyHours : 173.33;
+                const rate = emp.hourlyRate && emp.hourlyRate > 0 ? emp.hourlyRate : (slip.basicSalary > 0 ? slip.basicSalary / stdHours : 0);
+                // Build a full Rates & Quantities table. Phase 56: include any
+                // OT / Sunday / Public Holiday hours captured in the run
+                // editor — auditors need to see them at the premium rate so
+                // they can cross-reference with timekeeping.
+                const lines: any[] = [{ type: 'Normal', quantity: stdHours, rate }];
+                if ((slip.overtime15Hours ?? 0) > 0) lines.push({ type: 'Overtime 1.5×', quantity: slip.overtime15Hours, rate: rate * 1.5 });
+                if ((slip.overtime2Hours ?? 0) > 0) lines.push({ type: 'Overtime 2×', quantity: slip.overtime2Hours, rate: rate * 2 });
+                if ((slip.sundayHours ?? 0) > 0) lines.push({ type: 'Sunday (2×)', quantity: slip.sundayHours, rate: rate * 2 });
+                if ((slip.publicHolidayHours ?? 0) > 0) lines.push({ type: 'Public Holiday (2×)', quantity: slip.publicHolidayHours, rate: rate * 2 });
+                return lines;
+              }
+              /** Build the income line items contributed by overtime hours.
+               *  Returns BCEA premium-rated additions per employee. */
+              function overtimeIncomeFor(empId: string, slip: any): Array<{ label: string; amount: number }> {
+                const emp = employeesById.get(empId);
+                if (!emp) return [];
+                const stdHours = emp.standardMonthlyHours && emp.standardMonthlyHours > 0 ? emp.standardMonthlyHours : 173.33;
+                const rate = emp.hourlyRate && emp.hourlyRate > 0 ? emp.hourlyRate : (slip.basicSalary > 0 ? slip.basicSalary / stdHours : 0);
+                const out: Array<{ label: string; amount: number }> = [];
+                if ((slip.overtime15Hours ?? 0) > 0) out.push({ label: `Overtime (1.5×) ${slip.overtime15Hours.toFixed(2)}h`, amount: slip.overtime15Hours * rate * 1.5 });
+                if ((slip.overtime2Hours ?? 0) > 0) out.push({ label: `Overtime (2×) ${slip.overtime2Hours.toFixed(2)}h`, amount: slip.overtime2Hours * rate * 2 });
+                if ((slip.sundayHours ?? 0) > 0) out.push({ label: `Sunday (2×) ${slip.sundayHours.toFixed(2)}h`, amount: slip.sundayHours * rate * 2 });
+                if ((slip.publicHolidayHours ?? 0) > 0) out.push({ label: `Public Holiday (2×) ${slip.publicHolidayHours.toFixed(2)}h`, amount: slip.publicHolidayHours * rate * 2 });
+                return out;
+              }
+
+              if (transitionsToApproved || isAlreadyApproved) {
+                // ─── Loans: compute monthly repayment per employee.
+                const repaymentsByEmployee = new Map<string, { amount: number; loanNumber: string }[]>();
+                if (transitionsToApproved) {
+                  // Only decrement loans on the actual Draft→Approved transition
+                  // so re-saving an already-Approved run doesn't double-charge.
+                  nextLoans = nextLoans.map((loan) => {
+                    if (loan.status !== 'Active' || loan.balance <= 0) return loan;
+                    const repay = Math.min(loan.monthlyRepayment, loan.balance);
+                    if (repay <= 0) return loan;
+                    const list = repaymentsByEmployee.get(loan.employeeId) || [];
+                    list.push({ amount: repay, loanNumber: loan.loanNumber });
+                    repaymentsByEmployee.set(loan.employeeId, list);
+                    const newBalance = Math.max(0, loan.balance - repay);
+                    return { ...loan, balance: newBalance, status: newBalance === 0 ? 'Settled' as const : loan.status };
+                  });
+                }
+
                 const adjustments = run.adjustments ?? [];
                 const updatedPayslips = run.payslips.map((p) => {
-                  const repay = repaymentsByEmployee.get(p.employeeId) || 0;
+                  const myLoanRepayments = repaymentsByEmployee.get(p.employeeId) || [];
+                  const totalLoanRepay = myLoanRepayments.reduce((s, l) => s + l.amount, 0);
                   const myAdj = adjustments.filter((a) => a.employeeId === p.employeeId);
-                  const additions = myAdj.filter((a) => a.type !== 'Other Deduction' && a.type !== 'Loan Repayment').reduce((s, a) => s + a.amount, 0);
-                  const deductions = myAdj.filter((a) => a.type === 'Other Deduction' || a.type === 'Loan Repayment').reduce((s, a) => s + a.amount, 0);
-                  const grossPay = p.grossPay + additions;
-                  const otherDeductions = p.otherDeductions + repay + deductions;
-                  const netPay = grossPay - p.paye - p.uifEmployee - otherDeductions;
-                  return { ...p, grossPay, otherDeductions, netPay };
+                  const additionAdj = myAdj.filter((a) => a.type !== 'Other Deduction' && a.type !== 'Loan Repayment');
+                  const deductionAdj = myAdj.filter((a) => a.type === 'Other Deduction' || a.type === 'Loan Repayment');
+                  const additionsTotal = additionAdj.reduce((s, a) => s + a.amount, 0);
+                  const deductionsTotal = deductionAdj.reduce((s, a) => s + a.amount, 0);
+
+                  // Phase 56 — overtime pay at SA BCEA premiums. Auto-added
+                  // to grossPay AND surfaced as separate income lines on the
+                  // payslip so SMETA auditors see hours × premium rate.
+                  const otIncome = overtimeIncomeFor(p.employeeId, p);
+                  const otTotal = otIncome.reduce((s, x) => s + x.amount, 0);
+
+                  // For repeat saves on already-Approved runs, don't re-add
+                  // money — the previous save already baked it in. We just
+                  // refresh the display fields (hoursLines, leaveSnapshot,
+                  // additionalIncome/Deductions labels).
+                  const baseGross = transitionsToApproved ? p.grossPay + additionsTotal + otTotal : p.grossPay;
+                  const baseOther = transitionsToApproved ? p.otherDeductions + totalLoanRepay + deductionsTotal : p.otherDeductions;
+                  const netPay = baseGross - p.paye - p.uifEmployee - baseOther;
+
+                  // Build itemized line lists for the SMETA payslip. These are
+                  // computed every save so labels stay fresh as data changes.
+                  const additionalIncome = [
+                    ...otIncome,
+                    ...additionAdj.map((a) => ({ label: a.description || a.type, amount: a.amount })),
+                  ];
+                  const additionalDeductions = [
+                    ...myLoanRepayments.map((l) => ({ label: `Loan repayment ${l.loanNumber}`, amount: l.amount })),
+                    ...deductionAdj.map((a) => ({ label: a.description || a.type, amount: a.amount })),
+                  ];
+
+                  return {
+                    ...p,
+                    grossPay: baseGross,
+                    otherDeductions: baseOther,
+                    netPay,
+                    additionalIncome: additionalIncome.length > 0 ? additionalIncome : undefined,
+                    additionalDeductions: additionalDeductions.length > 0 ? additionalDeductions : undefined,
+                    hoursLines: hoursLinesFor(p.employeeId, p),
+                    leaveSnapshot: leaveSnapshotFor(p.employeeId),
+                  };
                 });
                 const totals = updatedPayslips.reduce((acc, p) => ({
                   totalGross: acc.totalGross + p.grossPay,
@@ -9628,7 +9997,19 @@ function App() {
                   totalNet: acc.totalNet + p.netPay,
                 }), { totalGross: 0, totalPaye: 0, totalUifEmployee: 0, totalUifEmployer: 0, totalSdl: 0, totalOtherDeductions: 0, totalNet: 0 });
                 runWithDeductions = { ...run, payslips: updatedPayslips, ...totals };
+              } else {
+                // Draft runs: still populate display fields so the payslip
+                // preview renders something useful before approval.
+                runWithDeductions = {
+                  ...run,
+                  payslips: run.payslips.map((p) => ({
+                    ...p,
+                    hoursLines: hoursLinesFor(p.employeeId, p),
+                    leaveSnapshot: leaveSnapshotFor(p.employeeId),
+                  })),
+                };
               }
+
               if (run.id) {
                 return { ...current, payrollRuns: current.payrollRuns.map((r) => (r.id === run.id ? runWithDeductions : r)), staffLoans: nextLoans };
               }
@@ -10139,6 +10520,26 @@ function App() {
           onApprove={handleApproveLeave}
           onDecline={handleDeclineLeave}
           onCancel={handleCancelLeave}
+        />
+      )}
+
+      {view === 'companies' && (
+        <CompaniesPage
+          companies={data.companies ?? []}
+          clients={data.clients}
+          suppliers={data.suppliers}
+          filters={companyFilters}
+          setFilters={setCompanyFilters}
+          form={companyForm}
+          setForm={setCompanyForm}
+          editingId={companyEditingId}
+          message={companyMessage}
+          onSave={handleSaveCompany}
+          onReset={resetCompanyEditor}
+          onEdit={editCompany}
+          onDelete={handleDeleteCompany}
+          onLinkClient={handleLinkCompanyToClient}
+          onLinkSupplier={handleLinkCompanyToSupplier}
         />
       )}
 

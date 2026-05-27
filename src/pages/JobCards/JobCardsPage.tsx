@@ -3,6 +3,7 @@ import { FlagBadge, StatusBadge } from '../../components/Badge';
 import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { BulkActionsBar } from '../../components/BulkActionsBar';
@@ -620,6 +621,16 @@ export function JobCardsPage(props: JobCardsPageProps) {
           <label className="full-span"><span>Packing / supply notes</span><textarea value={jobForm.packingNotes} onChange={(event) => setJobForm({ ...jobForm, packingNotes: event.target.value })} /></label>
           <label className="full-span"><span>Quality / issue notes</span><textarea value={jobForm.qualityNotes} onChange={(event) => setJobForm({ ...jobForm, qualityNotes: event.target.value })} /></label>
           <label className="full-span"><span>Notes</span><textarea value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} /></label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={jobForm.photoUrls ?? []}
+              onChange={(urls) => setJobForm({ ...jobForm, photoUrls: urls })}
+              recordType="jobs"
+              recordId={jobEditingId || `draft-${Date.now()}`}
+              label="Proof / sample photos (artwork sign-off, finished bag, defect evidence)"
+              max={10}
+            />
+          </div>
         </div>
       ),
     },

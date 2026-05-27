@@ -81,8 +81,18 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
   const pendingTraining = myTraining.filter((t) => !t.acknowledged);
 
   const pendingSops = useMemo(() => {
-    return sopDocuments.filter((s) => s.status === 'Active' && !s.acknowledgements.some((a) => a.staffName.trim().toLowerCase() === fullName.trim().toLowerCase()));
-  }, [sopDocuments, fullName]);
+    // Phase 53 — audience filter: show if mandatoryForAll OR if my role is
+    // in audienceRoles. Back-compat: SOPs with no audience info AND no
+    // mandatory flag are still shown (don't hide pre-Phase-53 docs).
+    return sopDocuments.filter((s) => {
+      if (s.status !== 'Active') return false;
+      if (s.acknowledgements.some((a) => a.staffName.trim().toLowerCase() === fullName.trim().toLowerCase())) return false;
+      if (s.mandatoryForAll) return true;
+      const hasAudience = Array.isArray(s.audienceRoles) && s.audienceRoles.length > 0;
+      if (!hasAudience) return true; // legacy / un-targeted SOP — show to everyone
+      return s.audienceRoles!.includes(role);
+    });
+  }, [sopDocuments, fullName, role]);
 
   // Warnings / commendations / notes addressed to this staff member.
   // Match on linkedEmployeeId first; fall back to name match so portal works

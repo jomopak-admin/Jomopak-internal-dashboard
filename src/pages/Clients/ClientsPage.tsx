@@ -27,6 +27,11 @@ interface ClientsPageProps {
   onEdit: (client: Client) => void;
   /** Current authed user — used for the edit-lock presence banner. */
   currentUser?: { id?: string; name?: string };
+  /** Phase 58 — unified Companies for the linker. Pass an empty array if
+   *  the parent doesn't track them; the picker just hides itself. */
+  companies?: { id: string; name: string; roles?: string[] }[];
+  /** Spin up a new Company pre-filled with this client's shared fields. */
+  onConvertToCompany?: (clientId: string) => void;
 }
 
 export function ClientsPage({
@@ -46,6 +51,8 @@ export function ClientsPage({
   filteredClients,
   onEdit,
   currentUser,
+  companies = [],
+  onConvertToCompany,
 }: ClientsPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -138,6 +145,24 @@ export function ClientsPage({
             <input value={clientForm.name} onChange={(event) => setClientForm({ ...clientForm, name: event.target.value })} />
           </label>
           <label><span>Company name</span><input value={clientForm.companyName} onChange={(event) => setClientForm({ ...clientForm, companyName: event.target.value })} /></label>
+          {companies.length > 0 ? (
+            <label>
+              <span>Linked Company <span className="muted" style={{ fontSize: '0.78rem' }}>(unified business partner)</span></span>
+              <select value={clientForm.companyId ?? ''} onChange={(event) => setClientForm({ ...clientForm, companyId: event.target.value || undefined })}>
+                <option value="">— not linked —</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.roles && c.roles.length > 1 ? ` · ${c.roles.join('+')}` : ''}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {clientEditingId && !clientForm.companyId && onConvertToCompany ? (
+            <div className="full-span" style={{ background: 'var(--jp-orange-soft, #fff3e0)', padding: 10, borderRadius: 8, fontSize: '0.85rem' }}>
+              Not linked to a Company yet.{' '}
+              <button type="button" className="link-button" onClick={() => onConvertToCompany(clientEditingId)}>Create a Company from this client</button>
+              {' '}— useful if this client also supplies you (or vice versa).
+            </div>
+          ) : null}
           <label><span>Account manager</span>
             <select value={clientForm.accountManagerName} onChange={(event) => setClientForm({ ...clientForm, accountManagerName: event.target.value })}>
               <option value="">— Unassigned —</option>

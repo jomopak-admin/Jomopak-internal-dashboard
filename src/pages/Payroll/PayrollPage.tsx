@@ -26,7 +26,7 @@ import {
   Payslip,
 } from '../../types';
 import { formatNumber } from '../../utils/calculations';
-import { buildPayslipHtml, sendEmails, OutgoingEmail } from '../../utils/emailService';
+import { buildPayslipHtml, computePayslipYtd, sendEmails, OutgoingEmail } from '../../utils/emailService';
 
 interface PayrollPageProps {
   payrollRuns: PayrollRun[];
@@ -211,7 +211,8 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
     for (const p of draft.payslips) {
       const emp = employeeById.get(p.employeeId);
       if (!emp?.email) { skipped.push(p.employeeName); continue; }
-      emails.push({ to: emp.email, subject: `Payslip — ${draft.periodLabel}`, html: buildPayslipHtml(p, draft, company) });
+      const ytd = computePayslipYtd(p.employeeId, payrollRuns, draft);
+      emails.push({ to: emp.email, subject: `Payslip — ${draft.periodLabel}`, html: buildPayslipHtml(p, draft, company, ytd, emp) });
     }
     if (emails.length === 0) {
       setMessage('No employees have an email address on file — add emails under Employees first.');
@@ -244,36 +245,13 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
         <div className="payslip-stack">
           {draft.payslips.map((p) => {
             const emp = employeeById.get(p.employeeId);
+            // Phase 55 — use the SMETA-compliant template (with YTD pulled
+            // from prior approved payroll runs in the same tax year).
+            const ytd = computePayslipYtd(p.employeeId, payrollRuns, draft);
+            const html = buildPayslipHtml(p, draft, company, ytd, emp);
             return (
               <article key={p.id} className="card payslip-doc">
-                <header className="payslip-head">
-                  <div>
-                    <strong>{company?.name || 'Jomopak'}</strong>
-                    <div className="muted" style={{ fontSize: 11 }}>{company?.legalName}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <strong>PAYSLIP</strong>
-                    <div className="muted" style={{ fontSize: 11 }}>{draft.periodLabel} · paid {draft.payDate}</div>
-                  </div>
-                </header>
-                <div className="payslip-meta">
-                  <div><span className="muted">Employee</span><strong>{p.employeeName}</strong></div>
-                  <div><span className="muted">Employee no.</span><strong>{p.employeeNumber || '—'}</strong></div>
-                  <div><span className="muted">ID</span><strong>{emp?.idNumber || '—'}</strong></div>
-                  <div><span className="muted">Tax no.</span><strong>{emp?.taxNumber || '—'}</strong></div>
-                </div>
-                <table className="data-table payslip-table">
-                  <tbody>
-                    <tr><td>Basic pay</td><td className="num">{formatNumber(p.basicSalary, 2)}</td></tr>
-                    <tr><td>Allowances</td><td className="num">{formatNumber(p.allowances, 2)}</td></tr>
-                    <tr className="payslip-strong"><td>Gross pay</td><td className="num">{formatNumber(p.grossPay, 2)}</td></tr>
-                    <tr><td>PAYE</td><td className="num">-{formatNumber(p.paye, 2)}</td></tr>
-                    <tr><td>UIF</td><td className="num">-{formatNumber(p.uifEmployee, 2)}</td></tr>
-                    <tr><td>Other deductions</td><td className="num">-{formatNumber(p.otherDeductions, 2)}</td></tr>
-                    <tr className="payslip-strong"><td>Net pay</td><td className="num">R {formatNumber(p.netPay, 2)}</td></tr>
-                  </tbody>
-                </table>
-                <p className="muted payslip-foot">Employer contributions (not deducted): UIF {formatNumber(p.uifEmployer, 2)} · SDL {formatNumber(p.sdl, 2)}</p>
+                <div dangerouslySetInnerHTML={{ __html: html }} />
               </article>
             );
           })}
@@ -329,6 +307,10 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
                     <th>Employee</th>
                     <th className="num">Basic</th>
                     <th className="num">Allow.</th>
+                    <th className="num" title="Overtime hours at 1.5× rate">OT 1.5×</th>
+                    <th className="num" title="Overtime hours at 2× rate">OT 2×</th>
+                    <th className="num">Sunday</th>
+                    <th className="num" title="Public holiday hours at 2× rate">Pub Hol</th>
                     <th className="num">Gross</th>
                     <th className="num">PAYE</th>
                     <th className="num">UIF</th>
@@ -342,6 +324,10 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
                       <td>{p.employeeName}</td>
                       <td><input type="number" className="payroll-input" value={p.basicSalary} onChange={(e) => updateSlip(p.id, { basicSalary: Number(e.target.value) })} /></td>
                       <td><input type="number" className="payroll-input" value={p.allowances} onChange={(e) => updateSlip(p.id, { allowances: Number(e.target.value) })} /></td>
+                      <td><input type="number" step="0.25" className="payroll-input" value={p.overtime15Hours ?? 0} onChange={(e) => updateSlip(p.id, { overtime15Hours: Number(e.target.value) || 0 })} /></td>
+                      <td><input type="number" step="0.25" className="payroll-input" value={p.overtime2Hours ?? 0} onChange={(e) => updateSlip(p.id, { overtime2Hours: Number(e.target.value) || 0 })} /></td>
+                      <td><input type="number" step="0.25" className="payroll-input" value={p.sundayHours ?? 0} onChange={(e) => updateSlip(p.id, { sundayHours: Number(e.target.value) || 0 })} /></td>
+                      <td><input type="number" step="0.25" className="payroll-input" value={p.publicHolidayHours ?? 0} onChange={(e) => updateSlip(p.id, { publicHolidayHours: Number(e.target.value) || 0 })} /></td>
                       <td className="num">{formatNumber(p.grossPay, 2)}</td>
                       <td><input type="number" className="payroll-input" value={p.paye} onChange={(e) => updateSlip(p.id, { paye: Number(e.target.value) })} /></td>
                       <td><input type="number" className="payroll-input" value={p.uifEmployee} onChange={(e) => updateSlip(p.id, { uifEmployee: Number(e.target.value) })} /></td>
@@ -355,6 +341,10 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
                     <td>Totals</td>
                     <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + p.basicSalary, 0), 2)}</td>
                     <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + p.allowances, 0), 2)}</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + (p.overtime15Hours ?? 0), 0), 1)}h</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + (p.overtime2Hours ?? 0), 0), 1)}h</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + (p.sundayHours ?? 0), 0), 1)}h</td>
+                    <td className="num">{formatNumber(draft.payslips.reduce((s, p) => s + (p.publicHolidayHours ?? 0), 0), 1)}h</td>
                     <td className="num">{formatNumber(draft.totalGross, 2)}</td>
                     <td className="num">{formatNumber(draft.totalPaye, 2)}</td>
                     <td className="num">{formatNumber(draft.totalUifEmployee, 2)}</td>
@@ -363,6 +353,9 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
                   </tr>
                 </tfoot>
               </table>
+              <p className="muted" style={{ fontSize: '0.78rem', marginTop: 6 }}>
+                Overtime hours auto-compute pay at SA BCEA premiums (1.5× weekday, 2× Sunday + Public Holiday) using each employee's hourly rate, and appear as separate income lines on the payslip when the run is Approved.
+              </p>
             </div>
           )}
 

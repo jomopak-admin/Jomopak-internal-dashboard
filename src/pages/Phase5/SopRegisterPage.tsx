@@ -19,6 +19,7 @@ import {
   SopDocumentFilters,
   SopDocumentFormState,
   SopStatus,
+  UserRole,
 } from '../../types';
 import { formatDate } from '../../utils/calculations';
 
@@ -141,6 +142,47 @@ export function SopRegisterPage(props: SopRegisterPageProps) {
           <label className="full-span"><span>Document URL</span><input value={form.documentUrl} onChange={(e) => setForm({ ...form, documentUrl: e.target.value })} placeholder="Link to PDF / Doc" /></label>
           <label className="full-span"><span>Summary / change notes</span><textarea rows={3} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="What this SOP covers + what changed in this version" /></label>
           <label className="full-span"><span>Notes</span><textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+
+          {/* Phase 53 — audience targeting. Mandatory-for-all overrides
+              any per-role ticks. Empty list with mandatory off means
+              "no one is nagged" — admin still sees it in the register. */}
+          <div className="full-span" style={{ borderTop: '1px solid var(--jp-line)', paddingTop: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={!!form.mandatoryForAll}
+                onChange={(e) => setForm({ ...form, mandatoryForAll: e.target.checked })}
+              />
+              <span><strong>Mandatory for all staff</strong> — show to everyone regardless of role (use for Code of Conduct, Fire Safety, etc.)</span>
+            </label>
+            {!form.mandatoryForAll ? (
+              <>
+                <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>
+                  Or pick which roles must acknowledge this SOP <span className="muted" style={{ fontWeight: 400 }}>· admin always sees everything</span>
+                </span>
+                <div className="role-toggles">
+                  {(['admin', 'ops', 'production', 'sales', 'artwork', 'accounts'] as UserRole[]).map((r) => {
+                    const ticked = (form.audienceRoles ?? []).includes(r);
+                    return (
+                      <label key={r} className={`role-toggle ${ticked ? 'is-active' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={ticked}
+                          onChange={() => {
+                            const next = ticked
+                              ? (form.audienceRoles ?? []).filter((x) => x !== r)
+                              : [...(form.audienceRoles ?? []), r];
+                            setForm({ ...form, audienceRoles: next });
+                          }}
+                        />
+                        <span>{r}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       ),
     },

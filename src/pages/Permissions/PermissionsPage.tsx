@@ -206,7 +206,7 @@ const initialCreateUserForm = (): CreateUserFormState => ({
 /** Section-access grouped by area, with a Select all / Clear per group. */
 const PERMISSION_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
-  { title: 'Sales & CRM', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'customerStatements', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs', 'costMasters'] },
+  { title: 'Sales & CRM', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'customerStatements', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs', 'costMasters'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'machines', 'maintenance', 'production', 'waste', 'paper'] },
   { title: 'Materials & Stock', views: ['materials', 'shipments', 'invoiceInbox', 'finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'spares', 'stockRequests', 'stockRequestsApprove', 'stockRequestsBuy', 'products', 'suppliers', 'dispatch', 'driverPod', 'deliveryNotes'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
@@ -307,6 +307,7 @@ const VIEW_DESCRIPTIONS: Partial<Record<View, string>> = {
   expenseClaims: 'Expense / claim requests — staff submit, manager approves, accounts pays out (via payslip reimbursement or banking).',
   expenseClaimsApprove: 'Approve / decline expense claims. Grant to factory managers / department heads.',
   stockStatements: 'Generate stock-statement reports per client — opening + receipts + releases + closing on hand. Printable / CSV / email-ready. The physical-stock equivalent of Customer Statements (AR).',
+  companies: 'Unified Business Partner register. One Company record holds shared details (legal name, VAT, banking, address) and links to Client + Supplier profiles for the role-specific stuff. Use this when a partner is both (you sell to them AND buy from them).',
 };
 
 function SectionAccessGrid({ selected, role, onChange }: {

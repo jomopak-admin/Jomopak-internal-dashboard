@@ -151,6 +151,7 @@ function mapSupplier(row: any): Supplier {
     contactPerson: row.contact_person ?? '',
     phone: row.phone ?? '',
     email: row.email ?? '',
+    companyId: row.company_id ?? undefined,
     contacts,
     address: row.address ?? '',
     billingAddress: row.billing_address ?? '',
@@ -409,6 +410,7 @@ export function mapClient(row: any): Client {
     name: row.name,
     version: typeof row.version === 'number' ? row.version : undefined,
     rowUpdatedAt: row.updated_at ?? undefined,
+    companyId: row.company_id ?? undefined,
     companyName: row.company_name ?? '',
     accountManagerName: row.account_manager_name ?? '',
     code: row.code ?? '',
@@ -494,6 +496,7 @@ export function mapClient(row: any): Client {
 function mapProduct(row: any): Product {
   return {
     id: row.id,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : undefined,
     name: row.name,
     sku: row.sku ?? '',
     category: row.category ?? 'Other Packaging',
@@ -553,6 +556,7 @@ function mapClientProductPrice(row: any): ClientProductPrice {
 export function mapJob(row: any): JobCard {
   return {
     id: row.id,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : undefined,
     jobNumber: row.job_number,
     version: typeof row.version === 'number' ? row.version : undefined,
     rowUpdatedAt: row.updated_at ?? undefined,
@@ -673,6 +677,7 @@ function mapMaterialOrderRequest(row: any): MaterialOrderRequest {
 export function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
   return {
     id: row.id,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : undefined,
     stockNumber: row.stock_number,
     barcode: row.barcode ?? row.stock_number,
     createdAt: row.created_at,
@@ -720,6 +725,7 @@ function mapSparePart(row: any): SparePart {
   const itemType = row.item_type === 'Tool' ? 'Tool' : 'Consumable';
   return {
     id: row.id,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : undefined,
     version: typeof row.version === 'number' ? row.version : undefined,
     rowUpdatedAt: row.updated_at ?? undefined,
     partCode: row.part_code,
@@ -1027,6 +1033,40 @@ function mapLeaveRequest(row: any): any {
     approvedAt: row.approved_at ?? '',
     approvalNotes: row.approval_notes ?? '',
     attachmentUrl: row.attachment_url ?? '',
+  };
+}
+
+/** Phase 57 — Unified Companies (business partners). */
+function mapCompany(row: any): any {
+  return {
+    id: row.id,
+    code: row.code ?? '',
+    createdAt: row.created_at ?? '',
+    name: row.name ?? '',
+    legalName: row.legal_name ?? '',
+    registrationNumber: row.registration_number ?? '',
+    vatNumber: row.vat_number ?? '',
+    roles: Array.isArray(row.roles) ? row.roles : [],
+    primaryContact: row.primary_contact ?? { name: '', role: '', email: '', phone: '' },
+    additionalContacts: Array.isArray(row.additional_contacts) ? row.additional_contacts : [],
+    addressLine1: row.address_line1 ?? '',
+    addressLine2: row.address_line2 ?? '',
+    city: row.city ?? '',
+    province: row.province ?? '',
+    postalCode: row.postal_code ?? '',
+    country: row.country ?? '',
+    bankName: row.bank_name ?? '',
+    bankAccountNumber: row.bank_account_number ?? '',
+    bankBranchCode: row.bank_branch_code ?? '',
+    accountType: row.account_type ?? '',
+    defaultCurrency: row.default_currency ?? 'ZAR',
+    defaultPaymentTerms: row.default_payment_terms ?? '',
+    industry: row.industry ?? '',
+    website: row.website ?? '',
+    notes: row.notes ?? '',
+    active: row.active !== false,
+    linkedClientId: row.linked_client_id ?? undefined,
+    linkedSupplierId: row.linked_supplier_id ?? undefined,
   };
 }
 
@@ -1524,6 +1564,8 @@ function mapSopDocument(row: any): any {
     acknowledgements: Array.isArray(row.acknowledgements) ? row.acknowledgements : [],
     supersedesId: row.supersedes_id ?? '',
     notes: row.notes ?? '',
+    audienceRoles: Array.isArray(row.audience_roles) ? row.audience_roles : undefined,
+    mandatoryForAll: Boolean(row.mandatory_for_all),
   };
 }
 
@@ -1855,6 +1897,7 @@ function mapSarsFiling(row: any): any {
 function mapEmployee(row: any): any {
   return {
     id: row.id,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : undefined,
     employeeNumber: row.employee_number ?? '',
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
@@ -1866,6 +1909,8 @@ function mapEmployee(row: any): any {
     department: row.department ?? '',
     payCycle: row.pay_cycle ?? 'Monthly',
     basicSalary: Number(row.basic_salary ?? 0),
+    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
+    standardMonthlyHours: row.standard_monthly_hours != null ? Number(row.standard_monthly_hours) : undefined,
     bankName: row.bank_name ?? '',
     bankAccountNumber: row.bank_account_number ?? '',
     bankBranchCode: row.bank_branch_code ?? '',
@@ -2050,6 +2095,7 @@ export async function fetchAppData(): Promise<AppData> {
     leaveRequestRows,
     staffLoanRows,
     expenseClaimRows,
+    companyRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -2138,6 +2184,8 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('staff_loans'),
     // Phase 49 — Expense claims.
     safeSelect('expense_claims'),
+    // Phase 57 — Unified Companies.
+    safeSelect('companies'),
   ]);
 
   return {
@@ -2208,6 +2256,7 @@ export async function fetchAppData(): Promise<AppData> {
     leaveRequests: leaveRequestRows.map(mapLeaveRequest),
     staffLoans: staffLoanRows.map(mapStaffLoan),
     expenseClaims: expenseClaimRows.map(mapExpenseClaim),
+    companies: companyRows.map(mapCompany),
     appSettings: mapAppSettings(appSettingsRow),
   };
 }
@@ -2216,6 +2265,7 @@ export async function syncAppData(data: AppData): Promise<void> {
   await Promise.all([
     safeUpsert('suppliers', data.suppliers.map((supplier) => ({
       id: supplier.id,
+      company_id: supplier.companyId || null,
       name: supplier.name,
       contact_person: supplier.contactPerson || null,
       phone: supplier.phone || null,
@@ -2426,6 +2476,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('clients', data.clients.map((client) => ({
       id: client.id,
+      company_id: client.companyId || null,
       name: client.name,
       company_name: client.companyName || null,
       account_manager_name: client.accountManagerName || null,
@@ -2509,6 +2560,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('products', data.products.map((product) => ({
       id: product.id,
+      photo_urls: product.photoUrls ?? null,
       name: product.name,
       sku: product.sku || null,
       category: product.category,
@@ -2582,6 +2634,37 @@ export async function syncAppData(data: AppData): Promise<void> {
       approved_at: r.approvedAt || null,
       approval_notes: r.approvalNotes || null,
       attachment_url: r.attachmentUrl || null,
+    }))),
+    // Phase 57 — unified Companies.
+    safeUpsert('companies', (data.companies ?? []).map((c) => ({
+      id: c.id,
+      code: c.code || null,
+      created_at: c.createdAt || null,
+      name: c.name,
+      legal_name: c.legalName || null,
+      registration_number: c.registrationNumber || null,
+      vat_number: c.vatNumber || null,
+      roles: c.roles ?? [],
+      primary_contact: c.primaryContact ?? null,
+      additional_contacts: c.additionalContacts ?? [],
+      address_line1: c.addressLine1 || null,
+      address_line2: c.addressLine2 || null,
+      city: c.city || null,
+      province: c.province || null,
+      postal_code: c.postalCode || null,
+      country: c.country || null,
+      bank_name: c.bankName || null,
+      bank_account_number: c.bankAccountNumber || null,
+      bank_branch_code: c.bankBranchCode || null,
+      account_type: c.accountType || null,
+      default_currency: c.defaultCurrency || 'ZAR',
+      default_payment_terms: c.defaultPaymentTerms || null,
+      industry: c.industry || null,
+      website: c.website || null,
+      notes: c.notes || null,
+      active: c.active !== false,
+      linked_client_id: c.linkedClientId || null,
+      linked_supplier_id: c.linkedSupplierId || null,
     }))),
     // Phase 49 — expense claims.
     safeUpsert('expense_claims', (data.expenseClaims ?? []).map((c) => ({
@@ -2671,6 +2754,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('jobs', data.jobs.map((job) => ({
       id: job.id,
+      photo_urls: job.photoUrls ?? null,
       job_number: job.jobNumber,
       created_at: job.createdAt,
       job_date: job.jobDate,
@@ -2779,6 +2863,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('finished_goods_stock', data.finishedGoodsStock.map((item) => ({
       id: item.id,
+      photo_urls: item.photoUrls ?? null,
       stock_number: item.stockNumber,
       barcode: item.barcode || null,
       created_at: item.createdAt,
@@ -2805,6 +2890,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('spare_parts', data.spareParts.map((part) => ({
       id: part.id,
+      photo_urls: part.photoUrls ?? null,
       part_code: part.partCode,
       barcode: part.barcode || null,
       created_at: part.createdAt,
@@ -3307,6 +3393,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       acknowledgements: d.acknowledgements,
       supersedes_id: d.supersedesId || null,
       notes: d.notes,
+      audience_roles: d.audienceRoles ?? null,
+      mandatory_for_all: !!d.mandatoryForAll,
     }))),
     safeUpsert('staff_training_records', data.staffTrainingRecords.map((r) => ({
       id: r.id, record_number: r.recordNumber, created_at: r.createdAt,
@@ -3560,6 +3648,7 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('employees', data.employees.map((e) => ({
       id: e.id,
+      photo_urls: e.photoUrls ?? null,
       employee_number: e.employeeNumber || '',
       first_name: e.firstName || '',
       last_name: e.lastName || '',
@@ -3571,6 +3660,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       department: e.department || '',
       pay_cycle: e.payCycle,
       basic_salary: e.basicSalary,
+      hourly_rate: e.hourlyRate ?? null,
+      standard_monthly_hours: e.standardMonthlyHours ?? null,
       bank_name: e.bankName || '',
       bank_account_number: e.bankAccountNumber || '',
       bank_branch_code: e.bankBranchCode || '',

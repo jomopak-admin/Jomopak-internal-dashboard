@@ -20,6 +20,9 @@ interface SuppliersPageProps {
   filteredSuppliers: Supplier[];
   onEdit: (supplier: Supplier) => void;
   onDelete: () => void;
+  /** Phase 58 — unified Companies for the linker. */
+  companies?: { id: string; name: string; roles?: string[] }[];
+  onConvertToCompany?: (supplierId: string) => void;
 }
 
 export function SuppliersPage({
@@ -37,6 +40,8 @@ export function SuppliersPage({
   filteredSuppliers,
   onEdit,
   onDelete,
+  companies = [],
+  onConvertToCompany,
 }: SuppliersPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -171,6 +176,24 @@ export function SuppliersPage({
           <label><span>City</span><input value={supplierForm.city} onChange={(event) => setSupplierForm({ ...supplierForm, city: event.target.value })} /></label>
           <label><span>Country</span><input value={supplierForm.country} onChange={(event) => setSupplierForm({ ...supplierForm, country: event.target.value })} /></label>
           <label className="full-span"><span>Address</span><textarea value={supplierForm.address} onChange={(event) => setSupplierForm({ ...supplierForm, address: event.target.value })} /></label>
+          {companies.length > 0 ? (
+            <label>
+              <span>Linked Company <span className="muted" style={{ fontSize: '0.78rem' }}>(unified business partner)</span></span>
+              <select value={supplierForm.companyId ?? ''} onChange={(event) => setSupplierForm({ ...supplierForm, companyId: event.target.value || undefined })}>
+                <option value="">— not linked —</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.roles && c.roles.length > 1 ? ` · ${c.roles.join('+')}` : ''}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {supplierEditingId && !supplierForm.companyId && onConvertToCompany ? (
+            <div className="full-span" style={{ background: 'var(--jp-orange-soft, #fff3e0)', padding: 10, borderRadius: 8, fontSize: '0.85rem' }}>
+              Not linked to a Company yet.{' '}
+              <button type="button" className="link-button" onClick={() => onConvertToCompany(supplierEditingId)}>Create a Company from this supplier</button>
+              {' '}— useful if this supplier also buys from you.
+            </div>
+          ) : null}
           <label className="checkbox-row"><input type="checkbox" checked={supplierForm.active} onChange={(event) => setSupplierForm({ ...supplierForm, active: event.target.checked })} />Active supplier</label>
         </div>
       ),
