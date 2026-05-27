@@ -64,6 +64,11 @@ export function buildSeedData(): AppData {
     inventoryMovements: [],
     biEvents: [],
     notices: [],
+    staffWarnings: [],
+    stockRequests: [],
+    leaveRequests: [],
+    staffLoans: [],
+    expenseClaims: [],
     appSettings: DEFAULT_APP_SETTINGS,
   };
 }

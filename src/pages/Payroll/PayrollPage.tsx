@@ -16,7 +16,10 @@ import { EmptyState } from '../../components/EmptyState';
 import {
   AppSettingsCompany,
   Employee,
+  PAYROLL_ADJUSTMENT_TYPES,
   PayCycle,
+  PayrollAdjustment,
+  PayrollAdjustmentType,
   PayrollRun,
   PayrollRunStatus,
   PAYROLL_RUN_STATUSES,
@@ -156,6 +159,17 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
 
   function updateSlip(id: string, patch: Partial<Payslip>) {
     setDraft((d) => recomputeTotals({ ...d, payslips: d.payslips.map((p) => (p.id === id ? recomputePayslip({ ...p, ...patch }) : p)) }));
+  }
+
+  // Phase 48 — payroll adjustments (bonuses / 13th cheque / commissions).
+  // Stored on draft.adjustments; auto-applied to payslips when run is
+  // Approved (logic lives in App.tsx onSave wrapper).
+  function addAdjustment(a: Omit<PayrollAdjustment, 'id'>) {
+    const next: PayrollAdjustment = { id: `adj-${Date.now().toString(36)}`, ...a };
+    setDraft((d) => ({ ...d, adjustments: [...(d.adjustments ?? []), next] }));
+  }
+  function removeAdjustment(id: string) {
+    setDraft((d) => ({ ...d, adjustments: (d.adjustments ?? []).filter((a) => a.id !== id) }));
   }
 
   function save() {
@@ -352,6 +366,14 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
             </div>
           )}
 
+          {/* Phase 48 — adjustments section (bonuses, 13th cheque, etc.) */}
+          <AdjustmentsSection
+            adjustments={draft.adjustments ?? []}
+            employees={employees}
+            onAdd={addAdjustment}
+            onRemove={removeAdjustment}
+          />
+
           <div className="payroll-summary">
             <div><span className="muted">Net to pay staff</span><strong>R {formatNumber(draft.totalNet, 2)}</strong></div>
             <div><span className="muted">EMP201 to SARS</span><strong>R {formatNumber(emp201, 2)}</strong></div>
@@ -411,5 +433,94 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * Phase 48 — Inline UI for adding payroll adjustments (bonuses, 13th cheque,
+ * commissions, ad-hoc reimbursements). Displayed on the draft-run editor.
+ * Auto-applied to each employee's payslip when the run is Approved (logic
+ * in App.tsx onSave wrapper).
+ */
+function AdjustmentsSection({ adjustments, employees, onAdd, onRemove }: {
+  adjustments: PayrollAdjustment[];
+  employees: Employee[];
+  onAdd: (a: Omit<PayrollAdjustment, 'id'>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [empId, setEmpId] = useState('');
+  const [type, setType] = useState<PayrollAdjustmentType>('Bonus');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [taxable, setTaxable] = useState(true);
+
+  function submit() {
+    const amt = Number(amount);
+    if (!empId || !amt) return;
+    onAdd({ employeeId: empId, type, amount: amt, description: description.trim(), taxable });
+    setEmpId(''); setAmount(''); setDescription(''); setType('Bonus'); setTaxable(true);
+    setOpen(false);
+  }
+
+  const empMap = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
+
+  return (
+    <section className="card" style={{ marginTop: 16, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <strong>Adjustments (bonuses, 13th cheque, commissions, reimbursements)</strong>
+        <button className="ghost-button" onClick={() => setOpen((v) => !v)}>{open ? 'Cancel' : '+ Add adjustment'}</button>
+      </div>
+      {open ? (
+        <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 12 }}>
+          <label><span>Employee</span>
+            <select value={empId} onChange={(e) => setEmpId(e.target.value)}>
+              <option value="">— pick —</option>
+              {employees.filter((e) => e.active !== false).map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}
+            </select>
+          </label>
+          <label><span>Type</span>
+            <select value={type} onChange={(e) => setType(e.target.value as PayrollAdjustmentType)}>
+              {PAYROLL_ADJUSTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label><span>Amount (R)</span>
+            <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </label>
+          <label className="full-span"><span>Description</span>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Q4 performance bonus" />
+          </label>
+          <label className="full-span" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+            <span>Taxable (most additions are; tick OFF for reimbursements)</span>
+          </label>
+          <div className="full-span">
+            <button className="secondary-button" onClick={submit} disabled={!empId || !amount}>Add</button>
+          </div>
+        </div>
+      ) : null}
+      {adjustments.length === 0 ? (
+        <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>No adjustments on this run. Bonuses and once-off payments will auto-apply to payslips when you set the run status to Approved.</p>
+      ) : (
+        <table className="data-table" style={{ marginTop: 4 }}>
+          <thead><tr><th>Employee</th><th>Type</th><th className="num">Amount</th><th>Description</th><th>Taxable</th><th></th></tr></thead>
+          <tbody>
+            {adjustments.map((a) => {
+              const e = empMap.get(a.employeeId);
+              return (
+                <tr key={a.id}>
+                  <td>{e ? `${e.firstName} ${e.lastName}` : a.employeeId}</td>
+                  <td>{a.type}</td>
+                  <td className="num">R {formatNumber(a.amount, 2)}</td>
+                  <td>{a.description}</td>
+                  <td>{a.taxable ? 'Yes' : 'No'}</td>
+                  <td><button className="table-button danger" onClick={() => onRemove(a.id)}>Remove</button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }

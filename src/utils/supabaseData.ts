@@ -1001,6 +1001,131 @@ function mapNotice(row: any): any {
   };
 }
 
+/**
+ * Phase 41 — Staff warnings / commendations / notes register.
+ * Unified entry shape; warning subtypes require an on-screen signature
+ * acknowledgement which we store as a PNG data URL.
+ */
+/**
+ * Phase 42 — Stock requests (purchase request workflow).
+ */
+/** Phase 43 — Leave requests. */
+function mapLeaveRequest(row: any): any {
+  return {
+    id: row.id,
+    requestNumber: row.request_number ?? '',
+    createdAt: row.created_at ?? '',
+    employeeId: row.employee_id ?? '',
+    employeeName: row.employee_name ?? '',
+    type: row.type ?? 'Annual',
+    startDate: row.start_date ?? '',
+    endDate: row.end_date ?? '',
+    days: Number(row.days ?? 0),
+    reason: row.reason ?? '',
+    status: row.status ?? 'Pending',
+    approvedByName: row.approved_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    approvalNotes: row.approval_notes ?? '',
+    attachmentUrl: row.attachment_url ?? '',
+  };
+}
+
+/** Phase 49 — Expense claims. */
+function mapExpenseClaim(row: any): any {
+  return {
+    id: row.id,
+    claimNumber: row.claim_number ?? '',
+    createdAt: row.created_at ?? '',
+    employeeId: row.employee_id ?? '',
+    employeeName: row.employee_name ?? '',
+    category: row.category ?? 'Other',
+    incidentDate: row.incident_date ?? '',
+    amount: Number(row.amount ?? 0),
+    description: row.description ?? '',
+    receiptUrl: row.receipt_url ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    status: row.status ?? 'Pending',
+    approvedByName: row.approved_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    approvalNotes: row.approval_notes ?? '',
+    paidByName: row.paid_by_name ?? '',
+    paidAt: row.paid_at ?? '',
+    payMethod: row.pay_method ?? 'Next Payslip',
+  };
+}
+
+/** Phase 44 — Staff loans. */
+function mapStaffLoan(row: any): any {
+  return {
+    id: row.id,
+    loanNumber: row.loan_number ?? '',
+    createdAt: row.created_at ?? '',
+    employeeId: row.employee_id ?? '',
+    employeeName: row.employee_name ?? '',
+    principalAmount: Number(row.principal_amount ?? 0),
+    monthlyRepayment: Number(row.monthly_repayment ?? 0),
+    startDate: row.start_date ?? '',
+    expectedEndDate: row.expected_end_date ?? '',
+    balance: Number(row.balance ?? 0),
+    status: row.status ?? 'Active',
+    reason: row.reason ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
+function mapStockRequest(row: any): any {
+  return {
+    id: row.id,
+    requestNumber: row.request_number ?? '',
+    createdAt: row.created_at ?? '',
+    requestedByName: row.requested_by_name ?? '',
+    requestedFor: row.requested_for ?? '',
+    itemName: row.item_name ?? '',
+    sparePartId: row.spare_part_id ?? '',
+    sparePartName: row.spare_part_name ?? '',
+    quantity: Number(row.quantity ?? 0),
+    unit: row.unit ?? '',
+    neededByDate: row.needed_by_date ?? '',
+    reason: row.reason ?? '',
+    urgency: row.urgency ?? 'Normal',
+    status: row.status ?? 'Pending Manager',
+    approvedByName: row.approved_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    approvalNotes: row.approval_notes ?? '',
+    fulfilledByName: row.fulfilled_by_name ?? '',
+    fulfilledAt: row.fulfilled_at ?? '',
+    fulfilmentNotes: row.fulfilment_notes ?? '',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    estimatedUnitCost: Number(row.estimated_unit_cost ?? 0),
+    receivedAt: row.received_at ?? '',
+  };
+}
+
+function mapStaffWarning(row: any): any {
+  return {
+    id: row.id,
+    recordNumber: row.record_number ?? '',
+    createdAt: row.created_at ?? '',
+    employeeId: row.employee_id ?? '',
+    employeeName: row.employee_name ?? '',
+    type: row.type ?? 'Note',
+    category: row.category ?? 'Other',
+    incidentDate: row.incident_date ?? '',
+    issuedDate: row.issued_date ?? '',
+    issuedByName: row.issued_by_name ?? '',
+    description: row.description ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    expiresAt: row.expires_at ?? '',
+    attachmentUrl: row.attachment_url ?? '',
+    acknowledged: Boolean(row.acknowledged),
+    acknowledgedDate: row.acknowledged_date ?? '',
+    acknowledgedSignatureDataUrl: row.acknowledged_signature_data_url ?? '',
+    notes: row.notes ?? '',
+  };
+}
+
 // ============================================================================
 // Phase 15 mappers — new tables added by schema-phase15-full-data-model.sql
 // ============================================================================
@@ -1765,6 +1890,7 @@ function mapPayrollRun(row: any): any {
     payDate: row.pay_date ?? '',
     status: row.status ?? 'Draft',
     payslips: Array.isArray(row.payslips) ? row.payslips : [],
+    adjustments: Array.isArray(row.adjustments) ? row.adjustments : undefined,
     totalGross: Number(row.total_gross ?? 0),
     totalPaye: Number(row.total_paye ?? 0),
     totalUifEmployee: Number(row.total_uif_employee ?? 0),
@@ -1919,6 +2045,11 @@ export async function fetchAppData(): Promise<AppData> {
     productPriceVersionRows,
     clientProductPriceRows,
     noticeRows,
+    staffWarningRows,
+    stockRequestRows,
+    leaveRequestRows,
+    staffLoanRows,
+    expenseClaimRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -1997,6 +2128,16 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('client_product_prices'),
     // Phase 40 — Staff-portal notice board.
     safeSelect('notices'),
+    // Phase 41 — Staff warnings / commendations / notes.
+    safeSelect('staff_warnings'),
+    // Phase 42 — Stock requests workflow.
+    safeSelect('stock_requests'),
+    // Phase 43 — Leave management.
+    safeSelect('leave_requests'),
+    // Phase 44 — Staff loans.
+    safeSelect('staff_loans'),
+    // Phase 49 — Expense claims.
+    safeSelect('expense_claims'),
   ]);
 
   return {
@@ -2062,6 +2203,11 @@ export async function fetchAppData(): Promise<AppData> {
     inventoryMovements: inventoryMovements.map(mapInventoryMovement),
     biEvents: biEvents.map(mapBiEvent),
     notices: noticeRows.map(mapNotice),
+    staffWarnings: staffWarningRows.map(mapStaffWarning),
+    stockRequests: stockRequestRows.map(mapStockRequest),
+    leaveRequests: leaveRequestRows.map(mapLeaveRequest),
+    staffLoans: staffLoanRows.map(mapStaffLoan),
+    expenseClaims: expenseClaimRows.map(mapExpenseClaim),
     appSettings: mapAppSettings(appSettingsRow),
   };
 }
@@ -2418,6 +2564,110 @@ export async function syncAppData(data: AppData): Promise<void> {
       expires_at: n.expiresAt || null,
       audience_roles: n.audienceRoles ?? null,
       pinned: !!n.pinned,
+    }))),
+    // Phase 43 — leave requests.
+    safeUpsert('leave_requests', (data.leaveRequests ?? []).map((r) => ({
+      id: r.id,
+      request_number: r.requestNumber,
+      created_at: r.createdAt || null,
+      employee_id: r.employeeId || null,
+      employee_name: r.employeeName,
+      type: r.type,
+      start_date: r.startDate || null,
+      end_date: r.endDate || null,
+      days: r.days,
+      reason: r.reason || null,
+      status: r.status,
+      approved_by_name: r.approvedByName || null,
+      approved_at: r.approvedAt || null,
+      approval_notes: r.approvalNotes || null,
+      attachment_url: r.attachmentUrl || null,
+    }))),
+    // Phase 49 — expense claims.
+    safeUpsert('expense_claims', (data.expenseClaims ?? []).map((c) => ({
+      id: c.id,
+      claim_number: c.claimNumber,
+      created_at: c.createdAt || null,
+      employee_id: c.employeeId || null,
+      employee_name: c.employeeName,
+      category: c.category,
+      incident_date: c.incidentDate || null,
+      amount: c.amount,
+      description: c.description,
+      receipt_url: c.receiptUrl || null,
+      job_id: c.jobId || null,
+      job_number: c.jobNumber || null,
+      status: c.status,
+      approved_by_name: c.approvedByName || null,
+      approved_at: c.approvedAt || null,
+      approval_notes: c.approvalNotes || null,
+      paid_by_name: c.paidByName || null,
+      paid_at: c.paidAt || null,
+      pay_method: c.payMethod || null,
+    }))),
+    // Phase 44 — staff loans.
+    safeUpsert('staff_loans', (data.staffLoans ?? []).map((l) => ({
+      id: l.id,
+      loan_number: l.loanNumber,
+      created_at: l.createdAt || null,
+      employee_id: l.employeeId || null,
+      employee_name: l.employeeName,
+      principal_amount: l.principalAmount,
+      monthly_repayment: l.monthlyRepayment,
+      start_date: l.startDate || null,
+      expected_end_date: l.expectedEndDate || null,
+      balance: l.balance,
+      status: l.status,
+      reason: l.reason || null,
+      notes: l.notes || null,
+    }))),
+    // Phase 42 — stock requests workflow.
+    safeUpsert('stock_requests', (data.stockRequests ?? []).map((r) => ({
+      id: r.id,
+      request_number: r.requestNumber,
+      created_at: r.createdAt || null,
+      requested_by_name: r.requestedByName || null,
+      requested_for: r.requestedFor || null,
+      item_name: r.itemName,
+      spare_part_id: r.sparePartId || null,
+      spare_part_name: r.sparePartName || null,
+      quantity: r.quantity,
+      unit: r.unit || null,
+      needed_by_date: r.neededByDate || null,
+      reason: r.reason || null,
+      urgency: r.urgency,
+      status: r.status,
+      approved_by_name: r.approvedByName || null,
+      approved_at: r.approvedAt || null,
+      approval_notes: r.approvalNotes || null,
+      fulfilled_by_name: r.fulfilledByName || null,
+      fulfilled_at: r.fulfilledAt || null,
+      fulfilment_notes: r.fulfilmentNotes || null,
+      supplier_id: r.supplierId || null,
+      supplier_name: r.supplierName || null,
+      estimated_unit_cost: r.estimatedUnitCost || 0,
+      received_at: r.receivedAt || null,
+    }))),
+    // Phase 41 — staff warnings / commendations / notes.
+    safeUpsert('staff_warnings', (data.staffWarnings ?? []).map((w) => ({
+      id: w.id,
+      record_number: w.recordNumber,
+      created_at: w.createdAt || null,
+      employee_id: w.employeeId || null,
+      employee_name: w.employeeName,
+      type: w.type,
+      category: w.category,
+      incident_date: w.incidentDate || null,
+      issued_date: w.issuedDate || null,
+      issued_by_name: w.issuedByName || null,
+      description: w.description,
+      corrective_action: w.correctiveAction || null,
+      expires_at: w.expiresAt || null,
+      attachment_url: w.attachmentUrl || null,
+      acknowledged: !!w.acknowledged,
+      acknowledged_date: w.acknowledgedDate || null,
+      acknowledged_signature_data_url: w.acknowledgedSignatureDataUrl || null,
+      notes: w.notes || null,
     }))),
     safeUpsert('jobs', data.jobs.map((job) => ({
       id: job.id,
@@ -3342,6 +3592,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       pay_date: r.payDate || '',
       status: r.status,
       payslips: r.payslips,
+      adjustments: r.adjustments ?? null,
       total_gross: r.totalGross,
       total_paye: r.totalPaye,
       total_uif_employee: r.totalUifEmployee,

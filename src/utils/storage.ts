@@ -938,6 +938,11 @@ export function loadAppData(): AppData {
       inventoryMovements: (parsed.inventoryMovements ?? []).map(normalizeInventoryMovement),
       biEvents: parsed.biEvents ?? [],
       notices: (parsed.notices ?? []) as AppData['notices'],
+      staffWarnings: (parsed.staffWarnings ?? []) as AppData['staffWarnings'],
+      stockRequests: (parsed.stockRequests ?? []) as AppData['stockRequests'],
+      leaveRequests: (parsed.leaveRequests ?? []) as AppData['leaveRequests'],
+      staffLoans: (parsed.staffLoans ?? []) as AppData['staffLoans'],
+      expenseClaims: (parsed.expenseClaims ?? []) as AppData['expenseClaims'],
       appSettings: normalizeAppSettings(parsed.appSettings),
     };
   } catch {

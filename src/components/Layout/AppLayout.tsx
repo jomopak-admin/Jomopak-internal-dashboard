@@ -22,10 +22,10 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance'] },
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
-  { title: 'Stock', views: ['finishedStock', 'customerStock', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'products', 'suppliers'] },
+  { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
-  { title: 'Payroll', views: ['payroll', 'employees'] },
-  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'contaminationControl', 'toolBladeControl', 'visitorLog'] },
+  { title: 'Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLoans', 'expenseClaims', 'irp5Centre', 'staffWarnings'] },
+  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'foreignObjectControl', 'pestControl', 'toolBladeControl', 'visitorLog'] },
   { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'notices', 'permissions', 'settings'] },
 ];
 

@@ -75,7 +75,18 @@ export type View =
   | 'dispatch'
   | 'reports'
   | 'myPortal'
-  | 'notices';
+  | 'notices'
+  | 'staffWarnings'
+  | 'stockRequests'
+  | 'stockRequestsApprove'
+  | 'stockRequestsBuy'
+  | 'staffLeave'
+  | 'staffLeaveApprove'
+  | 'staffLoans'
+  | 'irp5Centre'
+  | 'expenseClaims'
+  | 'expenseClaimsApprove'
+  | 'stockStatements';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts';
 export type DashboardWidget =
   | 'stats'
@@ -126,7 +137,7 @@ export const VIEW_LABELS: Record<View, string> = {
   cleaningLogs: 'Cleaning & Sanitation Logs',
   foodSafetyControlCentre: 'Food Safety Control Centre',
   haccpRegister: 'HACCP Hazard Register',
-  nonConformance: 'Non-Conformance Register',
+  nonConformance: 'Incidents & NCRs',
   sopRegister: 'SOP Document Register',
   staffTraining: 'Staff Training & Hygiene',
   ppeControl: 'PPE Issue & Control',
@@ -172,6 +183,17 @@ export const VIEW_LABELS: Record<View, string> = {
   reports: 'Reports',
   myPortal: 'My Stuff',
   notices: 'Notice Board',
+  staffWarnings: 'Staff Warnings & Notes',
+  stockRequests: 'Stock Requests',
+  stockRequestsApprove: 'Approve Stock Requests',
+  stockRequestsBuy: 'Buying Queue',
+  staffLeave: 'Leave Register',
+  staffLeaveApprove: 'Approve Leave',
+  staffLoans: 'Staff Loans',
+  irp5Centre: 'IRP5 / EMP501 Centre',
+  expenseClaims: 'Expense Claims',
+  expenseClaimsApprove: 'Approve Expense Claims',
+  stockStatements: 'Stock Statements',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -252,6 +274,17 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'currencies',
     'myPortal',
     'notices',
+    'staffWarnings',
+    'stockRequests',
+    'stockRequestsApprove',
+    'stockRequestsBuy',
+    'staffLeave',
+    'staffLeaveApprove',
+    'staffLoans',
+    'irp5Centre',
+    'expenseClaims',
+    'expenseClaimsApprove',
+    'stockStatements',
   ],
   ops: [
     'dashboard',
@@ -259,7 +292,6 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'leads',
     'calculator',
     'workTicket',
-    'suppliers',
     'quotes',
     'artwork',
     'customerStock',
@@ -306,26 +338,30 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'paper',
     'dispatch',
     'reports',
+    'stockRequests',
+    'stockRequestsApprove',
+    'staffLeaveApprove',
+    'expenseClaimsApprove',
+    'stockStatements',
   ],
   production: [
+    // Factory-floor operator scope. Intentionally minimal — just what a
+    // machine operator needs to do their shift. Admin can tick more per
+    // user via the Permissions page (e.g. for a senior operator who also
+    // does materials receiving). My Stuff + dashboard are forced on by
+    // normalizeProfilePermissions; listed here so they show up in role
+    // defaults too.
     'dashboard',
     'myPortal',
-    'jobs',
-    'productionSchedule',
-    'materialRequirements',
-    'finishedStock',
-    'stockTake',
-    'driverPod',
-    'materials',
-    'shipments',
-    'chemicalRegister',
-    'foodSafeMaterials',
-    'cleaningLogs',
-    'maintenance',
-    'production',
-    'waste',
-    'paper',
-    'dispatch',
+    'jobs',                // see today's assigned work
+    'productionSchedule',  // see today's queue
+    'production',          // log production output
+    'waste',               // log waste
+    'paper',               // log paper usage
+    'finishedStock',       // see what they've produced
+    'cleaningLogs',        // sanitation between batches
+    'maintenance',         // report machine issues
+    'stockRequests',       // request tape, gloves, tools, etc.
   ],
   sales: [
     'dashboard',
@@ -349,6 +385,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'jobs',
     'products',
     'priceList',
+    'stockStatements',
     'foodSafetyControlCentre',
     'haccpRegister',
     'nonConformance',
@@ -384,6 +421,11 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'customerStatements',
     'employees',
     'payroll',
+    'staffLeave',
+    'staffLoans',
+    'irp5Centre',
+    'expenseClaims',
+    'stockStatements',
     'bankRec',
     'generalLedger',
     'financialStatements',
@@ -2758,6 +2800,12 @@ export type NcrIssueType =
   | 'Product Failed QC'
   | 'Maintenance Issue'
   | 'Cross-Contamination Risk'
+  | 'Customer Complaint'
+  | 'Customer Return'
+  | 'Process Deviation'
+  | 'Wrong Artwork Sent'
+  | 'Equipment Failure'
+  | 'Late Delivery'
   | 'Other';
 
 export const NCR_ISSUE_TYPES: NcrIssueType[] = [
@@ -2774,6 +2822,12 @@ export const NCR_ISSUE_TYPES: NcrIssueType[] = [
   'Product Failed QC',
   'Maintenance Issue',
   'Cross-Contamination Risk',
+  'Customer Complaint',
+  'Customer Return',
+  'Process Deviation',
+  'Wrong Artwork Sent',
+  'Equipment Failure',
+  'Late Delivery',
   'Other',
 ];
 
@@ -4421,6 +4475,9 @@ export interface PayrollRun {
   payDate: string;
   status: PayrollRunStatus;
   payslips: Payslip[];
+  /** Phase 45 — per-employee adjustments (bonuses, 13th cheque, etc.).
+   *  Applied when the run is approved. */
+  adjustments?: PayrollAdjustment[];
   totalGross: number;
   totalPaye: number;
   totalUifEmployee: number;
@@ -4660,6 +4717,11 @@ export interface AppData {
   inventoryMovements: InventoryMovement[];
   biEvents: BiEvent[];
   notices: Notice[];
+  staffWarnings: StaffWarning[];
+  stockRequests: StockRequest[];
+  leaveRequests: LeaveRequest[];
+  staffLoans: StaffLoan[];
+  expenseClaims: ExpenseClaim[];
   appSettings: AppSettings;
 }
 
@@ -4691,6 +4753,471 @@ export interface NoticeFormState {
   expiresAt: string;
   audienceRoles: UserRole[];
   pinned: boolean;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 41 — Staff warnings, commendations & manager notes
+ * ----------------------------------------------------------------------
+ * One register that captures everything a manager writes about a staff
+ * member: formal warnings (progressive discipline), commendations for good
+ * work, and free-form notes (e.g. "asked for leave Friday"). Warnings
+ * require an on-screen signature acknowledgement; commendations and notes
+ * just appear on the staff member's My Stuff page.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type StaffWarningType =
+  | 'Verbal Warning'
+  | 'Written Warning 1'
+  | 'Written Warning 2'
+  | 'Final Written Warning'
+  | 'Commendation'
+  | 'Note';
+
+export const STAFF_WARNING_TYPES: StaffWarningType[] = [
+  'Verbal Warning',
+  'Written Warning 1',
+  'Written Warning 2',
+  'Final Written Warning',
+  'Commendation',
+  'Note',
+];
+
+/** Disciplinary categories — used for filtering + reporting. */
+export type StaffWarningCategory =
+  | 'Performance'
+  | 'Conduct'
+  | 'Attendance'
+  | 'Safety'
+  | 'Hygiene'
+  | 'Recognition'
+  | 'Other';
+
+export const STAFF_WARNING_CATEGORIES: StaffWarningCategory[] = [
+  'Performance',
+  'Conduct',
+  'Attendance',
+  'Safety',
+  'Hygiene',
+  'Recognition',
+  'Other',
+];
+
+export interface StaffWarning {
+  id: string;
+  recordNumber: string;
+  createdAt: string;
+  /** Linked employee. We store both id and name so the record survives if
+   *  the employee row is later renamed or removed. */
+  employeeId: string;
+  employeeName: string;
+  type: StaffWarningType;
+  category: StaffWarningCategory;
+  /** Date the incident / commendation happened. */
+  incidentDate: string;
+  /** Date the warning was issued (formal record date). */
+  issuedDate: string;
+  issuedByName: string;
+  /** What happened — the body of the warning / commendation / note. */
+  description: string;
+  /** Optional remediation action / agreed next steps. */
+  correctiveAction: string;
+  /** Optional date the warning falls off the record (HR policies often
+   *  have warnings expire after 6 or 12 months). */
+  expiresAt: string;
+  /** Optional file URL (signed letter PDF, photo evidence, etc.). */
+  attachmentUrl: string;
+  /** Set when the staff member signs to acknowledge they received it. */
+  acknowledged: boolean;
+  acknowledgedDate: string;
+  acknowledgedSignatureDataUrl: string;
+  notes: string;
+}
+
+export interface StaffWarningFormState {
+  employeeId: string;
+  employeeName: string;
+  type: StaffWarningType;
+  category: StaffWarningCategory;
+  incidentDate: string;
+  issuedDate: string;
+  issuedByName: string;
+  description: string;
+  correctiveAction: string;
+  expiresAt: string;
+  attachmentUrl: string;
+  notes: string;
+}
+
+export interface StaffWarningFilters {
+  search: string;
+  type: string;
+  category: string;
+  employeeId: string;
+  acknowledged: 'all' | 'yes' | 'no';
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 42 — Stock requests (purchase request workflow)
+ * ----------------------------------------------------------------------
+ * Three-stage flow for ad-hoc stock requests from the factory floor:
+ *
+ *   1. Floor staff opens a request ("I need 2 rolls of packing tape")
+ *      → status = 'Pending Manager'
+ *   2. Manager approves or declines (requires 'stockRequestsApprove')
+ *      → status = 'Approved' or 'Declined'
+ *   3. Buyer fulfills approved request (requires 'stockRequestsBuy'):
+ *        a. Issue from current spare-parts stock — auto-deducts qty from
+ *           the linked SparePart's onHand → status = 'Issued from Stock'
+ *        b. Raise a purchase order against a supplier → status = 'PO Created'
+ *        c. When goods arrive → status = 'Received'
+ *      Or decline → status = 'Declined'
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type StockRequestStatus =
+  | 'Pending Manager'
+  | 'Approved'
+  | 'Issued from Stock'
+  | 'PO Created'
+  | 'Received'
+  | 'Declined'
+  | 'Cancelled';
+
+export const STOCK_REQUEST_STATUSES: StockRequestStatus[] = [
+  'Pending Manager',
+  'Approved',
+  'Issued from Stock',
+  'PO Created',
+  'Received',
+  'Declined',
+  'Cancelled',
+];
+
+export type StockRequestUrgency = 'Low' | 'Normal' | 'Urgent';
+
+export const STOCK_REQUEST_URGENCIES: StockRequestUrgency[] = ['Low', 'Normal', 'Urgent'];
+
+export interface StockRequest {
+  id: string;
+  requestNumber: string;
+  createdAt: string;
+  /** Who raised the request (display name). */
+  requestedByName: string;
+  /** Optional area / department / machine / workstation. */
+  requestedFor: string;
+  /** Free-text item name (e.g. "Packing tape, 48mm clear"). */
+  itemName: string;
+  /** Optional link to a known spare part. If set, "issue from stock"
+   *  decrements that spare's on-hand quantity. */
+  sparePartId: string;
+  sparePartName: string;
+  quantity: number;
+  unit: string;
+  neededByDate: string;
+  reason: string;
+  urgency: StockRequestUrgency;
+  status: StockRequestStatus;
+  // Manager approval -----------------------------------------------------
+  approvedByName: string;
+  approvedAt: string;
+  approvalNotes: string;
+  // Buyer fulfilment ----------------------------------------------------
+  fulfilledByName: string;
+  fulfilledAt: string;
+  fulfilmentNotes: string;
+  /** Set when buyer chooses "raise PO" — the chosen supplier. */
+  supplierId: string;
+  supplierName: string;
+  /** Optional estimated unit cost — useful for the PO record. */
+  estimatedUnitCost: number;
+  /** When goods arrived (if PO route). */
+  receivedAt: string;
+}
+
+export interface StockRequestFormState {
+  requestedByName: string;
+  requestedFor: string;
+  itemName: string;
+  sparePartId: string;
+  sparePartName: string;
+  quantity: string;
+  unit: string;
+  neededByDate: string;
+  reason: string;
+  urgency: StockRequestUrgency;
+}
+
+export interface StockRequestFilters {
+  search: string;
+  status: string;
+  urgency: string;
+  tab: 'mine' | 'approval' | 'buying' | 'all';
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 43 — Leave management (SimplePay-style)
+ * ----------------------------------------------------------------------
+ * BCEA defaults baked in:
+ *   • Annual leave: 21 working days per year (≈ 1.75 days per month worked)
+ *   • Sick leave: 30 days per 3-year cycle (10 days/year average)
+ *   • Family responsibility: 3 days per year
+ *   • Unpaid / Maternity / Paternity / Study: tracked but not auto-accrued
+ *
+ * Workflow: staff applies via My Stuff → manager approves/declines →
+ * payroll deducts unpaid days from the next run.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type LeaveType =
+  | 'Annual'
+  | 'Sick'
+  | 'Family Responsibility'
+  | 'Unpaid'
+  | 'Maternity'
+  | 'Paternity'
+  | 'Study'
+  | 'Other';
+
+export const LEAVE_TYPES: LeaveType[] = [
+  'Annual',
+  'Sick',
+  'Family Responsibility',
+  'Unpaid',
+  'Maternity',
+  'Paternity',
+  'Study',
+  'Other',
+];
+
+/** BCEA annual entitlements in working days. Used by the accrual helper to
+ *  compute "days available" against days taken to date. */
+export const BCEA_LEAVE_ENTITLEMENTS: Record<LeaveType, number> = {
+  Annual: 21,
+  Sick: 10,                  // 30 over 3-year cycle = 10/year average
+  'Family Responsibility': 3,
+  Unpaid: 0,                 // unlimited; tracked but no accrual
+  Maternity: 120,            // 4 months unpaid by default
+  Paternity: 10,
+  Study: 0,
+  Other: 0,
+};
+
+export type LeaveStatus =
+  | 'Pending'
+  | 'Approved'
+  | 'Declined'
+  | 'Cancelled'
+  | 'Taken';
+
+export const LEAVE_STATUSES: LeaveStatus[] = [
+  'Pending',
+  'Approved',
+  'Declined',
+  'Cancelled',
+  'Taken',
+];
+
+export interface LeaveRequest {
+  id: string;
+  requestNumber: string;
+  createdAt: string;
+  employeeId: string;
+  employeeName: string;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  /** Working days requested (computed at save time; excludes weekends). */
+  days: number;
+  reason: string;
+  status: LeaveStatus;
+  // Approval -------------------------------------------------------------
+  approvedByName: string;
+  approvedAt: string;
+  approvalNotes: string;
+  /** Optional URL to medical certificate, school letter, etc. */
+  attachmentUrl: string;
+}
+
+export interface LeaveRequestFormState {
+  employeeId: string;
+  employeeName: string;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  attachmentUrl: string;
+}
+
+export interface LeaveRequestFilters {
+  search: string;
+  type: string;
+  status: string;
+  employeeId: string;
+  tab: 'mine' | 'approval' | 'all';
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 44 — Staff loans & salary advances
+ * ----------------------------------------------------------------------
+ * One loan record per agreement. monthlyRepayment is auto-deducted from
+ * the employee's next payslip (added to otherDeductions). Loan balance
+ * decrements as each repayment is applied; status flips to 'Settled' when
+ * balance hits zero.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type StaffLoanStatus = 'Active' | 'Settled' | 'Cancelled' | 'Written Off';
+export const STAFF_LOAN_STATUSES: StaffLoanStatus[] = ['Active', 'Settled', 'Cancelled', 'Written Off'];
+
+export interface StaffLoan {
+  id: string;
+  loanNumber: string;
+  createdAt: string;
+  employeeId: string;
+  employeeName: string;
+  /** Original loan amount. */
+  principalAmount: number;
+  /** Recovered per payslip until balance hits zero. */
+  monthlyRepayment: number;
+  startDate: string;
+  expectedEndDate: string;
+  /** Remaining balance after repayments. */
+  balance: number;
+  status: StaffLoanStatus;
+  reason: string;
+  notes: string;
+}
+
+export interface StaffLoanFormState {
+  employeeId: string;
+  employeeName: string;
+  principalAmount: string;
+  monthlyRepayment: string;
+  startDate: string;
+  expectedEndDate: string;
+  reason: string;
+  notes: string;
+}
+
+export interface StaffLoanFilters {
+  search: string;
+  status: string;
+  employeeId: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 45 — Payroll adjustments (bonuses, 13th cheque, ad-hoc additions)
+ * ----------------------------------------------------------------------
+ * Per-employee adjustments attached to a payroll run. Additions flow into
+ * grossPay; deductions flow into otherDeductions. Taxable adjustments are
+ * folded into PAYE recalc; non-taxable (e.g. reimbursements) bypass tax.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type PayrollAdjustmentType =
+  | 'Bonus'
+  | 'Commission'
+  | '13th Cheque'
+  | 'Reimbursement'
+  | 'Allowance'
+  | 'Loan Repayment'
+  | 'Other Addition'
+  | 'Other Deduction';
+
+export const PAYROLL_ADJUSTMENT_TYPES: PayrollAdjustmentType[] = [
+  'Bonus',
+  'Commission',
+  '13th Cheque',
+  'Reimbursement',
+  'Allowance',
+  'Loan Repayment',
+  'Other Addition',
+  'Other Deduction',
+];
+
+export interface PayrollAdjustment {
+  id: string;
+  employeeId: string;
+  type: PayrollAdjustmentType;
+  /** Always positive — sign is derived from `type`. */
+  amount: number;
+  /** If true, included in PAYE calc; if false, e.g. reimbursement, skipped. */
+  taxable: boolean;
+  description: string;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Phase 49 — Expense / claim requests
+ * ----------------------------------------------------------------------
+ * Staff submits a claim (e.g. R350 for petrol to deliver Job JC-123),
+ * manager approves, accountant marks it paid. Paid claims can flow back
+ * into the next payroll run as a 'Reimbursement' adjustment (non-taxable)
+ * or be paid out via banking.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type ExpenseClaimCategory =
+  | 'Travel / Petrol'
+  | 'Parking / Tolls'
+  | 'Tools & Materials'
+  | 'Customer Entertainment'
+  | 'Office Supplies'
+  | 'Cellphone / Data'
+  | 'Other';
+
+export const EXPENSE_CLAIM_CATEGORIES: ExpenseClaimCategory[] = [
+  'Travel / Petrol',
+  'Parking / Tolls',
+  'Tools & Materials',
+  'Customer Entertainment',
+  'Office Supplies',
+  'Cellphone / Data',
+  'Other',
+];
+
+export type ExpenseClaimStatus = 'Pending' | 'Approved' | 'Declined' | 'Paid' | 'Cancelled';
+export const EXPENSE_CLAIM_STATUSES: ExpenseClaimStatus[] = ['Pending', 'Approved', 'Declined', 'Paid', 'Cancelled'];
+
+export type ExpenseClaimPayMethod = 'Cash' | 'EFT' | 'Next Payslip' | 'Petty Cash';
+export const EXPENSE_CLAIM_PAY_METHODS: ExpenseClaimPayMethod[] = ['Cash', 'EFT', 'Next Payslip', 'Petty Cash'];
+
+export interface ExpenseClaim {
+  id: string;
+  claimNumber: string;
+  createdAt: string;
+  employeeId: string;
+  employeeName: string;
+  category: ExpenseClaimCategory;
+  incidentDate: string;
+  amount: number;
+  description: string;
+  /** Optional URL to scanned receipt / photo. */
+  receiptUrl: string;
+  /** Optional link to the job this claim relates to. */
+  jobId: string;
+  jobNumber: string;
+  status: ExpenseClaimStatus;
+  approvedByName: string;
+  approvedAt: string;
+  approvalNotes: string;
+  paidByName: string;
+  paidAt: string;
+  payMethod: ExpenseClaimPayMethod;
+}
+
+export interface ExpenseClaimFormState {
+  employeeId: string;
+  employeeName: string;
+  category: ExpenseClaimCategory;
+  incidentDate: string;
+  amount: string;
+  description: string;
+  receiptUrl: string;
+  jobId: string;
+  jobNumber: string;
+}
+
+export interface ExpenseClaimFilters {
+  search: string;
+  status: string;
+  category: string;
+  employeeId: string;
+  tab: 'mine' | 'approval' | 'payment' | 'all';
 }
 
 export interface MaterialOrderRequest {

@@ -4947,3 +4947,33 @@ tr.row-muted { opacity: 0.55; }
 .portal-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .portal-pill.due { background: var(--jp-orange-soft, #fff3e0); color: var(--jp-orange); }
 .portal-pill.ok { background: var(--jp-green-soft, #e8f7ec); color: var(--jp-green, #2a8c4a); }
+
+/* ---------- Phase 51 — mobile-first My Stuff staff portal ---------- */
+@media (max-width: 720px) {
+  /* Single column on phones; bigger fonts and taps. */
+  .portal-grid { grid-template-columns: 1fr; gap: 12px; }
+  .portal-card { padding: 14px; border-radius: 14px; }
+  .portal-card h3 { font-size: 1.05rem; }
+  .portal-card .portal-row { padding: 12px 0; }
+  .portal-card .portal-row-main strong { font-size: 1rem; }
+  .portal-card .portal-row-main span { font-size: 0.85rem; }
+  .portal-card button {
+    min-height: 44px; /* iOS tap-target minimum */
+    font-size: 0.95rem;
+    padding: 10px 14px;
+    border-radius: 10px;
+  }
+  .portal-card input, .portal-card select, .portal-card textarea {
+    font-size: 1rem; /* prevents iOS zoom-on-focus */
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+  .portal-pill { padding: 4px 10px; font-size: 0.78rem; }
+  /* My Stuff page title — bigger + friendlier on phones */
+  .page-stack .section-title-text { font-size: 1.2rem; }
+}
+
+/* Slightly tighter spacing on small tablets too. */
+@media (max-width: 980px) {
+  .portal-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+}

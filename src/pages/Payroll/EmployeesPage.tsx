@@ -16,6 +16,9 @@ interface EmployeesPageProps {
   employees: Employee[];
   onSave: (employee: Employee) => void;
   onDelete: (id: string) => void;
+  /** Used by the UI-19 generator for the employer-side fields. */
+  companyName?: string;
+  companyUifReference?: string;
 }
 
 function emptyEmployee(): Employee {
@@ -28,7 +31,81 @@ function emptyEmployee(): Employee {
   };
 }
 
-export function EmployeesPage({ employees, onSave, onDelete }: EmployeesPageProps) {
+function printUi19(e: Employee, companyName: string, companyUifRef: string) {
+  // Phase 50 — produce a printable UI-19 (UIF declaration on staff exit).
+  // Internal/working draft only — the official UI-19 is captured on the
+  // SARS / Dept of Labour ufiling portal but this print speeds up data
+  // gathering when an employee leaves.
+  const w = window.open('', '_blank', 'width=800,height=1100');
+  if (!w) return;
+  w.document.write(`<!doctype html><html><head><title>UI-19 — ${e.firstName} ${e.lastName}</title>
+<style>
+  body { font-family: sans-serif; padding: 24px; color: #111; }
+  h1 { margin: 0 0 4px; }
+  h2 { margin: 24px 0 8px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 12px; vertical-align: top; }
+  .muted { color: #666; font-size: 11px; }
+  .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .sig { margin-top: 60px; }
+  .sig-line { border-top: 1px solid #333; padding-top: 4px; width: 240px; }
+</style></head><body>
+<h1>UI-19 Declaration of Employee Termination</h1>
+<p class="muted">For submission to the UIF (Department of Employment &amp; Labour) — generated from the Jomopak dashboard</p>
+
+<h2>Employer</h2>
+<table><tbody>
+  <tr><td>Employer name</td><td>${companyName || '—'}</td></tr>
+  <tr><td>UIF reference number</td><td>${companyUifRef || '—'}</td></tr>
+</tbody></table>
+
+<h2>Employee</h2>
+<table><tbody>
+  <tr><td>Full name</td><td>${e.firstName} ${e.lastName}</td></tr>
+  <tr><td>ID number</td><td>${e.idNumber || '—'}</td></tr>
+  <tr><td>Tax reference</td><td>${e.taxNumber || '—'}</td></tr>
+  <tr><td>Employee number</td><td>${e.employeeNumber || '—'}</td></tr>
+  <tr><td>Job title</td><td>${e.jobTitle || '—'}</td></tr>
+  <tr><td>Department</td><td>${e.department || '—'}</td></tr>
+  <tr><td>Phone</td><td>${e.phone || '—'}</td></tr>
+  <tr><td>Email</td><td>${e.email || '—'}</td></tr>
+</tbody></table>
+
+<h2>Employment dates</h2>
+<table><tbody>
+  <tr><td>Start date</td><td>${e.startDate || '—'}</td></tr>
+  <tr><td>End date</td><td><strong>${e.endDate || '—'}</strong></td></tr>
+  <tr><td>Pay cycle</td><td>${e.payCycle}</td></tr>
+  <tr><td>Last basic salary</td><td>R ${(e.basicSalary || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td></tr>
+  <tr><td>UIF contributor?</td><td>${e.uifContributor ? 'Yes' : 'No'}</td></tr>
+</tbody></table>
+
+<h2>Banking</h2>
+<table><tbody>
+  <tr><td>Bank</td><td>${e.bankName || '—'}</td></tr>
+  <tr><td>Branch code</td><td>${e.bankBranchCode || '—'}</td></tr>
+  <tr><td>Account number</td><td>${e.bankAccountNumber || '—'}</td></tr>
+  <tr><td>Account type</td><td>${e.accountType || '—'}</td></tr>
+</tbody></table>
+
+<h2>Reason for termination (tick one and add details)</h2>
+<table><tbody>
+  <tr><td>☐ Resigned</td><td>☐ Dismissed</td><td>☐ Retrenched</td></tr>
+  <tr><td>☐ Contract expired</td><td>☐ Death</td><td>☐ Other (specify):</td></tr>
+</tbody></table>
+<p class="muted">Notes: ${e.notes || '—'}</p>
+
+<div class="sig">
+  <div class="sig-line">Employer signature &amp; date</div>
+</div>
+
+<p class="muted" style="margin-top: 40px;">Generated ${new Date().toLocaleString()} — Submit the official UI-19 via the Department of Labour's uFiling portal. This internal copy speeds up the data-gathering step.</p>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 250);
+}
+
+export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference }: EmployeesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [draft, setDraft] = useState<Employee>(emptyEmployee());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -151,6 +228,12 @@ export function EmployeesPage({ employees, onSave, onDelete }: EmployeesPageProp
                   <td style={{ textAlign: 'right' }}>R {formatNumber(e.basicSalary, 2)}</td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <button className="link-button" onClick={() => startEdit(e)}>Edit</button>
+                    {e.endDate ? (
+                      <>
+                        {' · '}
+                        <button className="link-button" onClick={() => printUi19(e, companyName || 'JomoPak', companyUifReference || '')} title="Generate UI-19 (UIF declaration on staff exit)">UI-19</button>
+                      </>
+                    ) : null}
                     {' · '}
                     <button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(e.id)}>Delete</button>
                   </td>

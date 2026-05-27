@@ -47,6 +47,13 @@ import { VisitorLogPage } from './pages/Phase4/VisitorLogPage';
 import { VisitorKioskPage } from './pages/VisitorKiosk/VisitorKioskPage';
 import { NoticesPage } from './pages/Notices/NoticesPage';
 import { StaffPortalPage } from './pages/StaffPortal/StaffPortalPage';
+import { StaffWarningsPage } from './pages/StaffWarnings/StaffWarningsPage';
+import { StockRequestsPage } from './pages/StockRequests/StockRequestsPage';
+import { LeavePage } from './pages/Leave/LeavePage';
+import { StaffLoansPage } from './pages/StaffLoans/StaffLoansPage';
+import { Irp5CentrePage } from './pages/Irp5Centre/Irp5CentrePage';
+import { ExpenseClaimsPage } from './pages/ExpenseClaims/ExpenseClaimsPage';
+import { StockStatementsPage } from './pages/StockStatements/StockStatementsPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -191,6 +198,23 @@ import {
   StaffTrainingFormState,
   Notice,
   NoticeFormState,
+  StaffWarning,
+  StaffWarningFilters,
+  StaffWarningFormState,
+  StockRequest,
+  StockRequestFilters,
+  StockRequestFormState,
+  LeaveRequest,
+  LeaveRequestFilters,
+  LeaveRequestFormState,
+  StaffLoan,
+  StaffLoanFilters,
+  StaffLoanFormState,
+  StaffLoanStatus,
+  ExpenseClaim,
+  ExpenseClaimFilters,
+  ExpenseClaimFormState,
+  ExpenseClaimPayMethod,
   PpeIssueRecord,
   PpeIssueFilters,
   PpeIssueFormState,
@@ -846,6 +870,67 @@ const createInitialNoticeForm = (): NoticeFormState => ({
   pinned: false,
 });
 
+const createInitialLeaveForm = (): LeaveRequestFormState => ({
+  employeeId: '',
+  employeeName: '',
+  type: 'Annual',
+  startDate: getToday(),
+  endDate: getToday(),
+  reason: '',
+  attachmentUrl: '',
+});
+
+const createInitialExpenseClaimForm = (): ExpenseClaimFormState => ({
+  employeeId: '',
+  employeeName: '',
+  category: 'Travel / Petrol',
+  incidentDate: getToday(),
+  amount: '0',
+  description: '',
+  receiptUrl: '',
+  jobId: '',
+  jobNumber: '',
+});
+
+const createInitialLoanForm = (): StaffLoanFormState => ({
+  employeeId: '',
+  employeeName: '',
+  principalAmount: '0',
+  monthlyRepayment: '0',
+  startDate: getToday(),
+  expectedEndDate: '',
+  reason: '',
+  notes: '',
+});
+
+const createInitialStockRequestForm = (): StockRequestFormState => ({
+  requestedByName: '',
+  requestedFor: '',
+  itemName: '',
+  sparePartId: '',
+  sparePartName: '',
+  quantity: '1',
+  unit: '',
+  neededByDate: '',
+  reason: '',
+  urgency: 'Normal',
+});
+
+const createInitialWarningForm = (): StaffWarningFormState => ({
+  employeeId: '',
+  employeeName: '',
+  type: 'Verbal Warning',
+  category: 'Conduct',
+  incidentDate: getToday(),
+  issuedDate: getToday(),
+  issuedByName: '',
+  description: '',
+  correctiveAction: '',
+  expiresAt: '',
+  attachmentUrl: '',
+  notes: '',
+});
+
 const createInitialPpeForm = (): PpeIssueFormState => ({
   staffName: '',
   staffRole: '',
@@ -1482,6 +1567,36 @@ function App() {
   const [noticeEditingId, setNoticeEditingId] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState('');
 
+  // Phase 41 — staff warnings / commendations / notes
+  const [warningForm, setWarningForm] = useState<StaffWarningFormState>(createInitialWarningForm);
+  const [warningEditingId, setWarningEditingId] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [warningFilters, setWarningFilters] = useState<StaffWarningFilters>({ search: '', type: '', category: '', employeeId: '', acknowledged: 'all' });
+
+  // Phase 42 — stock requests workflow (floor → manager → buyer)
+  const [stockRequestForm, setStockRequestForm] = useState<StockRequestFormState>(createInitialStockRequestForm);
+  const [stockRequestEditingId, setStockRequestEditingId] = useState<string | null>(null);
+  const [stockRequestMessage, setStockRequestMessage] = useState('');
+  const [stockRequestFilters, setStockRequestFilters] = useState<StockRequestFilters>({ search: '', status: '', urgency: '', tab: 'mine' });
+
+  // Phase 43 — leave management
+  const [leaveForm, setLeaveForm] = useState<LeaveRequestFormState>(createInitialLeaveForm);
+  const [leaveEditingId, setLeaveEditingId] = useState<string | null>(null);
+  const [leaveMessage, setLeaveMessage] = useState('');
+  const [leaveFilters, setLeaveFilters] = useState<LeaveRequestFilters>({ search: '', type: '', status: '', employeeId: '', tab: 'approval' });
+
+  // Phase 44 — staff loans
+  const [loanForm, setLoanForm] = useState<StaffLoanFormState>(createInitialLoanForm);
+  const [loanEditingId, setLoanEditingId] = useState<string | null>(null);
+  const [loanMessage, setLoanMessage] = useState('');
+  const [loanFilters, setLoanFilters] = useState<StaffLoanFilters>({ search: '', status: '', employeeId: '' });
+
+  // Phase 49 — expense claims
+  const [claimForm, setClaimForm] = useState<ExpenseClaimFormState>(createInitialExpenseClaimForm);
+  const [claimEditingId, setClaimEditingId] = useState<string | null>(null);
+  const [claimMessage, setClaimMessage] = useState('');
+  const [claimFilters, setClaimFilters] = useState<ExpenseClaimFilters>({ search: '', status: '', category: '', employeeId: '', tab: 'mine' });
+
   const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
   const [pestEditingId, setPestEditingId] = useState<string | null>(null);
   const [pestMessage, setPestMessage] = useState('');
@@ -1582,13 +1697,12 @@ function App() {
   const navItems = useMemo(
     () => {
       const perms = [...(profile?.permissions ?? [])];
-      // Phase 38b: surface the combined Contamination Control nav entry for
-      // anyone with either underlying permission — they still go to the same
-      // wrapper page; the tabs inside gate by their actual access.
-      if ((perms.includes('foreignObjectControl') || perms.includes('pestControl')) && !perms.includes('contaminationControl')) {
-        perms.push('contaminationControl');
-      }
-      return perms
+      // Phase 43: Contamination Control wrapper has been retired — NCR now
+      // covers the unified incident view (Foreign Object Found / Pest Evidence
+      // are NCR subtypes). Foreign Object Register + Pest Control Register
+      // remain as separate menu items for BRCGS compliance.
+      const filtered: View[] = perms.filter((p): p is View => p !== 'contaminationControl');
+      return filtered
         .sort((left, right) => VIEW_ORDER.indexOf(left) - VIEW_ORDER.indexOf(right))
         .map((permission) => ({ key: permission, label: VIEW_LABELS[permission] }));
     },
@@ -6983,6 +7097,451 @@ function App() {
     }));
   }
 
+  // ----- Phase 41: Staff warnings / commendations / notes -----
+  function resetWarningEditor() {
+    setWarningForm(createInitialWarningForm());
+    setWarningEditingId(null);
+    setWarningMessage('');
+  }
+  function editWarning(w: StaffWarning) {
+    setWarningEditingId(w.id);
+    setWarningForm({
+      employeeId: w.employeeId,
+      employeeName: w.employeeName,
+      type: w.type,
+      category: w.category,
+      incidentDate: w.incidentDate,
+      issuedDate: w.issuedDate,
+      issuedByName: w.issuedByName,
+      description: w.description,
+      correctiveAction: w.correctiveAction,
+      expiresAt: w.expiresAt,
+      attachmentUrl: w.attachmentUrl,
+      notes: w.notes,
+    });
+    setWarningMessage('');
+  }
+  function handleSaveWarning() {
+    if (!warningForm.employeeId && !warningForm.employeeName.trim()) { setWarningMessage('Pick a staff member.'); return; }
+    if (!warningForm.issuedDate) { setWarningMessage('Issued date is required.'); return; }
+    if (!warningForm.description.trim()) { setWarningMessage('Description is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existing = current.staffWarnings ?? [];
+      const existingNumbers = existing.map((w) => w.recordNumber);
+      const payload: Omit<StaffWarning, 'id' | 'recordNumber' | 'createdAt' | 'acknowledged' | 'acknowledgedDate' | 'acknowledgedSignatureDataUrl'> = {
+        employeeId: warningForm.employeeId,
+        employeeName: warningForm.employeeName.trim(),
+        type: warningForm.type,
+        category: warningForm.category,
+        incidentDate: warningForm.incidentDate,
+        issuedDate: warningForm.issuedDate,
+        issuedByName: warningForm.issuedByName.trim() || (profile?.fullName || profile?.email || ''),
+        description: warningForm.description.trim(),
+        correctiveAction: warningForm.correctiveAction.trim(),
+        expiresAt: warningForm.expiresAt,
+        attachmentUrl: warningForm.attachmentUrl.trim(),
+        notes: warningForm.notes.trim(),
+      };
+      if (warningEditingId) {
+        return { ...current, staffWarnings: existing.map((w) => w.id === warningEditingId ? { ...w, ...payload } : w) };
+      }
+      const newRec: StaffWarning = {
+        id: `warn-${Date.now().toString(36)}`,
+        recordNumber: generateCode('WARN', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        acknowledged: false,
+        acknowledgedDate: '',
+        acknowledgedSignatureDataUrl: '',
+        ...payload,
+      };
+      return { ...current, staffWarnings: [newRec, ...existing] };
+    });
+    setWarningMessage(warningEditingId ? 'Entry updated.' : 'Entry saved.');
+    resetWarningEditor();
+  }
+  function handleDeleteWarning(id: string) {
+    setData((current) => ({ ...current, staffWarnings: (current.staffWarnings ?? []).filter((w) => w.id !== id) }));
+  }
+  function handleAcknowledgeWarning(id: string, signatureDataUrl: string) {
+    setData((current) => ({
+      ...current,
+      staffWarnings: (current.staffWarnings ?? []).map((w) => w.id === id
+        ? { ...w, acknowledged: true, acknowledgedDate: getToday(), acknowledgedSignatureDataUrl: signatureDataUrl || w.acknowledgedSignatureDataUrl }
+        : w),
+    }));
+  }
+
+  // ----- Phase 42: Stock requests workflow -----
+  function resetStockRequestEditor() {
+    setStockRequestForm(createInitialStockRequestForm());
+    setStockRequestEditingId(null);
+    setStockRequestMessage('');
+  }
+  function editStockRequest(r: StockRequest) {
+    setStockRequestEditingId(r.id);
+    setStockRequestForm({
+      requestedByName: r.requestedByName,
+      requestedFor: r.requestedFor,
+      itemName: r.itemName,
+      sparePartId: r.sparePartId,
+      sparePartName: r.sparePartName,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      neededByDate: r.neededByDate,
+      reason: r.reason,
+      urgency: r.urgency,
+    });
+    setStockRequestMessage('');
+  }
+  function handleSaveStockRequest() {
+    if (!stockRequestForm.itemName.trim()) { setStockRequestMessage('What do you need?'); return; }
+    const qty = Number(stockRequestForm.quantity);
+    if (!qty || qty <= 0) { setStockRequestMessage('Quantity must be more than zero.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existing = current.stockRequests ?? [];
+      const existingNumbers = existing.map((r) => r.requestNumber);
+      const requesterName = stockRequestForm.requestedByName.trim() || profile?.fullName || profile?.email || '';
+      const payload: Omit<StockRequest, 'id' | 'requestNumber' | 'createdAt'> = {
+        requestedByName: requesterName,
+        requestedFor: stockRequestForm.requestedFor.trim(),
+        itemName: stockRequestForm.itemName.trim(),
+        sparePartId: stockRequestForm.sparePartId,
+        sparePartName: stockRequestForm.sparePartName,
+        quantity: qty,
+        unit: stockRequestForm.unit.trim(),
+        neededByDate: stockRequestForm.neededByDate,
+        reason: stockRequestForm.reason.trim(),
+        urgency: stockRequestForm.urgency,
+        status: 'Pending Manager',
+        approvedByName: '',
+        approvedAt: '',
+        approvalNotes: '',
+        fulfilledByName: '',
+        fulfilledAt: '',
+        fulfilmentNotes: '',
+        supplierId: '',
+        supplierName: '',
+        estimatedUnitCost: 0,
+        receivedAt: '',
+      };
+      if (stockRequestEditingId) {
+        return { ...current, stockRequests: existing.map((r) => r.id === stockRequestEditingId
+          ? { ...r, ...payload, status: r.status } // keep status if editing
+          : r) };
+      }
+      const newRec: StockRequest = {
+        id: `req-${Date.now().toString(36)}`,
+        requestNumber: generateCode('REQ', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, stockRequests: [newRec, ...existing] };
+    });
+    setStockRequestMessage(stockRequestEditingId ? 'Request updated.' : 'Request submitted to your manager.');
+    resetStockRequestEditor();
+  }
+  function handleCancelStockRequest(id: string) {
+    setData((current) => ({
+      ...current,
+      stockRequests: (current.stockRequests ?? []).map((r) => r.id === id ? { ...r, status: 'Cancelled' as const } : r),
+    }));
+  }
+  function handleApproveStockRequest(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      stockRequests: (current.stockRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Approved' as const, approvedByName: me, approvedAt: new Date().toISOString(), approvalNotes: notes }
+        : r),
+    }));
+  }
+  function handleDeclineStockRequest(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      stockRequests: (current.stockRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Declined' as const, approvedByName: r.approvedByName || me, approvedAt: r.approvedAt || new Date().toISOString(), approvalNotes: notes || r.approvalNotes }
+        : r),
+    }));
+  }
+  function handleIssueStockFromRequest(id: string, notes: string) {
+    // Auto-deduct the qty from the linked spare part's on-hand stock.
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => {
+      const req = (current.stockRequests ?? []).find((r) => r.id === id);
+      if (!req) return current;
+      const nextSpares = current.spareParts.map((s) => s.id === req.sparePartId
+        ? { ...s, quantityOnHand: Math.max(0, (s.quantityOnHand || 0) - req.quantity) }
+        : s);
+      const nextRequests = (current.stockRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Issued from Stock' as const, fulfilledByName: me, fulfilledAt: new Date().toISOString(), fulfilmentNotes: notes }
+        : r);
+      return { ...current, spareParts: nextSpares, stockRequests: nextRequests };
+    });
+  }
+  function handleRaisePoFromRequest(id: string, supplierId: string, supplierName: string, estimatedUnitCost: number, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      stockRequests: (current.stockRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'PO Created' as const, fulfilledByName: me, fulfilledAt: new Date().toISOString(), fulfilmentNotes: notes, supplierId, supplierName, estimatedUnitCost }
+        : r),
+    }));
+  }
+  function handleReceiveStockRequest(id: string) {
+    setData((current) => ({
+      ...current,
+      stockRequests: (current.stockRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Received' as const, receivedAt: new Date().toISOString() }
+        : r),
+    }));
+  }
+
+  // ----- Phase 43: Leave management -----
+  function resetLeaveEditor() {
+    setLeaveForm(createInitialLeaveForm());
+    setLeaveEditingId(null);
+    setLeaveMessage('');
+  }
+  function editLeave(r: LeaveRequest) {
+    setLeaveEditingId(r.id);
+    setLeaveForm({
+      employeeId: r.employeeId,
+      employeeName: r.employeeName,
+      type: r.type,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      reason: r.reason,
+      attachmentUrl: r.attachmentUrl,
+    });
+    setLeaveMessage('');
+  }
+  function handleSaveLeaveRequest() {
+    if (!leaveForm.employeeId && !leaveForm.employeeName.trim()) { setLeaveMessage('Pick a staff member.'); return; }
+    if (!leaveForm.startDate || !leaveForm.endDate) { setLeaveMessage('Pick start and end dates.'); return; }
+    if (leaveForm.endDate < leaveForm.startDate) { setLeaveMessage('End date must be after start date.'); return; }
+    // Lazy import to avoid pulling the helper into every code path.
+    const { countWorkingDays } = require('./utils/leaveCalculations') as typeof import('./utils/leaveCalculations');
+    const days = countWorkingDays(leaveForm.startDate, leaveForm.endDate);
+    setData((current) => {
+      const today = getToday();
+      const existing = current.leaveRequests ?? [];
+      const existingNumbers = existing.map((r) => r.requestNumber);
+      const payload: Omit<LeaveRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'approvedByName' | 'approvedAt' | 'approvalNotes'> = {
+        employeeId: leaveForm.employeeId,
+        employeeName: leaveForm.employeeName.trim(),
+        type: leaveForm.type,
+        startDate: leaveForm.startDate,
+        endDate: leaveForm.endDate,
+        days,
+        reason: leaveForm.reason.trim(),
+        attachmentUrl: leaveForm.attachmentUrl.trim(),
+      };
+      if (leaveEditingId) {
+        return { ...current, leaveRequests: existing.map((r) => r.id === leaveEditingId ? { ...r, ...payload } : r) };
+      }
+      const newRec: LeaveRequest = {
+        id: `leave-${Date.now().toString(36)}`,
+        requestNumber: generateCode('LEAV', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        status: 'Pending',
+        approvedByName: '',
+        approvedAt: '',
+        approvalNotes: '',
+        ...payload,
+      };
+      return { ...current, leaveRequests: [newRec, ...existing] };
+    });
+    setLeaveMessage(leaveEditingId ? 'Leave request updated.' : 'Leave request submitted.');
+    resetLeaveEditor();
+  }
+  function handleApproveLeave(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      leaveRequests: (current.leaveRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Approved' as const, approvedByName: me, approvedAt: new Date().toISOString(), approvalNotes: notes }
+        : r),
+    }));
+  }
+  function handleDeclineLeave(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      leaveRequests: (current.leaveRequests ?? []).map((r) => r.id === id
+        ? { ...r, status: 'Declined' as const, approvedByName: r.approvedByName || me, approvedAt: r.approvedAt || new Date().toISOString(), approvalNotes: notes || r.approvalNotes }
+        : r),
+    }));
+  }
+  function handleCancelLeave(id: string) {
+    setData((current) => ({
+      ...current,
+      leaveRequests: (current.leaveRequests ?? []).map((r) => r.id === id ? { ...r, status: 'Cancelled' as const } : r),
+    }));
+  }
+
+  // ----- Phase 44: Staff loans -----
+  function resetLoanEditor() {
+    setLoanForm(createInitialLoanForm());
+    setLoanEditingId(null);
+    setLoanMessage('');
+  }
+  function editLoan(l: StaffLoan) {
+    setLoanEditingId(l.id);
+    setLoanForm({
+      employeeId: l.employeeId,
+      employeeName: l.employeeName,
+      principalAmount: String(l.principalAmount),
+      monthlyRepayment: String(l.monthlyRepayment),
+      startDate: l.startDate,
+      expectedEndDate: l.expectedEndDate,
+      reason: l.reason,
+      notes: l.notes,
+    });
+    setLoanMessage('');
+  }
+  function handleSaveLoan() {
+    if (!loanForm.employeeId && !loanForm.employeeName.trim()) { setLoanMessage('Pick a staff member.'); return; }
+    const principal = Number(loanForm.principalAmount);
+    const monthly = Number(loanForm.monthlyRepayment);
+    if (!principal || principal <= 0) { setLoanMessage('Principal must be more than zero.'); return; }
+    if (!monthly || monthly <= 0) { setLoanMessage('Monthly repayment must be more than zero.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existing = current.staffLoans ?? [];
+      const existingNumbers = existing.map((l) => l.loanNumber);
+      if (loanEditingId) {
+        return { ...current, staffLoans: existing.map((l) => l.id === loanEditingId
+          ? { ...l, employeeId: loanForm.employeeId, employeeName: loanForm.employeeName.trim(), principalAmount: principal, monthlyRepayment: monthly, startDate: loanForm.startDate, expectedEndDate: loanForm.expectedEndDate, reason: loanForm.reason.trim(), notes: loanForm.notes.trim() }
+          : l) };
+      }
+      const newLoan: StaffLoan = {
+        id: `loan-${Date.now().toString(36)}`,
+        loanNumber: generateCode('LOAN', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        employeeId: loanForm.employeeId,
+        employeeName: loanForm.employeeName.trim(),
+        principalAmount: principal,
+        monthlyRepayment: monthly,
+        startDate: loanForm.startDate,
+        expectedEndDate: loanForm.expectedEndDate,
+        balance: principal,
+        status: 'Active',
+        reason: loanForm.reason.trim(),
+        notes: loanForm.notes.trim(),
+      };
+      return { ...current, staffLoans: [newLoan, ...existing] };
+    });
+    setLoanMessage(loanEditingId ? 'Loan updated.' : 'Loan created.');
+    resetLoanEditor();
+  }
+  function handleUpdateLoanStatus(id: string, status: StaffLoanStatus) {
+    setData((current) => ({
+      ...current,
+      staffLoans: (current.staffLoans ?? []).map((l) => l.id === id
+        ? { ...l, status, balance: status === 'Settled' ? 0 : l.balance }
+        : l),
+    }));
+  }
+
+  // ----- Phase 49: Expense / claim requests -----
+  function resetClaimEditor() {
+    setClaimForm(createInitialExpenseClaimForm());
+    setClaimEditingId(null);
+    setClaimMessage('');
+  }
+  function editClaim(c: ExpenseClaim) {
+    setClaimEditingId(c.id);
+    setClaimForm({
+      employeeId: c.employeeId,
+      employeeName: c.employeeName,
+      category: c.category,
+      incidentDate: c.incidentDate,
+      amount: String(c.amount),
+      description: c.description,
+      receiptUrl: c.receiptUrl,
+      jobId: c.jobId,
+      jobNumber: c.jobNumber,
+    });
+    setClaimMessage('');
+  }
+  function handleSaveClaim() {
+    if (!claimForm.employeeId && !claimForm.employeeName.trim()) { setClaimMessage('Pick a staff member.'); return; }
+    const amt = Number(claimForm.amount);
+    if (!amt || amt <= 0) { setClaimMessage('Amount must be more than zero.'); return; }
+    if (!claimForm.description.trim()) { setClaimMessage('Description is required.'); return; }
+    setData((current) => {
+      const today = getToday();
+      const existing = current.expenseClaims ?? [];
+      const existingNumbers = existing.map((c) => c.claimNumber);
+      const payload: Omit<ExpenseClaim, 'id' | 'claimNumber' | 'createdAt' | 'status' | 'approvedByName' | 'approvedAt' | 'approvalNotes' | 'paidByName' | 'paidAt' | 'payMethod'> = {
+        employeeId: claimForm.employeeId,
+        employeeName: claimForm.employeeName.trim() || profile?.fullName || profile?.email || '',
+        category: claimForm.category,
+        incidentDate: claimForm.incidentDate,
+        amount: amt,
+        description: claimForm.description.trim(),
+        receiptUrl: claimForm.receiptUrl.trim(),
+        jobId: claimForm.jobId,
+        jobNumber: claimForm.jobNumber,
+      };
+      if (claimEditingId) {
+        return { ...current, expenseClaims: existing.map((c) => c.id === claimEditingId ? { ...c, ...payload } : c) };
+      }
+      const newRec: ExpenseClaim = {
+        id: `claim-${Date.now().toString(36)}`,
+        claimNumber: generateCode('CLM', existingNumbers, today),
+        createdAt: new Date().toISOString(),
+        status: 'Pending',
+        approvedByName: '',
+        approvedAt: '',
+        approvalNotes: '',
+        paidByName: '',
+        paidAt: '',
+        payMethod: 'Next Payslip' as ExpenseClaimPayMethod,
+        ...payload,
+      };
+      return { ...current, expenseClaims: [newRec, ...existing] };
+    });
+    setClaimMessage(claimEditingId ? 'Claim updated.' : 'Claim submitted.');
+    resetClaimEditor();
+  }
+  function handleCancelClaim(id: string) {
+    setData((current) => ({
+      ...current,
+      expenseClaims: (current.expenseClaims ?? []).map((c) => c.id === id ? { ...c, status: 'Cancelled' as const } : c),
+    }));
+  }
+  function handleApproveClaim(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      expenseClaims: (current.expenseClaims ?? []).map((c) => c.id === id
+        ? { ...c, status: 'Approved' as const, approvedByName: me, approvedAt: new Date().toISOString(), approvalNotes: notes }
+        : c),
+    }));
+  }
+  function handleDeclineClaim(id: string, notes: string) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      expenseClaims: (current.expenseClaims ?? []).map((c) => c.id === id
+        ? { ...c, status: 'Declined' as const, approvedByName: c.approvedByName || me, approvedAt: c.approvedAt || new Date().toISOString(), approvalNotes: notes || c.approvalNotes }
+        : c),
+    }));
+  }
+  function handleMarkClaimPaid(id: string, method: ExpenseClaimPayMethod) {
+    const me = profile?.fullName || profile?.email || '';
+    setData((current) => ({
+      ...current,
+      expenseClaims: (current.expenseClaims ?? []).map((c) => c.id === id
+        ? { ...c, status: 'Paid' as const, paidByName: me, paidAt: new Date().toISOString(), payMethod: method }
+        : c),
+    }));
+  }
+
   // ----- Phase 4: Pest control -----
   function editPest(r: PestControlRecord) {
     setPestEditingId(r.id);
@@ -9016,6 +9575,8 @@ function App() {
           onDelete={(id: string) => {
             setData((current) => ({ ...current, employees: current.employees.filter((e) => e.id !== id) }));
           }}
+          companyName={data.appSettings.company?.legalName || data.appSettings.company?.name}
+          companyUifReference={data.appSettings.company?.vatNumber}
         />
       )}
 
@@ -9026,12 +9587,54 @@ function App() {
           company={data.appSettings.company}
           onSave={(run: PayrollRun) => {
             setData((current) => {
+              // Phase 44: when a run is Approved (or already-approved being
+              // saved), apply active loan repayments + Phase 45 adjustments.
+              // We compute these IN PLACE so the payroll page doesn't need
+              // to know about loans/bonuses.
+              const previousRun = run.id ? current.payrollRuns.find((r) => r.id === run.id) : null;
+              const transitionsToApproved = run.status === 'Approved' && previousRun?.status !== 'Approved';
+              let nextLoans = current.staffLoans ?? [];
+              let runWithDeductions = run;
+              if (transitionsToApproved) {
+                // First, walk active loans and apply this month's repayment.
+                const repaymentsByEmployee = new Map<string, number>();
+                nextLoans = nextLoans.map((loan) => {
+                  if (loan.status !== 'Active' || loan.balance <= 0) return loan;
+                  const repay = Math.min(loan.monthlyRepayment, loan.balance);
+                  if (repay <= 0) return loan;
+                  repaymentsByEmployee.set(loan.employeeId, (repaymentsByEmployee.get(loan.employeeId) || 0) + repay);
+                  const newBalance = Math.max(0, loan.balance - repay);
+                  return { ...loan, balance: newBalance, status: newBalance === 0 ? 'Settled' as const : loan.status };
+                });
+                // Apply repayments + Phase 45 adjustments to each payslip.
+                const adjustments = run.adjustments ?? [];
+                const updatedPayslips = run.payslips.map((p) => {
+                  const repay = repaymentsByEmployee.get(p.employeeId) || 0;
+                  const myAdj = adjustments.filter((a) => a.employeeId === p.employeeId);
+                  const additions = myAdj.filter((a) => a.type !== 'Other Deduction' && a.type !== 'Loan Repayment').reduce((s, a) => s + a.amount, 0);
+                  const deductions = myAdj.filter((a) => a.type === 'Other Deduction' || a.type === 'Loan Repayment').reduce((s, a) => s + a.amount, 0);
+                  const grossPay = p.grossPay + additions;
+                  const otherDeductions = p.otherDeductions + repay + deductions;
+                  const netPay = grossPay - p.paye - p.uifEmployee - otherDeductions;
+                  return { ...p, grossPay, otherDeductions, netPay };
+                });
+                const totals = updatedPayslips.reduce((acc, p) => ({
+                  totalGross: acc.totalGross + p.grossPay,
+                  totalPaye: acc.totalPaye + p.paye,
+                  totalUifEmployee: acc.totalUifEmployee + p.uifEmployee,
+                  totalUifEmployer: acc.totalUifEmployer + p.uifEmployer,
+                  totalSdl: acc.totalSdl + p.sdl,
+                  totalOtherDeductions: acc.totalOtherDeductions + p.otherDeductions,
+                  totalNet: acc.totalNet + p.netPay,
+                }), { totalGross: 0, totalPaye: 0, totalUifEmployee: 0, totalUifEmployer: 0, totalSdl: 0, totalOtherDeductions: 0, totalNet: 0 });
+                runWithDeductions = { ...run, payslips: updatedPayslips, ...totals };
+              }
               if (run.id) {
-                return { ...current, payrollRuns: current.payrollRuns.map((r) => (r.id === run.id ? run : r)) };
+                return { ...current, payrollRuns: current.payrollRuns.map((r) => (r.id === run.id ? runWithDeductions : r)), staffLoans: nextLoans };
               }
               const num = `PAY-${run.periodYear}${String(run.periodMonth).padStart(2, '0')}`;
-              const created: PayrollRun = { ...run, id: num, runNumber: num, createdAt: new Date().toISOString() };
-              return { ...current, payrollRuns: [created, ...current.payrollRuns] };
+              const created: PayrollRun = { ...runWithDeductions, id: num, runNumber: num, createdAt: new Date().toISOString() };
+              return { ...current, payrollRuns: [created, ...current.payrollRuns], staffLoans: nextLoans };
             });
           }}
           onDelete={(id: string) => {
@@ -9496,8 +10099,148 @@ function App() {
           sopDocuments={data.sopDocuments}
           payrollRuns={data.payrollRuns}
           employees={data.employees}
+          warnings={data.staffWarnings ?? []}
+          leaveRequests={data.leaveRequests ?? []}
           onAcknowledgeTraining={handleAcknowledgeTraining}
           onAcknowledgeSop={handleAcknowledgeSop}
+          onAcknowledgeWarning={handleAcknowledgeWarning}
+          onApplyForLeave={(payload) => {
+            // Phase 47: bridge to existing handleSaveLeaveRequest via the
+            // form state. We snap form, save, then reset to defaults.
+            setLeaveForm({
+              employeeId: profile?.linkedEmployeeId || '',
+              employeeName: profile?.fullName || profile?.email || '',
+              type: payload.type,
+              startDate: payload.startDate,
+              endDate: payload.endDate,
+              reason: payload.reason,
+              attachmentUrl: '',
+            });
+            // Defer to next tick so React commits the form state first.
+            setTimeout(() => handleSaveLeaveRequest(), 0);
+          }}
+        />
+      )}
+
+      {view === 'staffLeave' && (
+        <LeavePage
+          requests={data.leaveRequests ?? []}
+          employees={data.employees}
+          canApprove={allowedViews.has('staffLeaveApprove')}
+          filters={leaveFilters}
+          setFilters={setLeaveFilters}
+          form={leaveForm}
+          setForm={setLeaveForm}
+          editingId={leaveEditingId}
+          message={leaveMessage}
+          onSave={handleSaveLeaveRequest}
+          onReset={resetLeaveEditor}
+          onEdit={editLeave}
+          onApprove={handleApproveLeave}
+          onDecline={handleDeclineLeave}
+          onCancel={handleCancelLeave}
+        />
+      )}
+
+      {view === 'stockStatements' && (
+        <StockStatementsPage
+          clients={data.clients}
+          finishedStock={data.finishedGoodsStock}
+          releases={data.customerStockReleases}
+          company={data.appSettings.company}
+          today={getToday()}
+        />
+      )}
+
+      {view === 'expenseClaims' && (
+        <ExpenseClaimsPage
+          claims={data.expenseClaims ?? []}
+          employees={data.employees}
+          jobs={data.jobs}
+          currentUserName={profile?.fullName || profile?.email || ''}
+          canApprove={allowedViews.has('expenseClaimsApprove')}
+          canPay={allowedViews.has('payroll') || allowedViews.has('accountsPayable')}
+          filters={claimFilters}
+          setFilters={setClaimFilters}
+          form={claimForm}
+          setForm={setClaimForm}
+          editingId={claimEditingId}
+          message={claimMessage}
+          onSave={handleSaveClaim}
+          onReset={resetClaimEditor}
+          onEdit={editClaim}
+          onCancel={handleCancelClaim}
+          onApprove={handleApproveClaim}
+          onDecline={handleDeclineClaim}
+          onMarkPaid={handleMarkClaimPaid}
+        />
+      )}
+
+      {view === 'irp5Centre' && (
+        <Irp5CentrePage
+          employees={data.employees}
+          payrollRuns={data.payrollRuns}
+          companyName={data.appSettings.company?.legalName || data.appSettings.company?.name || 'JomoPak'}
+        />
+      )}
+
+      {view === 'staffLoans' && (
+        <StaffLoansPage
+          loans={data.staffLoans ?? []}
+          employees={data.employees}
+          filters={loanFilters}
+          setFilters={setLoanFilters}
+          form={loanForm}
+          setForm={setLoanForm}
+          editingId={loanEditingId}
+          message={loanMessage}
+          onSave={handleSaveLoan}
+          onReset={resetLoanEditor}
+          onEdit={editLoan}
+          onUpdateStatus={handleUpdateLoanStatus}
+        />
+      )}
+
+      {view === 'stockRequests' && (
+        <StockRequestsPage
+          requests={data.stockRequests ?? []}
+          spareParts={data.spareParts}
+          suppliers={data.suppliers}
+          currentUserName={profile?.fullName || profile?.email || ''}
+          canApprove={allowedViews.has('stockRequestsApprove')}
+          canBuy={allowedViews.has('stockRequestsBuy')}
+          filters={stockRequestFilters}
+          setFilters={setStockRequestFilters}
+          form={stockRequestForm}
+          setForm={setStockRequestForm}
+          editingId={stockRequestEditingId}
+          message={stockRequestMessage}
+          onSave={handleSaveStockRequest}
+          onReset={resetStockRequestEditor}
+          onEdit={editStockRequest}
+          onCancel={handleCancelStockRequest}
+          onApprove={handleApproveStockRequest}
+          onDecline={handleDeclineStockRequest}
+          onIssueFromStock={handleIssueStockFromRequest}
+          onRaisePurchaseOrder={handleRaisePoFromRequest}
+          onMarkReceived={handleReceiveStockRequest}
+        />
+      )}
+
+      {view === 'staffWarnings' && (
+        <StaffWarningsPage
+          warnings={data.staffWarnings ?? []}
+          employees={data.employees}
+          filters={warningFilters}
+          setFilters={setWarningFilters}
+          form={warningForm}
+          setForm={setWarningForm}
+          editingId={warningEditingId}
+          message={warningMessage}
+          onSave={handleSaveWarning}
+          onReset={resetWarningEditor}
+          onEdit={editWarning}
+          onDelete={handleDeleteWarning}
         />
       )}
 
