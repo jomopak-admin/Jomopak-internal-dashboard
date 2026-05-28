@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import { SignaturePad } from '../../components/SignaturePad';
-import { Client, DispatchRecord, ProofOfDelivery, UserProfile } from '../../types';
+import { Client, DeliveryNote, DispatchRecord, DispatchRun, ProofOfDelivery, UserProfile } from '../../types';
 import { captureGps, savePodLocally } from '../../utils/podQueue';
 
 interface DriverPodPageProps {
@@ -28,6 +28,11 @@ interface DriverPodPageProps {
   proofOfDeliveries: ProofOfDelivery[];
   clients: Client[];
   profile: UserProfile | null;
+  /** Phase 61 — assigned routes for this driver. The UI prioritises
+   *  these over raw dispatch records so the driver sees their day as
+   *  a structured run, not a flat list of warehouse exits. */
+  runs?: DispatchRun[];
+  deliveryNotes?: DeliveryNote[];
   /** Called when a POD is captured (synced or pending). Parent merges
    *  into state + triggers the sync flush. */
   onPodCaptured: (pod: ProofOfDelivery) => void;
@@ -60,6 +65,8 @@ export function DriverPodPage({
   proofOfDeliveries,
   clients,
   profile,
+  runs,
+  deliveryNotes,
   onPodCaptured,
 }: DriverPodPageProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -80,28 +87,121 @@ export function DriverPodPage({
     [activeId, dispatches],
   );
 
+  // Phase 61 — find the driver's currently-active run (Loaded / In Progress)
+  // assigned to this user. Most days there will be at most one. We bias
+  // toward today's date but accept any not-yet-completed run so an early
+  // start (set up the day before) still shows up.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const myActiveRun = useMemo(() => {
+    if (!runs || runs.length === 0 || !profile?.id) return null;
+    const mine = runs.filter((r) =>
+      (r.driverUserId === profile.id || (profile.fullName && r.driverName === profile.fullName))
+      && (r.status === 'Planned' || r.status === 'Loaded' || r.status === 'In Progress')
+    );
+    if (mine.length === 0) return null;
+    // Prefer today's run, then most recent runDate.
+    mine.sort((a, b) => {
+      const at = a.runDate === todayIso ? 0 : 1;
+      const bt = b.runDate === todayIso ? 0 : 1;
+      if (at !== bt) return at - bt;
+      return (b.runDate || '').localeCompare(a.runDate || '');
+    });
+    return mine[0];
+  }, [runs, profile?.id, profile?.fullName, todayIso]);
+
+  function dispatchForStop(deliveryNoteId: string): DispatchRecord | undefined {
+    if (!deliveryNotes) return undefined;
+    const dn = deliveryNotes.find((d) => d.id === deliveryNoteId);
+    if (!dn) return undefined;
+    const firstId = dn.dispatchRecordIds?.[0];
+    if (!firstId) return undefined;
+    return dispatches.find((d) => d.id === firstId);
+  }
+
+  function navigateUrl(address: string): string {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  }
+
   if (!active) {
     return (
       <div className="driver-pod-shell">
         <SectionTitle
           title="Driver POD"
-          subtitle={`Welcome ${profile?.fullName || 'driver'} — ${pendingDispatches.length} delivery${pendingDispatches.length === 1 ? '' : 's'} to capture.`}
+          subtitle={`Welcome ${profile?.fullName || 'driver'}${myActiveRun ? ` — run ${myActiveRun.runNumber}` : ` — ${pendingDispatches.length} delivery${pendingDispatches.length === 1 ? '' : 's'} to capture.`}`}
         />
-        {pendingDispatches.length === 0 ? (
-          <EmptyState title="All deliveries captured" body="Nothing waiting in your run sheet right now." />
-        ) : (
-          <ul className="driver-pod-list">
-            {pendingDispatches.map((d) => (
-              <li key={d.id}>
-                <button className="driver-pod-card" onClick={() => setActiveId(d.id)}>
-                  <strong>{d.customerName || 'Unknown customer'}</strong>
-                  <span>Dispatch {d.dispatchNumber} • Job {d.jobNumber}</span>
-                  <small>Qty {d.quantityDispatched} {d.quantityUnit}</small>
-                </button>
-              </li>
-            ))}
-          </ul>
+
+        {myActiveRun && (
+          <section className="card driver-run-panel">
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <div>
+                <strong style={{ fontSize: '1.05rem' }}>Today's run · {myActiveRun.runNumber}</strong>
+                <div className="muted" style={{ fontSize: '0.8rem' }}>
+                  {myActiveRun.runDate} · {myActiveRun.stops.length} stop{myActiveRun.stops.length === 1 ? '' : 's'} · {myActiveRun.status}
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: '0.78rem', textAlign: 'right' }}>
+                {myActiveRun.vehicleRegistration || ''}
+                {myActiveRun.vehicleDescription ? ` · ${myActiveRun.vehicleDescription}` : ''}
+              </div>
+            </header>
+            {myActiveRun.notes && (
+              <p className="muted" style={{ background: '#fef3c7', padding: '6px 10px', borderRadius: 6, fontSize: '0.78rem', margin: '6px 0' }}>
+                {myActiveRun.notes}
+              </p>
+            )}
+            <ol className="driver-run-stops">
+              {myActiveRun.stops.map((stop, idx) => {
+                const completed = Boolean(stop.outcome);
+                const linkedDispatch = dispatchForStop(stop.deliveryNoteId);
+                return (
+                  <li key={stop.deliveryNoteId} className={`driver-run-stop ${completed ? 'is-done' : ''}`}>
+                    <div className="driver-run-stop-num">{idx + 1}</div>
+                    <div className="driver-run-stop-body">
+                      <strong>{stop.clientName}</strong>
+                      <div className="muted" style={{ fontSize: '0.78rem' }}>{stop.deliveryNoteNumber}</div>
+                      {stop.clientAddress && <div style={{ fontSize: '0.78rem' }}>{stop.clientAddress}</div>}
+                      {completed && <div style={{ fontSize: '0.75rem', color: '#166534' }}>✓ {stop.outcome}</div>}
+                    </div>
+                    <div className="driver-run-stop-actions">
+                      {stop.clientAddress && (
+                        <a className="table-button" href={navigateUrl(stop.clientAddress)} target="_blank" rel="noopener noreferrer">
+                          Navigate
+                        </a>
+                      )}
+                      {!completed && linkedDispatch && (
+                        <button className="secondary-button" onClick={() => setActiveId(linkedDispatch.id)}>
+                          Capture POD
+                        </button>
+                      )}
+                      {!completed && !linkedDispatch && (
+                        <span className="muted" style={{ fontSize: '0.72rem' }}>No dispatch linked</span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
         )}
+
+        {pendingDispatches.length === 0 && !myActiveRun ? (
+          <EmptyState title="All deliveries captured" body="Nothing waiting in your run sheet right now." />
+        ) : pendingDispatches.length > 0 ? (
+          <>
+            {myActiveRun && <h4 style={{ marginTop: 16 }}>Other dispatches (ad-hoc / samples)</h4>}
+            <ul className="driver-pod-list">
+              {pendingDispatches.map((d) => (
+                <li key={d.id}>
+                  <button className="driver-pod-card" onClick={() => setActiveId(d.id)}>
+                    <strong>{d.customerName || 'Unknown customer'}</strong>
+                    <span>Dispatch {d.dispatchNumber} • Job {d.jobNumber}</span>
+                    <small>Qty {d.quantityDispatched} {d.quantityUnit}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </div>
     );
   }

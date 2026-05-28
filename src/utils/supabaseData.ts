@@ -11,6 +11,7 @@ import {
   DEFAULT_APP_SETTINGS,
   DeliveryNote,
   DispatchRecord,
+  DispatchRun,
   FinishedGoodsStock,
   InventoryMovement,
   JobCard,
@@ -349,6 +350,45 @@ function mapDeliveryNote(row: any): DeliveryNote {
     collectedByName: row.collected_by_name ?? '',
     collectedByDate: row.collected_by_date ?? '',
     collectedByIdNumber: row.collected_by_id_number ?? '',
+    dispatchRunId: row.dispatch_run_id ?? '',
+    dispatchRunNumber: row.dispatch_run_number ?? '',
+  };
+}
+
+function mapDispatchRun(row: any): DispatchRun {
+  return {
+    id: row.id,
+    runNumber: row.run_number,
+    createdAt: row.created_at,
+    runDate: row.run_date ?? '',
+    driverUserId: row.driver_user_id ?? '',
+    driverName: row.driver_name ?? '',
+    vehicleRegistration: row.vehicle_registration ?? '',
+    vehicleDescription: row.vehicle_description ?? '',
+    status: row.status ?? 'Planned',
+    stops: Array.isArray(row.stops) ? row.stops.map((s: any, idx: number) => ({
+      sequence: Number(s.sequence ?? idx),
+      deliveryNoteId: s.deliveryNoteId ?? s.delivery_note_id ?? '',
+      deliveryNoteNumber: s.deliveryNoteNumber ?? s.delivery_note_number ?? '',
+      clientId: s.clientId ?? s.client_id ?? '',
+      clientName: s.clientName ?? s.client_name ?? '',
+      clientAddress: s.clientAddress ?? s.client_address ?? '',
+      arrivedAt: s.arrivedAt ?? s.arrived_at ?? undefined,
+      completedAt: s.completedAt ?? s.completed_at ?? undefined,
+      outcome: s.outcome || undefined,
+      notes: s.notes ?? '',
+    })) : [],
+    plannedAt: row.planned_at ?? '',
+    loadedAt: row.loaded_at ?? '',
+    loadedByName: row.loaded_by_name ?? '',
+    departureTime: row.departure_time ?? '',
+    returnTime: row.return_time ?? '',
+    completedAt: row.completed_at ?? '',
+    odometerStart: Number(row.odometer_start ?? 0),
+    odometerEnd: Number(row.odometer_end ?? 0),
+    notes: row.notes ?? '',
+    version: row.version !== undefined ? Number(row.version) : undefined,
+    rowUpdatedAt: row.row_updated_at ?? undefined,
   };
 }
 
@@ -2097,6 +2137,7 @@ export async function fetchAppData(): Promise<AppData> {
     staffLoanRows,
     expenseClaimRows,
     companyRows,
+    dispatchRunRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -2187,6 +2228,8 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('expense_claims'),
     // Phase 57 — Unified Companies.
     safeSelect('companies'),
+    // Phase 61 — Dispatch Runs (route sheets).
+    safeSelect('dispatch_runs'),
   ]);
 
   return {
@@ -2234,6 +2277,7 @@ export async function fetchAppData(): Promise<AppData> {
     wasteEntries: wasteEntries.map(mapWaste),
     paperLogs: paperLogs.map(mapPaper),
     dispatchRecords: dispatchRecords.map(mapDispatch),
+    dispatchRuns: dispatchRunRows.map(mapDispatchRun),
     proofOfDeliveries: proofOfDeliveriesRows.map(mapProofOfDelivery),
     invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
     documents: documentRows.map(mapDocumentRecord),
@@ -2431,6 +2475,29 @@ export async function syncAppData(data: AppData): Promise<void> {
       line_items: note.lineItems,
       notes: note.notes || null,
       customer_note: note.customerNote || null,
+      dispatch_run_id: note.dispatchRunId || null,
+      dispatch_run_number: note.dispatchRunNumber || null,
+    }))),
+    safeUpsert('dispatch_runs', (data.dispatchRuns ?? []).map((run) => ({
+      id: run.id,
+      run_number: run.runNumber,
+      created_at: run.createdAt,
+      run_date: run.runDate,
+      driver_user_id: run.driverUserId || null,
+      driver_name: run.driverName || '',
+      vehicle_registration: run.vehicleRegistration || '',
+      vehicle_description: run.vehicleDescription || '',
+      status: run.status,
+      stops: run.stops,
+      planned_at: run.plannedAt || null,
+      loaded_at: run.loadedAt || null,
+      loaded_by_name: run.loadedByName || '',
+      departure_time: run.departureTime || null,
+      return_time: run.returnTime || null,
+      completed_at: run.completedAt || null,
+      odometer_start: run.odometerStart,
+      odometer_end: run.odometerEnd,
+      notes: run.notes || '',
     }))),
     safeUpsert('paper_rates', data.paperRates.map((rate) => ({
       id: rate.id,

@@ -87,7 +87,8 @@ export type View =
   | 'expenseClaims'
   | 'expenseClaimsApprove'
   | 'stockStatements'
-  | 'companies';
+  | 'companies'
+  | 'dispatchRuns';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
 export type DashboardWidget =
   | 'stats'
@@ -196,6 +197,7 @@ export const VIEW_LABELS: Record<View, string> = {
   expenseClaimsApprove: 'Approve Expense Claims',
   stockStatements: 'Stock Statements',
   companies: 'Companies',
+  dispatchRuns: 'Dispatch Runs',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -255,6 +257,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'leadAnalytics',
     'reorderReminders',
     'driverPod',
+    'dispatchRuns',
     'invoiceInbox',
     'production',
     'waste',
@@ -335,6 +338,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'morningDigest',
     'reorderReminders',
     'driverPod',
+    'dispatchRuns',
     'invoiceInbox',
     'production',
     'waste',
@@ -3861,6 +3865,103 @@ export interface DispatchRecord {
   fscRelated: boolean;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 61 — Dispatch Run (Route Sheet / Trip Sheet)
+ *
+ * A higher-level concept than DispatchRecord. One run = one driver +
+ * one vehicle + one day + an ordered list of delivery notes (stops).
+ *
+ * Lifecycle:
+ *   Planned   → dispatch supervisor created the run and assigned DNs
+ *   Loaded    → warehouse signed off that the vehicle is physically loaded
+ *   In Progress → driver left the yard (departureTime set)
+ *   Completed → all stops have a POD captured (or marked Failed)
+ *   Cancelled → run abandoned before departure
+ *
+ * The driver's PWA shows the next 'In Progress' or 'Loaded' run assigned
+ * to them. They tap a stop, capture POD, swipe to the next stop. When
+ * all stops are reconciled the run flips to Completed.
+ *
+ * The legacy DispatchRecord stays for ad-hoc / sample-out cases that
+ * don't fit a planned run.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type DispatchRunStatus = 'Planned' | 'Loaded' | 'In Progress' | 'Completed' | 'Cancelled';
+
+export interface DispatchRunStop {
+  /** Order in the route (0-indexed). Drag-to-reorder updates this. */
+  sequence: number;
+  /** FK to the delivery note this stop fulfils. */
+  deliveryNoteId: string;
+  /** Convenience copies so the driver's offline payload doesn't need to
+   *  join. Rebuilt from the DN whenever the run is opened. */
+  deliveryNoteNumber: string;
+  clientId: string;
+  clientName: string;
+  clientAddress: string;
+  /** Driver-captured arrival / departure times (best-effort). */
+  arrivedAt?: string;
+  completedAt?: string;
+  /** Per-stop outcome — mirrors POD outcome. Undefined until POD captured. */
+  outcome?: 'Delivered' | 'Partial' | 'Refused' | 'Failed';
+  /** Notes captured at the stop (e.g. "gate closed, left at security"). */
+  notes?: string;
+}
+
+export interface DispatchRun {
+  id: string;
+  runNumber: string;
+  createdAt: string;
+  /** Day the run is scheduled to depart. */
+  runDate: string;
+  /** Assigned driver. driverUserId points at a JomoPak profile when the
+   *  driver has an account; driverName is always set for printable
+   *  manifests + casual contractors. */
+  driverUserId: string;
+  driverName: string;
+  /** Vehicle assignment — free text for now (e.g. "CA 12-345 GP / Hilux"). */
+  vehicleRegistration: string;
+  vehicleDescription: string;
+  /** Lifecycle status. */
+  status: DispatchRunStatus;
+  /** Ordered list of stops (each is one delivery note). */
+  stops: DispatchRunStop[];
+  /** Timestamps for each lifecycle transition — drive SMETA + audit. */
+  plannedAt: string;
+  loadedAt: string;
+  loadedByName: string;
+  departureTime: string;
+  returnTime: string;
+  completedAt: string;
+  /** Odometer captured at start / end of the run for fleet costing. */
+  odometerStart: number;
+  odometerEnd: number;
+  /** Free-form planner notes (e.g. "Bongani — leave by 06:30 for Sandton"). */
+  notes: string;
+  /** Optimistic concurrency token. */
+  version?: number;
+  rowUpdatedAt?: string;
+}
+
+export interface DispatchRunFilters {
+  search: string;
+  driver: string;
+  status: DispatchRunStatus | 'all';
+  fromDate: string;
+  toDate: string;
+}
+
+export interface DispatchRunFormState {
+  runDate: string;
+  driverUserId: string;
+  driverName: string;
+  vehicleRegistration: string;
+  vehicleDescription: string;
+  status: DispatchRunStatus;
+  /** Selected DN ids in stop order. */
+  deliveryNoteIds: string[];
+  notes: string;
+}
+
 export interface DeliveryNote {
   id: string;
   deliveryNoteNumber: string;
@@ -3903,6 +4004,11 @@ export interface DeliveryNote {
   collectedByIdNumber: string;
   /** Phase 34 — customer-facing note printed on the delivery note. */
   customerNote?: string;
+  /** Phase 61 — the Dispatch Run this DN is bundled into, if any.
+   *  Empty for DNs not yet assigned to a run (the dispatcher's
+   *  "ready to ship" queue) or DNs that bypass runs entirely. */
+  dispatchRunId?: string;
+  dispatchRunNumber?: string;
 }
 
 export interface InvoiceLineItem {
@@ -4922,6 +5028,9 @@ export interface AppData {
   wasteEntries: WasteEntry[];
   paperLogs: PaperLog[];
   dispatchRecords: DispatchRecord[];
+  /** Phase 61 — Dispatch Runs (route sheets). Optional so legacy saved
+   *  state without runs continues to load cleanly. */
+  dispatchRuns?: DispatchRun[];
   proofOfDeliveries: ProofOfDelivery[];
   invoiceInboxItems: InvoiceInboxItem[];
   documents: DocumentRecord[];

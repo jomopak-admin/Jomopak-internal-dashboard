@@ -139,6 +139,93 @@ p {
   display: none;
 }
 
+/* Phase 61 — Dispatch Run builder. Two-column grid: assigned stops on
+   the left, "ready to ship" pool on the right. */
+.run-builder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 760px) {
+  .run-builder-grid { grid-template-columns: 1fr; }
+}
+.run-stops-list, .run-ready-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.run-stop-row, .run-ready-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+}
+.run-stop-num {
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+.run-stop-body { flex: 1; min-width: 0; }
+.run-stop-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.run-ready-row { justify-content: space-between; }
+.status-badge.status-ok { background: #dcfce7; color: #166534; }
+.status-badge.status-info { background: #dbeafe; color: #1e40af; }
+.status-badge.status-warn { background: #fef3c7; color: #92400e; }
+.status-badge.status-bad { background: #fee2e2; color: #991b1b; }
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Phase 61 — Driver run panel inside the POD page. Same look as the
+   planner so the driver recognises the run from the office screen. */
+.driver-run-panel { margin-bottom: 12px; }
+.driver-run-stops { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.driver-run-stop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+}
+.driver-run-stop.is-done { opacity: 0.6; background: #f3f4f6; }
+.driver-run-stop-num {
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.driver-run-stop.is-done .driver-run-stop-num { background: #166534; }
+.driver-run-stop-body { flex: 1; min-width: 0; }
+.driver-run-stop-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.driver-run-stop-actions a { text-decoration: none; text-align: center; }
+
 .login-shell {
   min-height: 100vh;
   display: grid;

@@ -58,6 +58,7 @@ import { ExpenseClaimsPage } from './pages/ExpenseClaims/ExpenseClaimsPage';
 import { StockStatementsPage } from './pages/StockStatements/StockStatementsPage';
 import { ControlCentrePage } from './pages/ControlCentre/ControlCentrePage';
 import { CompaniesPage } from './pages/Companies/CompaniesPage';
+import { DispatchRunsPage } from './pages/DispatchRuns/DispatchRunsPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -222,6 +223,11 @@ import {
   Company,
   CompanyFilters,
   CompanyFormState,
+  DispatchRun,
+  DispatchRunFilters,
+  DispatchRunFormState,
+  DispatchRunStatus,
+  DispatchRunStop,
   PpeIssueRecord,
   PpeIssueFilters,
   PpeIssueFormState,
@@ -1657,6 +1663,21 @@ function App() {
   const [companyEditingId, setCompanyEditingId] = useState<string | null>(null);
   const [companyMessage, setCompanyMessage] = useState('');
   const [companyFilters, setCompanyFilters] = useState<CompanyFilters>({ search: '', role: '', active: 'all' });
+
+  // Phase 61 — Dispatch Runs (route sheets)
+  const [dispatchRunForm, setDispatchRunForm] = useState<DispatchRunFormState>(() => ({
+    runDate: getToday(),
+    driverUserId: '',
+    driverName: '',
+    vehicleRegistration: '',
+    vehicleDescription: '',
+    status: 'Planned',
+    deliveryNoteIds: [],
+    notes: '',
+  }));
+  const [dispatchRunEditingId, setDispatchRunEditingId] = useState<string | null>(null);
+  const [dispatchRunMessage, setDispatchRunMessage] = useState('');
+  const [dispatchRunFilters, setDispatchRunFilters] = useState<DispatchRunFilters>({ search: '', driver: '', status: 'all', fromDate: '', toDate: '' });
 
   const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
   const [pestEditingId, setPestEditingId] = useState<string | null>(null);
@@ -7717,6 +7738,227 @@ function App() {
       };
     });
   }
+  /* ─────────────────────────────────────────────────────────────────
+   * Phase 61 — Dispatch Run handlers
+   * ──────────────────────────────────────────────────────────────── */
+  function resetDispatchRunEditor() {
+    setDispatchRunEditingId(null);
+    setDispatchRunMessage('');
+    setDispatchRunForm({
+      runDate: getToday(),
+      driverUserId: '',
+      driverName: '',
+      vehicleRegistration: '',
+      vehicleDescription: '',
+      status: 'Planned',
+      deliveryNoteIds: [],
+      notes: '',
+    });
+  }
+
+  function editDispatchRun(run: DispatchRun) {
+    setDispatchRunEditingId(run.id);
+    setDispatchRunMessage('');
+    setDispatchRunForm({
+      runDate: run.runDate,
+      driverUserId: run.driverUserId,
+      driverName: run.driverName,
+      vehicleRegistration: run.vehicleRegistration,
+      vehicleDescription: run.vehicleDescription,
+      status: run.status,
+      deliveryNoteIds: run.stops.map((s) => s.deliveryNoteId),
+      notes: run.notes,
+    });
+  }
+
+  function handleSaveDispatchRun() {
+    if (!dispatchRunForm.runDate) {
+      setDispatchRunMessage('Pick a run date.');
+      return;
+    }
+    if (!dispatchRunForm.driverName.trim() && !dispatchRunForm.driverUserId) {
+      setDispatchRunMessage('Select a driver or enter a driver name.');
+      return;
+    }
+    if (dispatchRunForm.deliveryNoteIds.length === 0) {
+      setDispatchRunMessage('Add at least one delivery note to the run.');
+      return;
+    }
+    setData((current) => {
+      const existing = current.dispatchRuns ?? [];
+      const dnById = new Map(current.deliveryNotes.map((d) => [d.id, d]));
+      const stops: DispatchRunStop[] = dispatchRunForm.deliveryNoteIds.map((dnId, idx) => {
+        const dn = dnById.get(dnId);
+        const client = dn?.clientId ? current.clients.find((c) => c.id === dn.clientId) : undefined;
+        const address = client
+          ? [client.deliveryAddressLine1, client.deliveryAddressLine2, client.deliveryCity, client.deliveryState, client.deliveryPostalCode].filter(Boolean).join(', ')
+          : (dn?.clientAddress || '');
+        // Preserve any captured arrival / outcome on edit so we don't
+        // wipe the driver's progress when the planner re-saves.
+        const prevStop = dispatchRunEditingId
+          ? existing.find((r) => r.id === dispatchRunEditingId)?.stops.find((s) => s.deliveryNoteId === dnId)
+          : undefined;
+        return {
+          sequence: idx,
+          deliveryNoteId: dnId,
+          deliveryNoteNumber: dn?.deliveryNoteNumber || '',
+          clientId: dn?.clientId || '',
+          clientName: dn?.clientName || '',
+          clientAddress: address,
+          arrivedAt: prevStop?.arrivedAt,
+          completedAt: prevStop?.completedAt,
+          outcome: prevStop?.outcome,
+          notes: prevStop?.notes,
+        };
+      });
+      const driverProfile = dispatchRunForm.driverUserId
+        ? profiles.find((p) => p.id === dispatchRunForm.driverUserId)
+        : undefined;
+      const driverName = dispatchRunForm.driverName.trim()
+        || driverProfile?.fullName
+        || driverProfile?.email
+        || '';
+      const nowIso = new Date().toISOString();
+      // Stamp back-references onto each DN so reads from the DN side
+      // (Stock Statements, DN list, etc.) can show "on run RUN-202605-001".
+      const nextDns = current.deliveryNotes.map((d) => {
+        const inRun = dispatchRunForm.deliveryNoteIds.includes(d.id);
+        if (!inRun) {
+          // If this DN was previously on the run being edited, clear
+          // its back-reference so it returns to "Ready to ship".
+          if (dispatchRunEditingId && d.dispatchRunId === dispatchRunEditingId) {
+            return { ...d, dispatchRunId: '', dispatchRunNumber: '' };
+          }
+          return d;
+        }
+        const runRef = dispatchRunEditingId || `pending-${dispatchRunForm.runDate}`;
+        return { ...d, dispatchRunId: runRef };
+      });
+
+      if (dispatchRunEditingId) {
+        const updated = existing.map((r) => r.id === dispatchRunEditingId ? {
+          ...r,
+          runDate: dispatchRunForm.runDate,
+          driverUserId: dispatchRunForm.driverUserId,
+          driverName,
+          vehicleRegistration: dispatchRunForm.vehicleRegistration,
+          vehicleDescription: dispatchRunForm.vehicleDescription,
+          status: dispatchRunForm.status,
+          stops,
+          notes: dispatchRunForm.notes,
+        } : r);
+        return { ...current, dispatchRuns: updated, deliveryNotes: nextDns };
+      }
+      const newId = `run-${Date.now().toString(36)}`;
+      const yyyymm = dispatchRunForm.runDate.replace(/-/g, '').slice(0, 6);
+      const seq = String((existing.filter((r) => r.runDate.startsWith(dispatchRunForm.runDate.slice(0, 7))).length) + 1).padStart(3, '0');
+      const newRun: DispatchRun = {
+        id: newId,
+        runNumber: `RUN-${yyyymm}-${seq}`,
+        createdAt: nowIso,
+        runDate: dispatchRunForm.runDate,
+        driverUserId: dispatchRunForm.driverUserId,
+        driverName,
+        vehicleRegistration: dispatchRunForm.vehicleRegistration,
+        vehicleDescription: dispatchRunForm.vehicleDescription,
+        status: dispatchRunForm.status,
+        stops,
+        plannedAt: nowIso,
+        loadedAt: '',
+        loadedByName: '',
+        departureTime: '',
+        returnTime: '',
+        completedAt: '',
+        odometerStart: 0,
+        odometerEnd: 0,
+        notes: dispatchRunForm.notes,
+      };
+      // Update DN back-refs with the real new run id + number.
+      const stampedDns = nextDns.map((d) => dispatchRunForm.deliveryNoteIds.includes(d.id)
+        ? { ...d, dispatchRunId: newRun.id, dispatchRunNumber: newRun.runNumber }
+        : d);
+      return { ...current, dispatchRuns: [newRun, ...existing], deliveryNotes: stampedDns };
+    });
+    resetDispatchRunEditor();
+  }
+
+  function handleDeleteDispatchRun(id: string) {
+    setData((current) => ({
+      ...current,
+      dispatchRuns: (current.dispatchRuns ?? []).filter((r) => r.id !== id),
+      // Clear back-refs on DNs so they return to the Ready to ship queue.
+      deliveryNotes: current.deliveryNotes.map((d) => d.dispatchRunId === id ? { ...d, dispatchRunId: '', dispatchRunNumber: '' } : d),
+    }));
+    if (dispatchRunEditingId === id) resetDispatchRunEditor();
+  }
+
+  function handleDispatchRunStatusChange(
+    run: DispatchRun,
+    nextStatus: DispatchRunStatus,
+    extras?: { loadedByName?: string; odometerStart?: number; odometerEnd?: number },
+  ) {
+    setData((current) => ({
+      ...current,
+      dispatchRuns: (current.dispatchRuns ?? []).map((r) => {
+        if (r.id !== run.id) return r;
+        const now = new Date().toISOString();
+        return {
+          ...r,
+          status: nextStatus,
+          loadedAt: nextStatus === 'Loaded' && !r.loadedAt ? now : r.loadedAt,
+          loadedByName: extras?.loadedByName ?? r.loadedByName,
+          departureTime: nextStatus === 'In Progress' && !r.departureTime ? now : r.departureTime,
+          returnTime: nextStatus === 'Completed' && !r.returnTime ? now : r.returnTime,
+          completedAt: nextStatus === 'Completed' && !r.completedAt ? now : r.completedAt,
+          odometerStart: extras?.odometerStart !== undefined ? extras.odometerStart : r.odometerStart,
+          odometerEnd: extras?.odometerEnd !== undefined ? extras.odometerEnd : r.odometerEnd,
+        };
+      }),
+    }));
+  }
+
+  /** Print a single-page trip sheet that the driver can take with them
+   *  if the phone dies. Opens a print window with the run's stops. */
+  function handlePrintDispatchRun(run: DispatchRun) {
+    const w = window.open('', '_blank', 'width=900,height=1200');
+    if (!w) return;
+    const stopsHtml = run.stops.map((s, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${s.deliveryNoteNumber}</strong></td>
+        <td>${s.clientName}</td>
+        <td>${s.clientAddress || '—'}</td>
+        <td style="border-bottom:1px dashed #999;height:30px;width:120px">&nbsp;</td>
+      </tr>`).join('');
+    w.document.write(`<!DOCTYPE html><html><head><title>Trip Sheet ${run.runNumber}</title>
+      <style>
+        body { font-family: -apple-system, sans-serif; padding: 24px; color: #111; }
+        h1 { margin: 0 0 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 13px; }
+        th { background: #f3f4f6; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; font-size: 13px; }
+        .meta div { padding: 6px 0; }
+      </style></head><body>
+      <h1>Trip Sheet — ${run.runNumber}</h1>
+      <p style="margin:0;color:#666">${run.runDate}</p>
+      <div class="meta">
+        <div><strong>Driver:</strong> ${run.driverName || '—'}</div>
+        <div><strong>Vehicle:</strong> ${run.vehicleRegistration || '—'} ${run.vehicleDescription || ''}</div>
+        <div><strong>Departure odo:</strong> ${run.odometerStart || '__________'} km</div>
+        <div><strong>Return odo:</strong> ${run.odometerEnd || '__________'} km</div>
+      </div>
+      ${run.notes ? `<p style="margin-top:12px;padding:8px;background:#fef3c7;border-radius:6px"><strong>Notes:</strong> ${run.notes}</p>` : ''}
+      <table>
+        <thead><tr><th>#</th><th>Delivery note</th><th>Client</th><th>Address</th><th>Receiver signature</th></tr></thead>
+        <tbody>${stopsHtml}</tbody>
+      </table>
+      <p style="margin-top:32px;font-size:11px;color:#666">JomoPak · printed ${new Date().toLocaleString()}</p>
+      <script>window.print();</script>
+      </body></html>`);
+    w.document.close();
+  }
+
   function handleLinkCompanyToClient(companyId: string, clientId: string) {
     setData((current) => ({
       ...current,
@@ -9699,11 +9941,41 @@ function App() {
           proofOfDeliveries={data.proofOfDeliveries}
           clients={data.clients}
           profile={profile}
+          runs={data.dispatchRuns ?? []}
+          deliveryNotes={data.deliveryNotes}
           onPodCaptured={(pod: ProofOfDelivery) => {
-            setData((current) => ({
-              ...current,
-              proofOfDeliveries: [pod, ...current.proofOfDeliveries.filter((p) => p.id !== pod.id)],
-            }));
+            setData((current) => {
+              // Phase 61 — back-fill the run stop with the captured outcome,
+              // and auto-flip the parent run to Completed when every stop
+              // is reconciled. We match the stop by following dispatch →
+              // delivery note → run, so this works even when the driver
+              // captures a POD via the ad-hoc list.
+              let nextRuns = current.dispatchRuns ?? [];
+              const dispatch = current.dispatchRecords.find((d) => d.id === pod.dispatchRecordId);
+              if (dispatch) {
+                const dn = current.deliveryNotes.find((d) => d.dispatchRecordIds?.includes(dispatch.id));
+                if (dn && dn.dispatchRunId) {
+                  nextRuns = nextRuns.map((r) => {
+                    if (r.id !== dn.dispatchRunId) return r;
+                    const stops = r.stops.map((s) => s.deliveryNoteId === dn.id
+                      ? { ...s, outcome: pod.outcome, completedAt: new Date().toISOString(), arrivedAt: s.arrivedAt || new Date().toISOString() }
+                      : s);
+                    const allDone = stops.every((s) => Boolean(s.outcome));
+                    return {
+                      ...r,
+                      stops,
+                      status: allDone && r.status !== 'Completed' ? ('Completed' as const) : r.status,
+                      completedAt: allDone && !r.completedAt ? new Date().toISOString() : r.completedAt,
+                    };
+                  });
+                }
+              }
+              return {
+                ...current,
+                proofOfDeliveries: [pod, ...current.proofOfDeliveries.filter((p) => p.id !== pod.id)],
+                dispatchRuns: nextRuns,
+              };
+            });
             // Best-effort: try to sync immediately. If offline, the queue
             // listener will pick it up when the device reconnects.
             void flushPodQueue().then(({ synced, failed }) => {
@@ -10665,6 +10937,28 @@ function App() {
           onDelete={handleDeleteCompany}
           onLinkClient={handleLinkCompanyToClient}
           onLinkSupplier={handleLinkCompanyToSupplier}
+        />
+      )}
+
+      {view === 'dispatchRuns' && (
+        <DispatchRunsPage
+          runs={data.dispatchRuns ?? []}
+          deliveryNotes={data.deliveryNotes}
+          clients={data.clients}
+          driverProfiles={profiles.filter((p) => p.role === 'driver' || p.role === 'ops' || p.role === 'admin')}
+          filters={dispatchRunFilters}
+          setFilters={setDispatchRunFilters}
+          form={dispatchRunForm}
+          setForm={setDispatchRunForm}
+          editingId={dispatchRunEditingId}
+          message={dispatchRunMessage}
+          onSave={handleSaveDispatchRun}
+          onReset={resetDispatchRunEditor}
+          onEdit={editDispatchRun}
+          onDelete={handleDeleteDispatchRun}
+          onStatusChange={handleDispatchRunStatusChange}
+          onPrint={handlePrintDispatchRun}
+          currentUserName={profile?.fullName || profile?.email || ''}
         />
       )}
 
