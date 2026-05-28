@@ -313,10 +313,17 @@ export function computeFgFsc(
   paperLogs: PaperLog[],
   materialReceipts: MaterialReceipt[],
   productionLogs: ProductionLogEntry[] = [],
-): FscClaimType | 'Unknown' {
+): FscClaimType | 'Unknown' | 'Not claimed' {
   if (!fg.jobId) return 'Unknown';
   const job = jobs.find((j) => j.id === fg.jobId);
   if (!job) return 'Unknown';
   const paper = findPaperForJob(job.id, productionLogs, paperLogs, materialReceipts);
-  return paper?.fscClaimType ?? 'Unknown';
+  if (!paper) return 'Unknown';
+  // Phase 76 — FSC is a *claim*, not a property. Even if the paper is
+  // FSC-certified, we only claim it on the FG batch when sales has opted in
+  // for this job (driven by the client's standing preference, overridable).
+  if (!job.fscClaimEnabled) return 'Not claimed';
+  // Paper isn't FSC-certified — we can't claim what we don't have.
+  if (paper.fscClaimType === 'None') return 'Not claimed';
+  return paper.fscClaimType;
 }

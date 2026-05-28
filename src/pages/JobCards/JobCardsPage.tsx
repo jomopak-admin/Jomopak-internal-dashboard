@@ -425,7 +425,17 @@ export function JobCardsPage(props: JobCardsPageProps) {
             <Combobox
               options={clientOptions}
               value={jobForm.clientId}
-              onChange={(value) => setJobForm({ ...jobForm, clientId: value })}
+              onChange={(value) => {
+                // Phase 76 — auto-fill the per-job fscClaimEnabled from the
+                // client's standing preference when the operator picks a new
+                // client. Sales can still uncheck it on the food-safety panel.
+                const picked = clients.find((c) => c.id === value);
+                setJobForm({
+                  ...jobForm,
+                  clientId: value,
+                  fscClaimEnabled: picked?.defaultFscClaim ?? jobForm.fscClaimEnabled ?? false,
+                });
+              }}
               placeholder="Search clients…"
               emptyMessage="No matching clients"
             />
@@ -701,6 +711,14 @@ export function JobCardsPage(props: JobCardsPageProps) {
                   <option key={lvl} value={lvl}>{FOOD_CONTACT_LEVEL_LABELS[lvl]}</option>
                 ))}
               </select>
+            </label>
+            <label className="full-span checkbox-row">
+              <input
+                type="checkbox"
+                checked={Boolean(jobForm.fscClaimEnabled)}
+                onChange={(e) => setJobForm({ ...jobForm, fscClaimEnabled: e.target.checked })}
+              />
+              Claim FSC on this job's outputs — only tick when the customer has explicitly requested an FSC claim AND the paper used is FSC-certified.
             </label>
             {isFood ? (
               <>

@@ -408,9 +408,11 @@ export function FinishedGoodsStockPage({
                           <td>
                             {fscClaim === 'Unknown'
                               ? <span className="muted" style={{ fontSize: 11 }}>—</span>
-                              : fscClaim === 'None'
-                                ? <span className="badge">Not FSC</span>
-                                : <span className="badge badge-success">{fscClaim}</span>}
+                              : fscClaim === 'Not claimed'
+                                ? <span className="badge" title="Either the customer didn't request an FSC claim on this job, or the paper used isn't FSC-certified.">Not claimed</span>
+                                : fscClaim === 'None'
+                                  ? <span className="badge">Not FSC</span>
+                                  : <span className="badge badge-success">{fscClaim}</span>}
                           </td>
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

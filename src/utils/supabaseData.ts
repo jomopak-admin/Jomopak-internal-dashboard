@@ -561,6 +561,8 @@ export function mapClient(row: any): Client {
     stockHoldingAgreementReference: row.stock_holding_agreement_reference ?? '',
     stockHoldingReviewDate: row.stock_holding_review_date ?? '',
     notifyClientOnDelivery: row.notify_client_on_delivery === false ? false : true,
+    // Phase 76 — default FSC claim preference for this client.
+    defaultFscClaim: Boolean(row.default_fsc_claim),
     creditAgreementSigned: Boolean(row.credit_agreement_signed),
     creditAgreementSignedDate: row.credit_agreement_signed_date ?? '',
     creditAgreementReference: row.credit_agreement_reference ?? '',
@@ -740,6 +742,8 @@ export function mapJob(row: any): JobCard {
     foodSafeMaterialIds: Array.isArray(row.food_safe_material_ids) ? row.food_safe_material_ids : [],
     // Phase 71 — chemicals (inks/glues/etc.) used on this job
     chemicalIds: Array.isArray(row.chemical_ids) ? row.chemical_ids : [],
+    // Phase 76 — claim FSC on this job's outputs?
+    fscClaimEnabled: Boolean(row.fsc_claim_enabled),
     internalBatchNumber: row.internal_batch_number ?? '',
     foodSafetyNotes: row.food_safety_notes ?? '',
     // Phase 2 fields — also local-only until schema lands.
@@ -2688,6 +2692,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       stock_holding_agreement_reference: client.stockHoldingAgreementReference || null,
       stock_holding_review_date: client.stockHoldingReviewDate || null,
       notify_client_on_delivery: client.notifyClientOnDelivery !== false,
+      // Phase 76 — client's default FSC claim preference.
+      default_fsc_claim: Boolean(client.defaultFscClaim),
       credit_agreement_signed: client.creditAgreementSigned,
       credit_agreement_signed_date: client.creditAgreementSignedDate || null,
       credit_agreement_reference: client.creditAgreementReference || null,
@@ -2995,6 +3001,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       food_safe_material_ids: job.foodSafeMaterialIds ?? [],
       // Phase 71 — chemicals used on this job
       chemical_ids: job.chemicalIds ?? [],
+      // Phase 76 — opt-in FSC claim for this job
+      fsc_claim_enabled: Boolean(job.fscClaimEnabled),
       internal_batch_number: job.internalBatchNumber ?? '',
       food_safety_notes: job.foodSafetyNotes ?? '',
       assigned_machine_id: job.assignedMachineId || null,

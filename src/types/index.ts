@@ -1395,6 +1395,11 @@ export interface Client {
    *  email to contactEmail). Some clients prefer to be contacted by their
    *  account manager directly rather than receive system emails. */
   notifyClientOnDelivery?: boolean;
+  /** Phase 76 — does this client want FSC claimed on their outputs by default?
+   *  Auto-fills the per-job fscClaimEnabled flag on job creation. Sales can
+   *  still override per job. Defaults to false (no claim) so we never claim
+   *  FSC accidentally. */
+  defaultFscClaim?: boolean;
   /** Phase 5.6 — customer-specific food safety requirements. Optional so
    *  existing records load without forcing a migration. */
   foodSafeDeclarationRequired?: boolean;
@@ -1663,6 +1668,11 @@ export interface JobCard {
    *  job. Drives the FG-batch food-safe derivation: every chemical must be
    *  food-safe for the batch to inherit a food-safe 'Yes'. */
   chemicalIds?: string[];
+  /** Phase 76 — Sales decision: should this job's outputs carry an FSC claim
+   *  on the invoice / dispatch? Default-fills from client.defaultFscClaim when
+   *  a job is created. FSC paper alone is NOT enough to claim — both this flag
+   *  AND a non-'None' fscClaimType on the source material are required. */
+  fscClaimEnabled?: boolean;
   /** Internal batch number assigned at job start (propagates to production + dispatch). */
   internalBatchNumber: string;
   /** Free-text food-safety notes (intended food use, customer-specific rules, etc.). */
@@ -6399,6 +6409,8 @@ export interface JobFormState {
   foodSafeMaterialIds: string[];
   /** Phase 71 — chemicals (inks/glues/adhesives/lubricants) used. */
   chemicalIds?: string[];
+  /** Phase 76 — claim FSC on this job's outputs. */
+  fscClaimEnabled?: boolean;
   internalBatchNumber: string;
   foodSafetyNotes: string;
   assignedMachineId: string;
