@@ -59,6 +59,10 @@ interface JobCardsPageProps {
   products: Product[];
   pricingTiers: PricingTier[];
   finishedGoodsStock: FinishedGoodsStock[];
+  /** Phase 62 — pickable tooling so sales/production can record which
+   *  die + stereo are used on this job (and inherit "client already
+   *  owns one" suggestions). */
+  tooling?: Array<{ id: string; code: string; name: string; clientId: string; toolType: 'die' | 'stereo'; active: boolean }>;
   jobForm: JobFormState;
   setJobForm: (value: JobFormState) => void;
   jobEditingId: string | null;
@@ -132,6 +136,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
     products,
     pricingTiers,
     finishedGoodsStock,
+    tooling = [],
     jobForm,
     setJobForm,
     jobEditingId,
@@ -621,6 +626,32 @@ export function JobCardsPage(props: JobCardsPageProps) {
           <label className="full-span"><span>Packing / supply notes</span><textarea value={jobForm.packingNotes} onChange={(event) => setJobForm({ ...jobForm, packingNotes: event.target.value })} /></label>
           <label className="full-span"><span>Quality / issue notes</span><textarea value={jobForm.qualityNotes} onChange={(event) => setJobForm({ ...jobForm, qualityNotes: event.target.value })} /></label>
           <label className="full-span"><span>Notes</span><textarea value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} /></label>
+          {/* Phase 62 — Tooling pickers. Sales filters by the job's client
+              first ('this client already owns these'), then falls back to
+              generic dies if none match. */}
+          {(() => {
+            const candidateDies = tooling.filter((t) => t.toolType === 'die' && t.active && (!t.clientId || t.clientId === jobForm.clientId));
+            const candidateStereos = tooling.filter((t) => t.toolType === 'stereo' && t.active && t.clientId === jobForm.clientId);
+            return (
+              <>
+                <label>
+                  <span>Die used (tooling)</span>
+                  <select value={jobForm.dieToolId || ''} onChange={(event) => setJobForm({ ...jobForm, dieToolId: event.target.value })}>
+                    <option value="">— No die / new die required —</option>
+                    {candidateDies.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}
+                  </select>
+                  {candidateDies.length > 0 && <small className="muted">{candidateDies.length} matching die(s) — sales avoids quoting a new die cost when one exists.</small>}
+                </label>
+                <label>
+                  <span>Stereo used (tooling)</span>
+                  <select value={jobForm.stereoToolId || ''} onChange={(event) => setJobForm({ ...jobForm, stereoToolId: event.target.value })}>
+                    <option value="">— No stereo / new artwork —</option>
+                    {candidateStereos.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name} v{(t as any).designVersion || 1}</option>)}
+                  </select>
+                </label>
+              </>
+            );
+          })()}
           <div className="full-span">
             <PhotoUploader
               urls={jobForm.photoUrls ?? []}

@@ -24,7 +24,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
-  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance'] },
+  { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance', 'dies', 'stereos'] },
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'paper', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },

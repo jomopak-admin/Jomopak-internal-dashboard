@@ -913,6 +913,7 @@ export function loadAppData(): AppData {
       paperLogs: (parsed.paperLogs ?? []).map(normalizePaper),
       dispatchRecords: (parsed.dispatchRecords ?? []).map(normalizeDispatch),
       dispatchRuns: (parsed.dispatchRuns ?? []) as AppData['dispatchRuns'],
+      tooling: (parsed.tooling ?? []) as AppData['tooling'],
       // Phase 17 — POD + invoice-inbox are local-only at the moment. We
       // pass them through unshaped; the editor on each page is the only
       // way these get populated client-side.

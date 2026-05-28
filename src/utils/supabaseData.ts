@@ -13,6 +13,7 @@ import {
   DispatchRecord,
   DispatchRun,
   FinishedGoodsStock,
+  Tooling,
   InventoryMovement,
   JobCard,
   Lead,
@@ -392,6 +393,62 @@ function mapDispatchRun(row: any): DispatchRun {
   };
 }
 
+function mapTooling(row: any): Tooling {
+  return {
+    id: row.id,
+    code: row.code,
+    createdAt: row.created_at,
+    toolType: row.tool_type,
+    name: row.name ?? '',
+    description: row.description ?? '',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    location: row.location ?? 'Internal',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    supplierReference: row.supplier_reference ?? '',
+    internalLocation: row.internal_location ?? '',
+    cost: Number(row.cost ?? 0),
+    currency: row.currency ?? 'ZAR',
+    paidDate: row.paid_date ?? '',
+    supplierInvoiceNumber: row.supplier_invoice_number ?? '',
+    status: row.status ?? 'In Service',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    documentUrls: Array.isArray(row.document_urls) ? row.document_urls : [],
+    notes: row.notes ?? '',
+    active: row.active !== false,
+    lastUsedAt: row.last_used_at ?? '',
+    runCount: Number(row.run_count ?? 0),
+    dimensions: row.dimensions ? {
+      widthMm: Number(row.dimensions.widthMm ?? row.dimensions.width_mm ?? 0),
+      heightMm: Number(row.dimensions.heightMm ?? row.dimensions.height_mm ?? 0),
+      depthMm: Number(row.dimensions.depthMm ?? row.dimensions.depth_mm ?? 0),
+    } : undefined,
+    bagType: row.bag_type ?? undefined,
+    handleType: row.handle_type ?? undefined,
+    bottomStyle: row.bottom_style ?? undefined,
+    sharpeningHistory: Array.isArray(row.sharpening_history) ? row.sharpening_history.map((e: any, idx: number) => ({
+      id: e.id ?? `sh-${row.id}-${idx}`,
+      eventDate: e.eventDate ?? e.event_date ?? '',
+      performedBy: e.performedBy ?? e.performed_by ?? '',
+      runsSinceLast: Number(e.runsSinceLast ?? e.runs_since_last ?? 0),
+      cost: Number(e.cost ?? 0),
+      invoiceNumber: e.invoiceNumber ?? e.invoice_number ?? '',
+      notes: e.notes ?? '',
+    })) : [],
+    designName: row.design_name ?? undefined,
+    designVersion: row.design_version !== null && row.design_version !== undefined ? Number(row.design_version) : undefined,
+    supersededByToolId: row.superseded_by_tool_id ?? undefined,
+    supersedesToolId: row.supersedes_tool_id ?? undefined,
+    signedOffByName: row.signed_off_by_name ?? undefined,
+    signedOffAt: row.signed_off_at ?? undefined,
+    signatureDataUrl: row.signature_data_url ?? undefined,
+    signedSampleDocumentUrl: row.signed_sample_document_url ?? undefined,
+    version: row.version !== undefined ? Number(row.version) : undefined,
+    rowUpdatedAt: row.row_updated_at ?? undefined,
+  };
+}
+
 function mapPricingTier(row: any): PricingTier {
   return {
     id: row.id,
@@ -687,6 +744,10 @@ export function mapJob(row: any): JobCard {
       ? row.changeover_checklist
       : buildBlankChangeoverChecklist(),
     qcPlan: Array.isArray(row.qc_plan) && row.qc_plan.length === 4 ? row.qc_plan : buildBlankQcPlan(),
+    dieToolId: row.die_tool_id ?? undefined,
+    dieToolCode: row.die_tool_code ?? undefined,
+    stereoToolId: row.stereo_tool_id ?? undefined,
+    stereoToolCode: row.stereo_tool_code ?? undefined,
   };
 }
 
@@ -2138,6 +2199,7 @@ export async function fetchAppData(): Promise<AppData> {
     expenseClaimRows,
     companyRows,
     dispatchRunRows,
+    toolingRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -2230,6 +2292,8 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('companies'),
     // Phase 61 — Dispatch Runs (route sheets).
     safeSelect('dispatch_runs'),
+    // Phase 62 — Tooling (Dies + Stereos).
+    safeSelect('tooling'),
   ]);
 
   return {
@@ -2278,6 +2342,7 @@ export async function fetchAppData(): Promise<AppData> {
     paperLogs: paperLogs.map(mapPaper),
     dispatchRecords: dispatchRecords.map(mapDispatch),
     dispatchRuns: dispatchRunRows.map(mapDispatchRun),
+    tooling: toolingRows.map(mapTooling),
     proofOfDeliveries: proofOfDeliveriesRows.map(mapProofOfDelivery),
     invoiceInboxItems: invoiceInboxItemRows.map(mapInvoiceInboxItem),
     documents: documentRows.map(mapDocumentRecord),
@@ -2907,6 +2972,49 @@ export async function syncAppData(data: AppData): Promise<void> {
       assigned_machine_id: job.assignedMachineId || null,
       changeover_checklist: job.changeoverChecklist ?? [],
       qc_plan: job.qcPlan ?? [],
+      die_tool_id: job.dieToolId || null,
+      die_tool_code: job.dieToolCode || null,
+      stereo_tool_id: job.stereoToolId || null,
+      stereo_tool_code: job.stereoToolCode || null,
+    }))),
+    safeUpsert('tooling', (data.tooling ?? []).map((t) => ({
+      id: t.id,
+      code: t.code,
+      created_at: t.createdAt,
+      tool_type: t.toolType,
+      name: t.name,
+      description: t.description || '',
+      client_id: t.clientId || null,
+      client_name: t.clientName || '',
+      location: t.location,
+      supplier_id: t.supplierId || null,
+      supplier_name: t.supplierName || '',
+      supplier_reference: t.supplierReference || '',
+      internal_location: t.internalLocation || '',
+      cost: t.cost,
+      currency: t.currency,
+      paid_date: t.paidDate || null,
+      supplier_invoice_number: t.supplierInvoiceNumber || '',
+      status: t.status,
+      active: t.active,
+      photo_urls: t.photoUrls ?? [],
+      document_urls: t.documentUrls ?? [],
+      notes: t.notes || '',
+      last_used_at: t.lastUsedAt || null,
+      run_count: t.runCount,
+      dimensions: t.dimensions ?? null,
+      bag_type: t.bagType ?? null,
+      handle_type: t.handleType ?? null,
+      bottom_style: t.bottomStyle ?? null,
+      sharpening_history: t.sharpeningHistory ?? [],
+      design_name: t.designName ?? null,
+      design_version: t.designVersion ?? null,
+      supersedes_tool_id: t.supersedesToolId ?? null,
+      superseded_by_tool_id: t.supersededByToolId ?? null,
+      signed_off_by_name: t.signedOffByName ?? null,
+      signed_off_at: t.signedOffAt ?? null,
+      signature_data_url: t.signatureDataUrl ?? null,
+      signed_sample_document_url: t.signedSampleDocumentUrl ?? null,
     }))),
     safeUpsert('material_order_requests', data.materialOrderRequests.map((request) => ({
       id: request.id,

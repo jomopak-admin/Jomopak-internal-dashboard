@@ -88,7 +88,9 @@ export type View =
   | 'expenseClaimsApprove'
   | 'stockStatements'
   | 'companies'
-  | 'dispatchRuns';
+  | 'dispatchRuns'
+  | 'dies'
+  | 'stereos';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
 export type DashboardWidget =
   | 'stats'
@@ -198,6 +200,8 @@ export const VIEW_LABELS: Record<View, string> = {
   stockStatements: 'Stock Statements',
   companies: 'Companies',
   dispatchRuns: 'Dispatch Runs',
+  dies: 'Dies',
+  stereos: 'Stereos',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -258,6 +262,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'reorderReminders',
     'driverPod',
     'dispatchRuns',
+    'dies',
+    'stereos',
     'invoiceInbox',
     'production',
     'waste',
@@ -339,6 +345,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'reorderReminders',
     'driverPod',
     'dispatchRuns',
+    'dies',
+    'stereos',
     'invoiceInbox',
     'production',
     'waste',
@@ -369,6 +377,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'cleaningLogs',        // sanitation between batches
     'maintenance',         // report machine issues
     'stockRequests',       // request tape, gloves, tools, etc.
+    'dies',                // see what die to grab off the rack
+    'stereos',             // confirm the stereo on the press
   ],
   sales: [
     'dashboard',
@@ -376,6 +386,8 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'salesDesk',
     'salesPipeline',
     'leadAnalytics',
+    'dies',
+    'stereos',
     'productionSchedule',
     'materialRequirements',
     'cashFlow',
@@ -1531,6 +1543,12 @@ export interface JobCard {
   id: string;
   /** Phase 59 — proof / sample / finished-product photos. */
   photoUrls?: string[];
+  /** Phase 62 — die / stereo tooling used on this job. Bumps the
+   *  tool's runCount + lastUsedAt automatically on save. */
+  dieToolId?: string;
+  dieToolCode?: string;
+  stereoToolId?: string;
+  stereoToolCode?: string;
   jobNumber: string;
   /**
    * Optimistic concurrency token (phase 14). Bumped server-side on every
@@ -3866,6 +3884,162 @@ export interface DispatchRecord {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+ * Phase 62 — Tooling (Dies + Stereos)
+ *
+ * One table, two flavours via toolType discriminator. Shared plumbing
+ * for photos / docs / supplier / cost / status / usage trail. Each
+ * flavour has a handful of role-specific fields:
+ *
+ *   Die:    dimensions, bag/box type, handle style, sharpening history
+ *   Stereo: client, design name, version, sign-off, supersedes link
+ *
+ * Lives either Internal (Jomopak warehouse / die rack) or External
+ * (held at a supplier — we need to defend "supplier says it needs
+ * sharpening after one run" claims with our own usage records).
+ * ────────────────────────────────────────────────────────────────────────*/
+export type ToolType = 'die' | 'stereo';
+
+export type ToolingStatus =
+  | 'In Service'
+  | 'Needs Sharpening'
+  | 'In Repair'
+  | 'Damaged'
+  | 'Decommissioned'
+  | 'Archived';
+
+export const TOOLING_STATUSES: ToolingStatus[] = [
+  'In Service', 'Needs Sharpening', 'In Repair', 'Damaged', 'Decommissioned', 'Archived',
+];
+
+export type ToolingLocation = 'Internal' | 'External';
+
+/** A sharpening / refurbishment / repair event on a die. Stored as a
+ *  jsonb array on the tool record so the lifecycle is auditable end-
+ *  to-end (supplier says "needs sharpening" → we know exactly when it
+ *  was last sharpened and how many runs since). */
+export interface ToolingSharpeningEvent {
+  id: string;
+  eventDate: string;
+  performedBy: string;       // supplier name or internal tech
+  runsSinceLast: number;
+  cost: number;
+  invoiceNumber: string;
+  notes: string;
+}
+
+export interface ToolingDimensions {
+  widthMm: number;
+  heightMm: number;
+  depthMm: number;
+}
+
+export interface Tooling {
+  id: string;
+  code: string;              // DIE-202605-001 / STR-202605-001
+  createdAt: string;
+  toolType: ToolType;
+  name: string;
+  description: string;
+  /** Client this tool belongs to. Required for stereos (it's their IP),
+   *  optional for dies (a die can be generic / shared across clients). */
+  clientId: string;
+  clientName: string;
+  /** Where the tool physically lives + who's holding it. */
+  location: ToolingLocation;
+  supplierId: string;
+  supplierName: string;
+  /** Their internal tag / shelf reference so we can find it during an audit. */
+  supplierReference: string;
+  /** Internal storage location when location === 'Internal'. */
+  internalLocation: string;
+  /** Cost + paid trail. */
+  cost: number;
+  currency: CurrencyCode;
+  paidDate: string;
+  supplierInvoiceNumber: string;
+  /** Status — drives filters + dashboards. */
+  status: ToolingStatus;
+  /** Photos of the tool itself (and for stereos, the printed sample). */
+  photoUrls: string[];
+  /** PDF / image documents attached: drawings, sign-off forms, supplier
+   *  invoices, technical specs. */
+  documentUrls: string[];
+  notes: string;
+  active: boolean;
+  /** Usage trail — bumped automatically whenever a job uses this tool. */
+  lastUsedAt: string;
+  runCount: number;
+  /** Die-specific fields. Nullable so stereo records load cleanly. */
+  dimensions?: ToolingDimensions;
+  bagType?: string;          // SOS / Tote / Pinch-bottom / Box / etc.
+  handleType?: HandleType;
+  bottomStyle?: string;      // Flat / Block / SOS / Square / Hex
+  sharpeningHistory?: ToolingSharpeningEvent[];
+  /** Stereo-specific fields. Nullable so die records load cleanly. */
+  designName?: string;       // "Mother's Day 2026 v3"
+  designVersion?: number;
+  /** When a new stereo version is approved, the OLD record gets
+   *  supersededByToolId set so it's archived but searchable. */
+  supersededByToolId?: string;
+  supersedesToolId?: string;
+  /** Client sign-off proof. */
+  signedOffByName?: string;
+  signedOffAt?: string;
+  signatureDataUrl?: string;
+  signedSampleDocumentUrl?: string;
+  /** Optimistic concurrency. */
+  version?: number;
+  rowUpdatedAt?: string;
+}
+
+export interface ToolingFilters {
+  search: string;
+  status: ToolingStatus | 'all';
+  location: ToolingLocation | 'all';
+  client: string;
+  supplier: string;
+  /** Free-text dimension search — sales types "240x120" or "A4" etc.
+   *  We match against the dimensions + name + description. Dies only. */
+  sizeQuery: string;
+  activeOnly: boolean;
+}
+
+export interface ToolingFormState {
+  toolType: ToolType;
+  name: string;
+  description: string;
+  clientId: string;
+  location: ToolingLocation;
+  supplierId: string;
+  supplierReference: string;
+  internalLocation: string;
+  cost: string;
+  currency: CurrencyCode;
+  paidDate: string;
+  supplierInvoiceNumber: string;
+  status: ToolingStatus;
+  photoUrls: string[];
+  documentUrls: string[];
+  notes: string;
+  active: boolean;
+  // Die-specific
+  widthMm: string;
+  heightMm: string;
+  depthMm: string;
+  bagType: string;
+  handleType: HandleType;
+  bottomStyle: string;
+  // Stereo-specific
+  designName: string;
+  designVersion: string;
+  supersedesToolId: string;
+  signedOffByName: string;
+  signedOffAt: string;
+  signatureDataUrl: string;
+  signedSampleDocumentUrl: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
  * Phase 61 — Dispatch Run (Route Sheet / Trip Sheet)
  *
  * A higher-level concept than DispatchRecord. One run = one driver +
@@ -5031,6 +5205,9 @@ export interface AppData {
   /** Phase 61 — Dispatch Runs (route sheets). Optional so legacy saved
    *  state without runs continues to load cleanly. */
   dispatchRuns?: DispatchRun[];
+  /** Phase 62 — Tooling (Dies + Stereos). Single table, two flavours
+   *  via toolType. Optional so legacy state loads. */
+  tooling?: Tooling[];
   proofOfDeliveries: ProofOfDelivery[];
   invoiceInboxItems: InvoiceInboxItem[];
   documents: DocumentRecord[];
@@ -6113,6 +6290,9 @@ export interface JobFormState {
   qcPlan: QcStageRecord[];
   /** Phase 59 — proof / sample photos for the job. */
   photoUrls?: string[];
+  /** Phase 62 — Tooling references (die + stereo). */
+  dieToolId?: string;
+  stereoToolId?: string;
 }
 
 export interface FinishedGoodsStockFormState {

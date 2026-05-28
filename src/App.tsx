@@ -59,6 +59,7 @@ import { StockStatementsPage } from './pages/StockStatements/StockStatementsPage
 import { ControlCentrePage } from './pages/ControlCentre/ControlCentrePage';
 import { CompaniesPage } from './pages/Companies/CompaniesPage';
 import { DispatchRunsPage } from './pages/DispatchRuns/DispatchRunsPage';
+import { ToolingPage } from './pages/Tooling/ToolingPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -228,6 +229,10 @@ import {
   DispatchRunFormState,
   DispatchRunStatus,
   DispatchRunStop,
+  Tooling,
+  ToolingFilters,
+  ToolingFormState,
+  ToolingSharpeningEvent,
   PpeIssueRecord,
   PpeIssueFilters,
   PpeIssueFormState,
@@ -1678,6 +1683,48 @@ function App() {
   const [dispatchRunEditingId, setDispatchRunEditingId] = useState<string | null>(null);
   const [dispatchRunMessage, setDispatchRunMessage] = useState('');
   const [dispatchRunFilters, setDispatchRunFilters] = useState<DispatchRunFilters>({ search: '', driver: '', status: 'all', fromDate: '', toDate: '' });
+
+  // Phase 62 — Tooling (Dies + Stereos)
+  const createInitialToolingForm = (toolType: 'die' | 'stereo' = 'die'): ToolingFormState => ({
+    toolType,
+    name: '',
+    description: '',
+    clientId: '',
+    location: 'Internal',
+    supplierId: '',
+    supplierReference: '',
+    internalLocation: '',
+    cost: '',
+    currency: 'ZAR',
+    paidDate: '',
+    supplierInvoiceNumber: '',
+    status: 'In Service',
+    photoUrls: [],
+    documentUrls: [],
+    notes: '',
+    active: true,
+    widthMm: '',
+    heightMm: '',
+    depthMm: '',
+    bagType: '',
+    handleType: 'None',
+    bottomStyle: '',
+    designName: '',
+    designVersion: '1',
+    supersedesToolId: '',
+    signedOffByName: '',
+    signedOffAt: '',
+    signatureDataUrl: '',
+    signedSampleDocumentUrl: '',
+  });
+  const [dieForm, setDieForm] = useState<ToolingFormState>(() => createInitialToolingForm('die'));
+  const [dieEditingId, setDieEditingId] = useState<string | null>(null);
+  const [dieMessage, setDieMessage] = useState('');
+  const [dieFilters, setDieFilters] = useState<ToolingFilters>({ search: '', status: 'all', location: 'all', client: '', supplier: '', sizeQuery: '', activeOnly: true });
+  const [stereoForm, setStereoForm] = useState<ToolingFormState>(() => createInitialToolingForm('stereo'));
+  const [stereoEditingId, setStereoEditingId] = useState<string | null>(null);
+  const [stereoMessage, setStereoMessage] = useState('');
+  const [stereoFilters, setStereoFilters] = useState<ToolingFilters>({ search: '', status: 'all', location: 'all', client: '', supplier: '', sizeQuery: '', activeOnly: true });
 
   const [pestForm, setPestForm] = useState<PestControlFormState>(createInitialPestForm);
   const [pestEditingId, setPestEditingId] = useState<string | null>(null);
@@ -4193,6 +4240,14 @@ function App() {
       changeoverChecklist: jobForm.changeoverChecklist,
       qcPlan: jobForm.qcPlan,
       photoUrls: jobForm.photoUrls && jobForm.photoUrls.length > 0 ? jobForm.photoUrls : (base.photoUrls ?? []),
+      dieToolId: jobForm.dieToolId || base.dieToolId,
+      dieToolCode: jobForm.dieToolId
+        ? (data.tooling ?? []).find((t) => t.id === jobForm.dieToolId)?.code
+        : base.dieToolCode,
+      stereoToolId: jobForm.stereoToolId || base.stereoToolId,
+      stereoToolCode: jobForm.stereoToolId
+        ? (data.tooling ?? []).find((t) => t.id === jobForm.stereoToolId)?.code
+        : base.stereoToolCode,
     });
 
     setJobMessage('');
@@ -6219,6 +6274,8 @@ function App() {
       changeoverChecklist: job.changeoverChecklist?.length === 9 ? job.changeoverChecklist : buildBlankChangeoverChecklist(),
       qcPlan: job.qcPlan?.length === 4 ? job.qcPlan : buildBlankQcPlan(),
       photoUrls: job.photoUrls ?? [],
+      dieToolId: job.dieToolId || '',
+      stereoToolId: job.stereoToolId || '',
     });
     setView('jobs');
   }
@@ -7959,6 +8016,161 @@ function App() {
     w.document.close();
   }
 
+  /* ─────────────────────────────────────────────────────────────────
+   * Phase 62 — Tooling handlers (shared for Dies + Stereos)
+   * ──────────────────────────────────────────────────────────────── */
+  function resetToolingEditor(toolType: 'die' | 'stereo') {
+    if (toolType === 'die') {
+      setDieEditingId(null);
+      setDieMessage('');
+      setDieForm(createInitialToolingForm('die'));
+    } else {
+      setStereoEditingId(null);
+      setStereoMessage('');
+      setStereoForm(createInitialToolingForm('stereo'));
+    }
+  }
+  function editTooling(t: Tooling) {
+    const isDie = t.toolType === 'die';
+    const formState: ToolingFormState = {
+      toolType: t.toolType,
+      name: t.name,
+      description: t.description,
+      clientId: t.clientId,
+      location: t.location,
+      supplierId: t.supplierId,
+      supplierReference: t.supplierReference,
+      internalLocation: t.internalLocation,
+      cost: String(t.cost || ''),
+      currency: t.currency,
+      paidDate: t.paidDate,
+      supplierInvoiceNumber: t.supplierInvoiceNumber,
+      status: t.status,
+      photoUrls: t.photoUrls,
+      documentUrls: t.documentUrls,
+      notes: t.notes,
+      active: t.active,
+      widthMm: t.dimensions ? String(t.dimensions.widthMm) : '',
+      heightMm: t.dimensions ? String(t.dimensions.heightMm) : '',
+      depthMm: t.dimensions ? String(t.dimensions.depthMm) : '',
+      bagType: t.bagType || '',
+      handleType: t.handleType || 'None',
+      bottomStyle: t.bottomStyle || '',
+      designName: t.designName || '',
+      designVersion: t.designVersion ? String(t.designVersion) : '1',
+      supersedesToolId: t.supersedesToolId || '',
+      signedOffByName: t.signedOffByName || '',
+      signedOffAt: t.signedOffAt ? t.signedOffAt.slice(0, 10) : '',
+      signatureDataUrl: t.signatureDataUrl || '',
+      signedSampleDocumentUrl: t.signedSampleDocumentUrl || '',
+    };
+    if (isDie) {
+      setDieEditingId(t.id);
+      setDieForm(formState);
+      setView('dies');
+    } else {
+      setStereoEditingId(t.id);
+      setStereoForm(formState);
+      setView('stereos');
+    }
+  }
+  function handleSaveTooling(toolType: 'die' | 'stereo') {
+    const form = toolType === 'die' ? dieForm : stereoForm;
+    const editingId = toolType === 'die' ? dieEditingId : stereoEditingId;
+    const setMessage = toolType === 'die' ? setDieMessage : setStereoMessage;
+    if (!form.name.trim()) { setMessage('Name is required.'); return; }
+    if (toolType === 'stereo' && !form.clientId) { setMessage('A stereo must belong to a client.'); return; }
+
+    setData((current) => {
+      const existing = current.tooling ?? [];
+      const client = form.clientId ? current.clients.find((c) => c.id === form.clientId) : undefined;
+      const supplier = form.supplierId ? current.suppliers.find((s) => s.id === form.supplierId) : undefined;
+      const prior = editingId ? existing.find((t) => t.id === editingId) : undefined;
+      const yyyymm = new Date().toISOString().slice(0, 7).replace('-', '');
+      const prefix = toolType === 'die' ? 'DIE' : 'STR';
+      const seq = String(existing.filter((t) => t.toolType === toolType).length + 1).padStart(4, '0');
+      const payload: Tooling = {
+        id: prior?.id || `${prefix.toLowerCase()}-${Date.now().toString(36)}`,
+        code: prior?.code || `${prefix}-${yyyymm}-${seq}`,
+        createdAt: prior?.createdAt || new Date().toISOString(),
+        toolType,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        clientId: form.clientId,
+        clientName: client?.name || prior?.clientName || '',
+        location: form.location,
+        supplierId: form.supplierId,
+        supplierName: supplier?.name || prior?.supplierName || '',
+        supplierReference: form.supplierReference.trim(),
+        internalLocation: form.internalLocation.trim(),
+        cost: Number(form.cost) || 0,
+        currency: form.currency,
+        paidDate: form.paidDate,
+        supplierInvoiceNumber: form.supplierInvoiceNumber.trim(),
+        status: form.status,
+        photoUrls: form.photoUrls,
+        documentUrls: form.documentUrls,
+        notes: form.notes.trim(),
+        active: form.active,
+        lastUsedAt: prior?.lastUsedAt || '',
+        runCount: prior?.runCount || 0,
+        sharpeningHistory: prior?.sharpeningHistory || [],
+      };
+      if (toolType === 'die') {
+        payload.dimensions = {
+          widthMm: Number(form.widthMm) || 0,
+          heightMm: Number(form.heightMm) || 0,
+          depthMm: Number(form.depthMm) || 0,
+        };
+        payload.bagType = form.bagType.trim();
+        payload.handleType = form.handleType;
+        payload.bottomStyle = form.bottomStyle.trim();
+      } else {
+        payload.designName = form.designName.trim() || payload.name;
+        payload.designVersion = Number(form.designVersion) || 1;
+        payload.signedOffByName = form.signedOffByName.trim();
+        payload.signedOffAt = form.signedOffAt;
+        payload.signatureDataUrl = form.signatureDataUrl;
+        payload.signedSampleDocumentUrl = form.signedSampleDocumentUrl;
+        payload.supersedesToolId = form.supersedesToolId || undefined;
+      }
+      // Auto-archive the prior stereo this one supersedes.
+      let nextTooling = existing;
+      if (editingId) {
+        nextTooling = existing.map((t) => t.id === editingId ? payload : t);
+      } else {
+        nextTooling = [payload, ...existing];
+      }
+      if (toolType === 'stereo' && form.supersedesToolId) {
+        nextTooling = nextTooling.map((t) => t.id === form.supersedesToolId
+          ? { ...t, supersededByToolId: payload.id, status: 'Archived' as const, active: false }
+          : t);
+      }
+      return { ...current, tooling: nextTooling };
+    });
+    setMessage(editingId ? 'Tooling updated.' : 'Tooling added.');
+    resetToolingEditor(toolType);
+  }
+  function handleDeleteTooling(id: string) {
+    setData((current) => ({
+      ...current,
+      tooling: (current.tooling ?? []).filter((t) => t.id !== id),
+    }));
+    if (dieEditingId === id) resetToolingEditor('die');
+    if (stereoEditingId === id) resetToolingEditor('stereo');
+  }
+  function handleAddSharpeningEvent(toolId: string, event: ToolingSharpeningEvent) {
+    setData((current) => ({
+      ...current,
+      tooling: (current.tooling ?? []).map((t) => t.id === toolId ? {
+        ...t,
+        sharpeningHistory: [...(t.sharpeningHistory || []), event],
+        // Flip back to In Service after a sharpening event so it can be used again.
+        status: t.status === 'Needs Sharpening' || t.status === 'In Repair' ? 'In Service' : t.status,
+      } : t),
+    }));
+  }
+
   function handleLinkCompanyToClient(companyId: string, clientId: string) {
     setData((current) => ({
       ...current,
@@ -9644,6 +9856,7 @@ function App() {
           products={data.products}
           pricingTiers={data.pricingTiers}
           finishedGoodsStock={data.finishedGoodsStock}
+          tooling={(data.tooling ?? []).map((t) => ({ id: t.id, code: t.code, name: t.name, clientId: t.clientId, toolType: t.toolType, active: t.active, designVersion: t.designVersion } as any))}
           jobForm={jobForm}
           setJobForm={setJobForm}
           jobEditingId={jobEditingId}
@@ -10937,6 +11150,46 @@ function App() {
           onDelete={handleDeleteCompany}
           onLinkClient={handleLinkCompanyToClient}
           onLinkSupplier={handleLinkCompanyToSupplier}
+        />
+      )}
+
+      {view === 'dies' && (
+        <ToolingPage
+          toolType="die"
+          tooling={data.tooling ?? []}
+          clients={data.clients}
+          suppliers={data.suppliers}
+          filters={dieFilters}
+          setFilters={setDieFilters}
+          form={dieForm}
+          setForm={setDieForm}
+          editingId={dieEditingId}
+          message={dieMessage}
+          onSave={() => handleSaveTooling('die')}
+          onReset={() => resetToolingEditor('die')}
+          onEdit={editTooling}
+          onDelete={handleDeleteTooling}
+          onAddSharpeningEvent={handleAddSharpeningEvent}
+        />
+      )}
+
+      {view === 'stereos' && (
+        <ToolingPage
+          toolType="stereo"
+          tooling={data.tooling ?? []}
+          clients={data.clients}
+          suppliers={data.suppliers}
+          filters={stereoFilters}
+          setFilters={setStereoFilters}
+          form={stereoForm}
+          setForm={setStereoForm}
+          editingId={stereoEditingId}
+          message={stereoMessage}
+          onSave={() => handleSaveTooling('stereo')}
+          onReset={() => resetToolingEditor('stereo')}
+          onEdit={editTooling}
+          onDelete={handleDeleteTooling}
+          onAddSharpeningEvent={handleAddSharpeningEvent}
         />
       )}
 
