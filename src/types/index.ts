@@ -640,7 +640,17 @@ export type JobStatus =
   | 'In Storage'
   | 'Partially Dispatched'
   | 'Completed';
-export type QuantityUnit = 'kg' | 'sheets' | 'rolls' | 'units';
+// Phase 79 — expanded for materials receiving: chemicals (litres/ml),
+// raw materials (ton/grams), generic count units (pieces). All existing
+// values are kept so old rows stay valid.
+export type QuantityUnit =
+  | 'kg' | 'g' | 'ton'
+  | 'litres' | 'ml'
+  | 'sheets' | 'rolls'
+  | 'units' | 'pieces';
+export const QUANTITY_UNITS: QuantityUnit[] = [
+  'kg', 'g', 'ton', 'litres', 'ml', 'sheets', 'rolls', 'units', 'pieces',
+];
 export type ProductSupplyType = 'Manufactured' | 'Purchased';
 export type ProductCategory = 'Paper Bags' | 'Paper Cups' | 'Food Boxes' | 'Wet Wipes' | 'Other Packaging';
 export type PricingTierType = 'Wholesale' | 'Retail' | 'Ecommerce' | 'Custom';

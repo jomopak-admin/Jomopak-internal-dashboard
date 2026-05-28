@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
-import { InventoryMovement, InventoryScanFormState, JobCard, MaterialFilters, MaterialOrderRequest, MaterialReceipt, MaterialReceiptFormState, Supplier } from '../../types';
+import { InventoryMovement, InventoryScanFormState, JobCard, MATERIAL_KINDS, MaterialFilters, MaterialOrderRequest, MaterialReceipt, MaterialReceiptFormState, QUANTITY_UNITS, Supplier } from '../../types';
 import { FSC_CLAIM_TYPES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
 
 interface MaterialsReceivingPageProps {
@@ -29,6 +29,11 @@ interface MaterialsReceivingPageProps {
   inventoryMovements: InventoryMovement[];
   onInventoryScanAction: () => void;
   onEdit: (receipt: MaterialReceipt) => void;
+  /** Phase 79 — preview of the next auto-generated internal roll code
+   *  (MAT-YYYYMM-NNN). Computed in App.tsx from the storedDate + full
+   *  existing material-receipt code list. Used as the read-only default
+   *  in the receiving form so the receiver doesn't have to type one. */
+  nextInternalRollCodePreview?: string;
 }
 
 export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
@@ -53,9 +58,14 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     inventoryMovements,
     onInventoryScanAction,
     onEdit,
+    nextInternalRollCodePreview = '',
   } = props;
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  // Phase 79 — override toggle for the auto-generated roll code / barcode.
+  // Defaults to off; the rare case of a pre-printed external label is the
+  // only reason to override.
+  const [codeOverride, setCodeOverride] = useState(false);
 
   useEffect(() => {
     if (materialEditingId) {
@@ -155,10 +165,19 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
               value={materialForm.supplierId}
               onChange={(value) => {
                 const supplier = suppliers.find((item) => item.id === value);
+                // Phase 79 — when this is a Paper receipt and the supplier
+                // has an FSC certification on file, auto-pull its certificate
+                // number into supplierCertificateCode and tick fscRelated.
+                // We never overwrite an existing override the receiver typed.
+                const fscCert = supplier?.certifications?.find((c) => c.type === 'FSC');
+                const isPaper = (materialForm.materialKind || 'Paper') === 'Paper';
+                const shouldPull = isPaper && fscCert && !materialForm.supplierCertificateCode;
                 setMaterialForm({
                   ...materialForm,
                   supplierId: supplier?.id ?? '',
                   supplierName: supplier?.name ?? materialForm.supplierName,
+                  supplierCertificateCode: shouldPull ? fscCert.certificateNumber : materialForm.supplierCertificateCode,
+                  fscRelated: shouldPull ? true : materialForm.fscRelated,
                 });
               }}
               placeholder="Search suppliers…"
@@ -179,16 +198,52 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     {
       key: 'identification',
       title: 'Identification',
-      subtitle: 'How the roll is identified on the floor.',
+      subtitle: 'How the roll / drum / pallet is identified on the floor. Auto-coded — override only for pre-printed supplier labels.',
       body: (
         <div className="form-grid">
           <label>
-            <span>Barcode</span>
-            <input value={materialForm.barcode} onChange={(event) => setMaterialForm({ ...materialForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
-          </label>
-          <label>
-            <span>Internal roll code</span>
-            <input value={materialForm.internalRollCode} onChange={(event) => setMaterialForm({ ...materialForm, internalRollCode: event.target.value })} />
+            <span>Internal roll code / Barcode</span>
+            {materialEditingId ? (
+              <input value={materialForm.internalRollCode} readOnly title="Code is fixed once the receipt is saved." />
+            ) : codeOverride ? (
+              <>
+                <input
+                  value={materialForm.internalRollCode}
+                  onChange={(event) => setMaterialForm({ ...materialForm, internalRollCode: event.target.value, barcode: event.target.value })}
+                  placeholder="Scan or type a custom code"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ marginTop: 4, alignSelf: 'flex-start', padding: '2px 8px', fontSize: 11 }}
+                  onClick={() => { setCodeOverride(false); setMaterialForm({ ...materialForm, internalRollCode: '', barcode: '' }); }}
+                >
+                  Use auto-generated instead
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  value={nextInternalRollCodePreview}
+                  readOnly
+                  title="Auto-generated from the previous material receipt this month."
+                  style={{ background: 'var(--jp-paper-2, #faf8f4)', color: 'var(--jp-ink-2, #6f6657)' }}
+                />
+                <span className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Auto — increments from the previous receipt this month. The barcode is identical.
+                  {' '}
+                  <button
+                    type="button"
+                    className="link-button"
+                    style={{ padding: 0, background: 'none', border: 'none', color: 'var(--jp-accent, #2563eb)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}
+                    onClick={() => setCodeOverride(true)}
+                  >
+                    Override
+                  </button>
+                </span>
+              </>
+            )}
           </label>
           <label>
             <span>Storage location</span>
@@ -211,7 +266,7 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
               value={materialForm.materialKind || 'Paper'}
               onChange={(event) => setMaterialForm({ ...materialForm, materialKind: event.target.value as any })}
             >
-              {(['Paper', 'Ink', 'Plate', 'Adhesive', 'Foil', 'Chemical', 'Other'] as const).map((k) => (
+              {MATERIAL_KINDS.map((k) => (
                 <option key={k} value={k}>{k}</option>
               ))}
             </select>
@@ -261,19 +316,18 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
           <label>
             <span>Quantity unit</span>
             <select value={materialForm.quantityUnit} onChange={(event) => setMaterialForm({ ...materialForm, quantityUnit: event.target.value as MaterialReceipt['quantityUnit'] })}>
-              <option value="kg">kg</option>
-              <option value="rolls">rolls</option>
-              <option value="sheets">sheets</option>
-              <option value="units">units</option>
+              {QUANTITY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </label>
         </div>
       ),
     },
-    {
+    // Phase 79 — FSC section only shown for Paper. Auto-pulls the supplier's
+    // FSC certificate code when a supplier with an FSC certification is picked.
+    ...((materialForm.materialKind || 'Paper') === 'Paper' ? [{
       key: 'fsc',
       title: 'FSC chain-of-custody',
-      subtitle: 'Capture FSC details if this material falls under chain-of-custody.',
+      subtitle: 'FSC only applies to paper. The supplier certificate code auto-pulls from the supplier record when available.',
       body: (
         <div className="form-grid">
           <label className="checkbox-row">
@@ -288,11 +342,19 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
           </label>
           <label>
             <span>Supplier certificate code</span>
-            <input value={materialForm.supplierCertificateCode} onChange={(event) => setMaterialForm({ ...materialForm, supplierCertificateCode: event.target.value })} />
+            <input
+              value={materialForm.supplierCertificateCode}
+              onChange={(event) => setMaterialForm({ ...materialForm, supplierCertificateCode: event.target.value })}
+              placeholder={(() => {
+                const sup = suppliers.find((s) => s.id === materialForm.supplierId);
+                const fsc = sup?.certifications?.find((c) => c.type === 'FSC');
+                return fsc?.certificateNumber || 'No FSC cert on file for this supplier';
+              })()}
+            />
           </label>
         </div>
       ),
-    },
+    } as FormWizardSection] : []),
     {
       key: 'foodsafe',
       title: 'Food-safe certification',

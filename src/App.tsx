@@ -5962,16 +5962,25 @@ function App() {
       }));
     } else {
       const receiptNumber = generateCode('RCV', data.materialReceipts.map((receipt) => receipt.receiptNumber), materialForm.receivedDate);
+      // Phase 79 — auto-generate the internal roll code if the operator
+      // didn't override. MAT-YYYYMM-NNN, per-month sequence. The barcode
+      // mirrors the roll code so a single label carries both.
+      const autoRollCode = generateCode(
+        'MAT',
+        data.materialReceipts.map((r) => r.internalRollCode).filter(Boolean),
+        materialForm.receivedDate,
+      );
+      const resolvedRollCode = materialForm.internalRollCode.trim() || autoRollCode;
       const newReceipt: MaterialReceipt = {
         id: receiptNumber,
         receiptNumber,
-        barcode: materialForm.barcode.trim() || buildBarcode(materialForm.internalRollCode || receiptNumber),
+        barcode: materialForm.barcode.trim() || buildBarcode(resolvedRollCode),
         createdAt: new Date().toISOString(),
         receivedDate: materialForm.receivedDate,
         supplierId: linkedSupplier?.id ?? materialForm.supplierId,
         supplierName: linkedSupplier?.name ?? materialForm.supplierName,
         supplierBatchNumber: materialForm.supplierBatchNumber,
-        internalRollCode: materialForm.internalRollCode,
+        internalRollCode: resolvedRollCode,
         materialKind: materialForm.materialKind || 'Paper',
         itemName: materialForm.itemName,
         paperType: materialForm.paperType,
@@ -10574,6 +10583,11 @@ function App() {
           inventoryMovements={data.inventoryMovements}
           onInventoryScanAction={handleInventoryScanAction}
           onEdit={editMaterial}
+          nextInternalRollCodePreview={generateCode(
+            'MAT',
+            data.materialReceipts.map((r) => r.internalRollCode).filter(Boolean),
+            materialForm.receivedDate || new Date().toISOString().slice(0, 10),
+          )}
         />
       )}
 

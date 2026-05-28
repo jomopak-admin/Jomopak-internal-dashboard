@@ -1,5 +1,5 @@
 export function generateCode(
-  prefix: 'JOB' | 'RCV' | 'PRD' | 'WST' | 'PPR' | 'DSP' | 'FGS' | 'SPR' | 'QTE' | 'ART' | 'REL' | 'LED' | 'POR' | 'IVM' | 'DLV' | 'INV' | 'SPEC' | 'SI' | 'SC' | 'WT' | 'CHEM' | 'FSM' | 'FSB' | 'CLN' | 'NCR' | 'CMP' | 'HAZ' | 'TRN' | 'PPE' | 'PEST' | 'FOR' | 'TLB' | 'VIS' | 'SOP' | 'SHP' | 'BILL' | 'JNL' | 'FA' | 'WO' | 'WARN' | 'REQ' | 'LEAV' | 'LOAN' | 'CLM',
+  prefix: 'JOB' | 'RCV' | 'PRD' | 'WST' | 'PPR' | 'DSP' | 'FGS' | 'SPR' | 'QTE' | 'ART' | 'REL' | 'LED' | 'POR' | 'IVM' | 'DLV' | 'INV' | 'SPEC' | 'SI' | 'SC' | 'WT' | 'CHEM' | 'FSM' | 'FSB' | 'CLN' | 'NCR' | 'CMP' | 'HAZ' | 'TRN' | 'PPE' | 'PEST' | 'FOR' | 'TLB' | 'VIS' | 'SOP' | 'SHP' | 'BILL' | 'JNL' | 'FA' | 'WO' | 'WARN' | 'REQ' | 'LEAV' | 'LOAN' | 'CLM' | 'MAT',
   existingCodes: string[],
   date: string,
 ): string {
