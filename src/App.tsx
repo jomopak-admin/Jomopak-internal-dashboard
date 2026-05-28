@@ -47,6 +47,7 @@ import { PpeIssuePage } from './pages/Phase4/PpeIssuePage';
 import { PestControlPage } from './pages/Phase4/PestControlPage';
 import { ForeignObjectPage } from './pages/Phase4/ForeignObjectPage';
 import { ToolBladePage } from './pages/Phase4/ToolBladePage';
+import { FirstAidRegisterPage } from './pages/FirstAidRegister/FirstAidRegisterPage';
 import { VisitorLogPage } from './pages/Phase4/VisitorLogPage';
 import { VisitorKioskPage } from './pages/VisitorKiosk/VisitorKioskPage';
 import { NoticesPage } from './pages/Notices/NoticesPage';
@@ -249,6 +250,11 @@ import {
   ToolBladeRecord,
   ToolBladeFilters,
   ToolBladeFormState,
+  FirstAidEntry,
+  FirstAidEntryFormState,
+  FirstAidFilters,
+  DesignatedFirstAider,
+  DesignatedFirstAiderFormState,
   VisitorLogEntry,
   VisitorLogFilters,
   VisitorLogFormState,
@@ -1044,6 +1050,45 @@ const createInitialToolBladeForm = (): ToolBladeFormState => ({
   notes: '',
 });
 
+// Phase 82 — First Aid Register
+const createInitialFirstAidEntryForm = (): FirstAidEntryFormState => ({
+  incidentDate: '',
+  incidentTime: '',
+  location: '',
+  isVisitor: false,
+  employeeId: '',
+  employeeName: '',
+  visitorName: '',
+  visitorCompany: '',
+  injuryType: 'Cut / Laceration',
+  bodyPart: '',
+  description: '',
+  treatmentGiven: '',
+  treatedByName: '',
+  treatedByCertNumber: '',
+  isIod: false,
+  iodReportNumber: '',
+  iodReportedDate: '',
+  followUpRequired: false,
+  followUpNotes: '',
+  resolvedDate: '',
+  witnessName: '',
+  photoUrls: [],
+  signatureDataUrl: '',
+  notes: '',
+});
+const createInitialFirstAiderForm = (): DesignatedFirstAiderFormState => ({
+  employeeId: '',
+  fullName: '',
+  certLevel: 'L1',
+  certNumber: '',
+  certIssuedDate: '',
+  certExpiryDate: '',
+  phoneNumber: '',
+  notes: '',
+  active: true,
+});
+
 const createInitialSopForm = (): SopDocumentFormState => ({
   title: '',
   category: 'Food Safety Policy',
@@ -1744,6 +1789,15 @@ function App() {
   const [toolBladeEditingId, setToolBladeEditingId] = useState<string | null>(null);
   const [toolBladeMessage, setToolBladeMessage] = useState('');
   const [toolBladeFilters, setToolBladeFilters] = useState<ToolBladeFilters>({ search: '', itemType: '', status: '', criticalOnly: false });
+
+  // Phase 82 — First Aid Register state
+  const [firstAidEntryForm, setFirstAidEntryForm] = useState<FirstAidEntryFormState>(createInitialFirstAidEntryForm);
+  const [firstAidEntryEditingId, setFirstAidEntryEditingId] = useState<string | null>(null);
+  const [firstAidEntryMessage, setFirstAidEntryMessage] = useState('');
+  const [firstAidFilters, setFirstAidFilters] = useState<FirstAidFilters>({ search: '', month: '', iodOnly: false });
+  const [firstAiderForm, setFirstAiderForm] = useState<DesignatedFirstAiderFormState>(createInitialFirstAiderForm);
+  const [firstAiderEditingId, setFirstAiderEditingId] = useState<string | null>(null);
+  const [firstAiderMessage, setFirstAiderMessage] = useState('');
 
   const [visitorForm, setVisitorForm] = useState<VisitorLogFormState>(createInitialVisitorForm);
   const [visitorEditingId, setVisitorEditingId] = useState<string | null>(null);
@@ -8690,6 +8744,118 @@ function App() {
     resetToolBladeEditor();
   }
 
+  // ----- Phase 82: First Aid Register -----
+  function resetFirstAidEntryEditor() {
+    setFirstAidEntryForm(createInitialFirstAidEntryForm());
+    setFirstAidEntryEditingId(null);
+    setFirstAidEntryMessage('');
+  }
+  function resetFirstAiderEditor() {
+    setFirstAiderForm(createInitialFirstAiderForm());
+    setFirstAiderEditingId(null);
+    setFirstAiderMessage('');
+  }
+  function editFirstAidEntry(e: FirstAidEntry) {
+    setFirstAidEntryEditingId(e.id);
+    setFirstAidEntryForm({
+      incidentDate: e.incidentDate, incidentTime: e.incidentTime, location: e.location,
+      isVisitor: e.isVisitor, employeeId: e.employeeId, employeeName: e.employeeName,
+      visitorName: e.visitorName, visitorCompany: e.visitorCompany,
+      injuryType: e.injuryType, bodyPart: e.bodyPart, description: e.description,
+      treatmentGiven: e.treatmentGiven, treatedByName: e.treatedByName, treatedByCertNumber: e.treatedByCertNumber,
+      isIod: e.isIod, iodReportNumber: e.iodReportNumber, iodReportedDate: e.iodReportedDate,
+      followUpRequired: e.followUpRequired, followUpNotes: e.followUpNotes, resolvedDate: e.resolvedDate,
+      witnessName: e.witnessName, photoUrls: e.photoUrls ?? [],
+      signatureDataUrl: e.signatureDataUrl ?? '', notes: e.notes,
+    });
+  }
+  function editFirstAider(a: DesignatedFirstAider) {
+    setFirstAiderEditingId(a.id);
+    setFirstAiderForm({
+      employeeId: a.employeeId, fullName: a.fullName, certLevel: a.certLevel,
+      certNumber: a.certNumber, certIssuedDate: a.certIssuedDate, certExpiryDate: a.certExpiryDate,
+      phoneNumber: a.phoneNumber, notes: a.notes, active: a.active,
+    });
+  }
+  function handleSaveFirstAidEntry() {
+    if (!firstAidEntryForm.incidentDate || !firstAidEntryForm.location) {
+      setFirstAidEntryMessage('Incident date and location are required.');
+      return;
+    }
+    if (!firstAidEntryForm.isVisitor && !firstAidEntryForm.employeeId) {
+      setFirstAidEntryMessage('Pick an employee, or tick "Visitor / contractor".');
+      return;
+    }
+    if (firstAidEntryForm.isVisitor && !firstAidEntryForm.visitorName) {
+      setFirstAidEntryMessage('Visitor name is required.');
+      return;
+    }
+    setFirstAidEntryMessage('');
+    const payload = {
+      ...firstAidEntryForm,
+      // photoUrls + signatureDataUrl are already in the form state.
+    };
+    setData((current) => {
+      const existing = current.firstAidEntries ?? [];
+      if (firstAidEntryEditingId) {
+        return {
+          ...current,
+          firstAidEntries: existing.map((e) => e.id === firstAidEntryEditingId ? { ...e, ...payload } : e),
+        };
+      }
+      const id = `far-${Date.now().toString(36)}`;
+      const entryNumber = generateCode('MAT' as any, existing.map((e) => e.entryNumber), firstAidEntryForm.incidentDate)
+        .replace(/^MAT/, 'FAR');
+      const newEntry: FirstAidEntry = {
+        id,
+        entryNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+      };
+      return { ...current, firstAidEntries: [newEntry, ...existing] };
+    });
+    setFirstAidEntryMessage(firstAidEntryEditingId ? 'Entry updated.' : 'Entry saved.');
+    resetFirstAidEntryEditor();
+  }
+  function handleSaveFirstAider() {
+    if (!firstAiderForm.fullName) {
+      setFirstAiderMessage('Full name is required.');
+      return;
+    }
+    setFirstAiderMessage('');
+    setData((current) => {
+      const existing = current.firstAidAiders ?? [];
+      if (firstAiderEditingId) {
+        return {
+          ...current,
+          firstAidAiders: existing.map((a) => a.id === firstAiderEditingId ? { ...a, ...firstAiderForm } : a),
+        };
+      }
+      const newAider: DesignatedFirstAider = {
+        id: `faa-${Date.now().toString(36)}`,
+        ...firstAiderForm,
+      };
+      return { ...current, firstAidAiders: [newAider, ...existing] };
+    });
+    setFirstAiderMessage(firstAiderEditingId ? 'First aider updated.' : 'First aider saved.');
+    resetFirstAiderEditor();
+  }
+
+  const filteredFirstAidEntries = useMemo(() => {
+    const entries = data.firstAidEntries ?? [];
+    const monthKey = (s: string) => s.slice(0, 7);
+    return entries.filter((e) => {
+      if (firstAidFilters.iodOnly && !e.isIod) return false;
+      if (firstAidFilters.month && monthKey(e.incidentDate) !== firstAidFilters.month) return false;
+      if (firstAidFilters.search) {
+        const haystack = [e.entryNumber, e.employeeName, e.visitorName, e.location, e.injuryType, e.bodyPart, e.treatedByName]
+          .join(' ').toLowerCase();
+        if (!haystack.includes(firstAidFilters.search.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [data.firstAidEntries, firstAidFilters]);
+
   // ----- Phase 4: Visitor log -----
   function editVisitor(r: VisitorLogEntry) {
     setVisitorEditingId(r.id);
@@ -11973,6 +12139,32 @@ function App() {
           onSave={handleSaveToolBlade}
           onReset={resetToolBladeEditor}
           onEdit={editToolBlade}
+        />
+      )}
+
+      {view === 'firstAidRegister' && (
+        <FirstAidRegisterPage
+          monthOptions={monthOptions}
+          employees={data.employees ?? []}
+          entries={data.firstAidEntries ?? []}
+          aiders={data.firstAidAiders ?? []}
+          entryForm={firstAidEntryForm}
+          setEntryForm={setFirstAidEntryForm}
+          entryEditingId={firstAidEntryEditingId}
+          entryMessage={firstAidEntryMessage}
+          onSaveEntry={handleSaveFirstAidEntry}
+          onResetEntry={resetFirstAidEntryEditor}
+          filters={firstAidFilters}
+          setFilters={setFirstAidFilters}
+          filteredEntries={filteredFirstAidEntries}
+          onEditEntry={editFirstAidEntry}
+          aiderForm={firstAiderForm}
+          setAiderForm={setFirstAiderForm}
+          aiderEditingId={firstAiderEditingId}
+          aiderMessage={firstAiderMessage}
+          onSaveAider={handleSaveFirstAider}
+          onResetAider={resetFirstAiderEditor}
+          onEditAider={editFirstAider}
         />
       )}
 

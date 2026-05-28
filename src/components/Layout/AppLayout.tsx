@@ -32,7 +32,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'stockMovements', 'labels', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   { title: 'Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLoans', 'expenseClaims', 'irp5Centre', 'staffWarnings'] },
-  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'foreignObjectControl', 'pestControl', 'toolBladeControl', 'visitorLog'] },
+  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'firstAidRegister', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'foreignObjectControl', 'pestControl', 'toolBladeControl', 'visitorLog'] },
   { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'notices', 'permissions', 'settings'] },
 ];
 

@@ -38,6 +38,7 @@ export type View =
   | 'foreignObjectControl'
   | 'contaminationControl'
   | 'toolBladeControl'
+  | 'firstAidRegister'
   | 'visitorLog'
   | 'visitorKiosk'
   | 'traceability'
@@ -151,6 +152,7 @@ export const VIEW_LABELS: Record<View, string> = {
   foreignObjectControl: 'Foreign Object Register',
   contaminationControl: 'Contamination Control',
   toolBladeControl: 'Tools & Blade Control',
+  firstAidRegister: 'First Aid Register',
   visitorLog: 'Visitor & Contractor Log',
   visitorKiosk: 'Reception Kiosk',
   traceability: 'Batch Traceability',
@@ -251,6 +253,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'pestControl',
     'foreignObjectControl',
     'toolBladeControl',
+    'firstAidRegister',
     'visitorLog',
     'visitorKiosk',
     'traceability',
@@ -338,6 +341,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'pestControl',
     'foreignObjectControl',
     'toolBladeControl',
+    'firstAidRegister',
     'visitorLog',
     'traceability',
     'complaints',
@@ -422,6 +426,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'pestControl',
     'foreignObjectControl',
     'toolBladeControl',
+    'firstAidRegister',
     'visitorLog',
     'traceability',
     'complaints',
@@ -482,6 +487,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'pestControl',
     'foreignObjectControl',
     'toolBladeControl',
+    'firstAidRegister',
     'visitorLog',
     'traceability',
     'complaints',
@@ -669,6 +675,135 @@ export type WasteReason =
   | 'Other';
 
 export type FscClaimType = 'None' | 'FSC Mix' | 'FSC Recycled' | 'FSC 100%';
+
+// ----- Phase 82 — First Aid Register -----
+export type FirstAidInjuryType =
+  | 'Cut / Laceration'
+  | 'Burn'
+  | 'Bruise / Contusion'
+  | 'Sprain / Strain'
+  | 'Fracture'
+  | 'Eye injury'
+  | 'Chemical exposure'
+  | 'Heat / Cold'
+  | 'Foreign body'
+  | 'Other';
+
+export const FIRST_AID_INJURY_TYPES: FirstAidInjuryType[] = [
+  'Cut / Laceration', 'Burn', 'Bruise / Contusion', 'Sprain / Strain',
+  'Fracture', 'Eye injury', 'Chemical exposure', 'Heat / Cold',
+  'Foreign body', 'Other',
+];
+
+export type FirstAidCertLevel = 'L1' | 'L2' | 'L3' | 'Not certified';
+export const FIRST_AID_CERT_LEVELS: FirstAidCertLevel[] = ['L1', 'L2', 'L3', 'Not certified'];
+
+/** Site first-aider register. OHS Act requires at least 1 certified first
+ *  aider per 50 employees in any workplace where >5 employees work. We
+ *  track cert expiry so HR gets a renewal reminder before the cert lapses. */
+export interface DesignatedFirstAider {
+  id: string;
+  /** Optional pointer to the Employee record if this person is on payroll. */
+  employeeId: string;
+  fullName: string;
+  certLevel: FirstAidCertLevel;
+  certNumber: string;
+  certIssuedDate: string;
+  certExpiryDate: string;
+  phoneNumber: string;
+  notes: string;
+  active: boolean;
+}
+
+export interface FirstAidEntry {
+  id: string;
+  /** FAR-YYYYMM-NNN — auto-generated. */
+  entryNumber: string;
+  /** Optimistic concurrency token. */
+  version?: number;
+  /** Server-side update timestamp. */
+  rowUpdatedAt?: string;
+  createdAt: string;
+  incidentDate: string;
+  incidentTime: string;
+  /** Where the incident happened — machine name, area, room. */
+  location: string;
+  // ----- Who was hurt -----
+  isVisitor: boolean;
+  employeeId: string;
+  employeeName: string;
+  visitorName: string;
+  visitorCompany: string;
+  // ----- Injury -----
+  injuryType: FirstAidInjuryType;
+  bodyPart: string;
+  description: string;
+  // ----- Treatment -----
+  treatmentGiven: string;
+  treatedByName: string;
+  /** The first aider's cert number — must match a DesignatedFirstAider record. */
+  treatedByCertNumber: string;
+  // ----- Injury on Duty (Compensation Fund / RMA reporting) -----
+  isIod: boolean;
+  iodReportNumber: string;
+  iodReportedDate: string;
+  // ----- Follow-up -----
+  followUpRequired: boolean;
+  followUpNotes: string;
+  resolvedDate: string;
+  // ----- Evidence -----
+  witnessName: string;
+  photoUrls?: string[];
+  /** Employee signature confirming treatment was administered + accepted. */
+  signatureDataUrl?: string;
+  notes: string;
+}
+
+export interface FirstAidEntryFormState {
+  incidentDate: string;
+  incidentTime: string;
+  location: string;
+  isVisitor: boolean;
+  employeeId: string;
+  employeeName: string;
+  visitorName: string;
+  visitorCompany: string;
+  injuryType: FirstAidInjuryType;
+  bodyPart: string;
+  description: string;
+  treatmentGiven: string;
+  treatedByName: string;
+  treatedByCertNumber: string;
+  isIod: boolean;
+  iodReportNumber: string;
+  iodReportedDate: string;
+  followUpRequired: boolean;
+  followUpNotes: string;
+  resolvedDate: string;
+  witnessName: string;
+  photoUrls?: string[];
+  signatureDataUrl?: string;
+  notes: string;
+}
+
+export interface FirstAidFilters {
+  search: string;
+  month: string;
+  iodOnly: boolean;
+}
+
+export interface DesignatedFirstAiderFormState {
+  employeeId: string;
+  fullName: string;
+  certLevel: FirstAidCertLevel;
+  certNumber: string;
+  certIssuedDate: string;
+  certExpiryDate: string;
+  phoneNumber: string;
+  notes: string;
+  active: boolean;
+}
+
 
 /** Tri-state food-safe flag used on materials, chemicals, and derived FG batches.
  *  Defaults to 'unknown' so receivers/operators must explicitly pick. */
@@ -5331,6 +5466,9 @@ export interface AppData {
   pestControlRecords: PestControlRecord[];
   foreignObjectRecords: ForeignObjectRecord[];
   toolBladeRecords: ToolBladeRecord[];
+  // Phase 82 — First Aid Register.
+  firstAidEntries?: FirstAidEntry[];
+  firstAidAiders?: DesignatedFirstAider[];
   visitorLogEntries: VisitorLogEntry[];
   sopDocuments: SopDocument[];
   haccpHazards: HaccpHazard[];
