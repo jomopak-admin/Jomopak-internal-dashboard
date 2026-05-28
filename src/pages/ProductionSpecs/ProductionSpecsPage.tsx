@@ -165,7 +165,8 @@ export function ProductionSpecsPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>New Production Spec</button> : <button className="ghost-button" onClick={handleBackToList}>Back to specs</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>New Production Spec</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to specs</button>}
       />
 
       {mode === 'form' ? (

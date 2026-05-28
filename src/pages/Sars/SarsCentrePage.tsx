@@ -247,7 +247,7 @@ export function SarsCentrePage({
         <SectionTitle
           title={`${SARS_OBLIGATION_SHORT[draft.obligationType]} · ${draft.periodLabel}`}
           subtitle={SARS_OBLIGATION_LABELS[draft.obligationType]}
-          action={<button className="ghost-button" onClick={() => { setMode('overview'); setDraft(null); }}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => { setMode('overview'); setDraft(null); }}>← Back</button>}
         />
 
         <section className="card">

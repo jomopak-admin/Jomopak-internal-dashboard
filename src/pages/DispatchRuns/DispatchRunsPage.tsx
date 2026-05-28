@@ -162,9 +162,8 @@ export function DispatchRunsPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list'
-          ? <button className="secondary-button" onClick={handleStartCreate}>Plan New Run</button>
-          : <button className="ghost-button" onClick={handleBackToList}>Back to runs</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Plan New Run</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to runs</button>}
       />
 
       {mode === 'form' ? (

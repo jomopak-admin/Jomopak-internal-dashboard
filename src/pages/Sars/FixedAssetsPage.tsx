@@ -92,7 +92,7 @@ export function FixedAssetsPage({ fixedAssets, ledgerAccounts, today, onSave, on
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit ${draft.name}` : 'New fixed asset'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">

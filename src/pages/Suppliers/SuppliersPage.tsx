@@ -427,16 +427,16 @@ export function SuppliersPage({
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Suppliers</button> : null}
+
         action={
           mode === 'list' ? (
             <div className="add-button-group">
               <button className="secondary-button" onClick={handleStartQuickAdd}>Add New Supplier</button>
               <button className="ghost-button" onClick={handleStartCreate}>Full Form</button>
             </div>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Suppliers</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'quick' ? (

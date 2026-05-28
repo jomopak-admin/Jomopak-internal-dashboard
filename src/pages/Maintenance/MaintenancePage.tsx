@@ -109,7 +109,7 @@ export function MaintenancePage({ workOrders, machines, today, onSave, onDelete,
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit ${draft.woNumber}` : 'New work order'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">

@@ -196,9 +196,8 @@ export function CompaniesPage({ companies, clients, suppliers, filters, setFilte
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New company</button>
-        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); setDetailId(null); }}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New company</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); setDetailId(null); }}>← Back</button>}
       />
 
       {mode === 'form' ? (

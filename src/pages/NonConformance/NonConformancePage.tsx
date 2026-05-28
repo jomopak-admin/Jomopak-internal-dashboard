@@ -213,9 +213,8 @@ export function NonConformancePage(props: NonConformancePageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={handleStartCreate}>Log NCR</button>
-        : <button className="ghost-button" onClick={handleBackToList}>Back to NCRs</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Log NCR</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to NCRs</button>}
       />
       {mode === 'form' ? (
         <FormWizard

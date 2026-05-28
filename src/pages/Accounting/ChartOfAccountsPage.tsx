@@ -79,7 +79,7 @@ export function ChartOfAccountsPage({ ledgerAccounts, onSave, onDelete }: ChartO
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit account ${draft.code}` : 'New ledger account'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">

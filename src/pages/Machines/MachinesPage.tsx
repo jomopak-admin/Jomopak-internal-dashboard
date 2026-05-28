@@ -90,7 +90,8 @@ export function MachinesPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Machine</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Machines</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Machine</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to Machines</button>}
       />
 
       {mode === 'form' ? (

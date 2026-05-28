@@ -110,7 +110,7 @@ export function GeneralLedgerPage({ journalEntries, ledgerAccounts, invoices, su
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit journal ${draft.entryNumber}` : 'New journal entry'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">

@@ -914,6 +914,23 @@ p {
   margin-bottom: 14px;
 }
 
+/* Back-action sits to the LEFT of the title; action stays on the right. */
+.section-title-back {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+.section-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.section-title-action {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .section-title h2 {
   font-family: var(--jp-serif);
   font-weight: 500;

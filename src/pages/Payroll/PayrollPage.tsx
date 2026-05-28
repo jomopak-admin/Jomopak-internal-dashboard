@@ -237,10 +237,8 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
       <div className="page-stack">
         <SectionTitle
           title={`Payslips — ${draft.periodLabel}`}
-          action={<>
-            <button className="ghost-button no-print" onClick={() => setMode('run')}>Back</button>
-            <button className="primary-button no-print" onClick={() => window.print()}>Print all</button>
-          </>}
+          backAction={<button className="ghost-button no-print" onClick={() => setMode('run')}>← Back</button>}
+          action={<button className="primary-button no-print" onClick={() => window.print()}>Print all</button>}
         />
         <div className="payslip-stack">
           {draft.payslips.map((p) => {
@@ -267,7 +265,7 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Payroll — ${draft.periodLabel}` : 'New payroll run'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">

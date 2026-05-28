@@ -367,15 +367,15 @@ export function WorkTicketPage({
         <SectionTitle
           title={editing ? 'Edit Work Ticket' : 'New Work Ticket'}
           subtitle="Fill the spec — costs auto-calculate from the live cost masters."
+          backAction={
+            <button type="button" className="ghost-button" onClick={handleBackToList}>
+              ← Back to list
+            </button>
+          }
           action={
-            <div className="action-row">
-              <button type="button" className="ghost-button" onClick={handleBackToList}>
-                ← Back to list
-              </button>
-              <button type="button" className="primary-button" onClick={onSave}>
-                {editing ? 'Save changes' : 'Save ticket'}
-              </button>
-            </div>
+            <button type="button" className="primary-button" onClick={onSave}>
+              {editing ? 'Save changes' : 'Save ticket'}
+            </button>
           }
         />
         {workTicketMessage ? <div className="form-message">{workTicketMessage}</div> : null}

@@ -190,13 +190,13 @@ export function PaperLogPage(props: PaperLogPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Paper Log</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Paper Log</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Paper Log</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

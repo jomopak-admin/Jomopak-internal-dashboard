@@ -224,7 +224,7 @@ export function BankReconciliationPage({
         <SectionTitle
           title="Import bank statement"
           subtitle="Upload a CSV exported from your bank, map the columns, and import."
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <div className="accounting-toolbar">

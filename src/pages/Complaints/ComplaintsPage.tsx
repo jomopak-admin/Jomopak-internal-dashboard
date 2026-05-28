@@ -288,9 +288,8 @@ export function ComplaintsPage(props: ComplaintsPageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={handleStartCreate}>Log complaint</button>
-        : <button className="ghost-button" onClick={handleBackToList}>Back to complaints</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Log complaint</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to complaints</button>}
       />
       {mode === 'form' ? (
         <FormWizard

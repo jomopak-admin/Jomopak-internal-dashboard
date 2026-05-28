@@ -101,9 +101,8 @@ export function ForeignObjectPage({ records, filters, setFilters, form, setForm,
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Log entry</button>
-        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Log entry</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

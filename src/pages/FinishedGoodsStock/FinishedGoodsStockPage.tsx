@@ -245,13 +245,13 @@ export function FinishedGoodsStockPage({
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Finished Stock</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Finished Stock</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Finished Stock</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

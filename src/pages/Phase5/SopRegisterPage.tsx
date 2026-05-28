@@ -210,9 +210,8 @@ export function SopRegisterPage(props: SopRegisterPageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={startCreate}>Add SOP</button>
-        : <button className="ghost-button" onClick={back}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={startCreate}>Add SOP</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={back}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

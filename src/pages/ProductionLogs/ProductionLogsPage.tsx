@@ -281,13 +281,13 @@ export function ProductionLogsPage(props: ProductionLogsPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Production Logs</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Production Log</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Production Logs</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

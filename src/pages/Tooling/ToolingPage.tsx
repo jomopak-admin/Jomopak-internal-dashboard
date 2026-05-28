@@ -391,6 +391,9 @@ export function ToolingPage(props: ToolingPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>← Back to {labelPlural}</button>
+          : null}
         action={mode === 'list'
           ? (
             <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -398,7 +401,7 @@ export function ToolingPage(props: ToolingPageProps) {
               <button className="secondary-button" onClick={handleStartCreate}>Add {labelSingular}</button>
             </div>
           )
-          : <button className="ghost-button" onClick={handleBackToList}>Back to {labelPlural}</button>}
+          : null}
       />
 
       {mode === 'form' ? (

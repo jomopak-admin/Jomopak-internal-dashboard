@@ -93,13 +93,13 @@ export function PricingTiersPage({
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Pricing Tiers</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Pricing Tier</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Pricing Tiers</button>
-          )
-        }
+          ) : null
+}
       />
       {mode === 'form' ? (
         <FormWizard

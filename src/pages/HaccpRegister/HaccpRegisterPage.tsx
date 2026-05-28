@@ -202,9 +202,8 @@ export function HaccpRegisterPage(props: HaccpRegisterPageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={handleStartCreate}>Add hazard</button>
-        : <button className="ghost-button" onClick={handleBackToList}>Back to register</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add hazard</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to register</button>}
       />
       {mode === 'form' ? (
         <FormWizard

@@ -167,13 +167,13 @@ export function WasteLogPage(props: WasteLogPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Waste Log</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Waste Log</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Waste Log</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

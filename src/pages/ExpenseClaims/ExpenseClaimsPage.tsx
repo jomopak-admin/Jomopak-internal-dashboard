@@ -142,9 +142,8 @@ export function ExpenseClaimsPage({ claims, employees, jobs, currentUserName, ca
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New claim</button>
-        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New claim</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

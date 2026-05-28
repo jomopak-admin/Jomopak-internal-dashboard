@@ -135,7 +135,7 @@ export function AccountsPayablePage({ supplierBills, suppliers, ledgerAccounts, 
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit bill ${draft.billNumber}` : 'New supplier bill'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <h3>Bill details</h3>

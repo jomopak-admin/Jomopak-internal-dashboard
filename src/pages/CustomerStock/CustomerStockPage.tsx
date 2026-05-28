@@ -150,8 +150,8 @@ export function CustomerStockPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'form'
-          ? <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>
+        backAction={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>← Back to Customer Stock</button>
           : null}
       />
       {mode === 'list' && (

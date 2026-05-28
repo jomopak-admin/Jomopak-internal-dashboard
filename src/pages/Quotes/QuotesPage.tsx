@@ -204,7 +204,8 @@ export function QuotesPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Quote</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Quotes</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Quote</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to Quotes</button>}
       />
 
       {mode === 'form' ? (

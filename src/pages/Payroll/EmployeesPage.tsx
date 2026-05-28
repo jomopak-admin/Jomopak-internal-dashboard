@@ -144,7 +144,7 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit ${draft.firstName} ${draft.lastName}` : 'New employee'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <h3>Personal</h3>

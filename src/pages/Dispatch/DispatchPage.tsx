@@ -143,13 +143,13 @@ export function DispatchPage(props: DispatchPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Dispatch</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Dispatch</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Dispatch</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

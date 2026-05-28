@@ -133,14 +133,17 @@ export function LeavePage({ requests, employees, canApprove, filters, setFilters
 
   return (
     <>
-      <SectionTitle action={
-        mode === 'list' ? (
+      <SectionTitle
+        backAction={mode === 'form'
+          ? <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>
+          : null}
+        action={mode === 'list' ? (
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="ghost-button" onClick={() => setMode('balances')}>Balances</button>
             <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New request</button>
           </div>
-        ) : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>
-      } />
+        ) : null}
+      />
 
       {mode === 'form' ? (
         <FormWizard

@@ -215,9 +215,8 @@ export function FoodSafeMaterialsPage(props: FoodSafeMaterialsPageProps) {
   return (
     <>
       <SectionTitle
-        action={mode === 'list'
-          ? <button className="secondary-button" onClick={handleStartCreate}>Add material</button>
-          : <button className="ghost-button" onClick={handleBackToList}>Back to register</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add material</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to register</button>}
       />
       {mode === 'form' ? (
         <FormWizard

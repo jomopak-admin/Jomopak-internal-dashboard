@@ -355,8 +355,8 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
   return (
     <>
       <SectionTitle
-        action={mode === 'form'
-          ? <button className="ghost-button" onClick={handleBackToList}>Back to Delivery Notes</button>
+        backAction={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>← Back to Delivery Notes</button>
           : null}
       />
       {mode === 'list' && (

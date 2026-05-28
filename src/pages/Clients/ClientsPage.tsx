@@ -384,16 +384,16 @@ export function ClientsPage({
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Clients</button> : null}
+
         action={
           mode === 'list' ? (
             <div className="add-button-group">
               <button className="secondary-button" onClick={handleStartQuickAdd}>Add New Client</button>
               <button className="ghost-button" onClick={handleStartCreate}>Full Form</button>
             </div>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Clients</button>
-          )
-        }
+          ) : null
+}
       />
       {mode === 'quick' ? (
         <QuickAddCard

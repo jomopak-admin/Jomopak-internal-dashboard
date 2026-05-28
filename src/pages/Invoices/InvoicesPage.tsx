@@ -375,7 +375,8 @@ export function InvoicesPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>New Invoice</button> : <button className="ghost-button" onClick={handleBackToList}>Back to invoices</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>New Invoice</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to invoices</button>}
       />
 
       {mode === 'form' ? (

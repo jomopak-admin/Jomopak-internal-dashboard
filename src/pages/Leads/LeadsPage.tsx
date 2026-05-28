@@ -203,7 +203,7 @@ export function LeadsPage(props: LeadsPageProps) {
   if (mode === 'form') {
     return (
       <>
-        <SectionTitle action={<button className="ghost-button" onClick={back}>Back to leads</button>} />
+        <SectionTitle backAction={<button className="ghost-button" onClick={back}>← Back to leads</button>} />
         <section className="card">
           <SectionTitle
             title={leadEditingId ? `Edit lead` : 'New lead'}

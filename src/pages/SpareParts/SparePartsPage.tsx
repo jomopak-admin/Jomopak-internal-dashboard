@@ -318,13 +318,13 @@ export function SparePartsPage({
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Spares & Consumables</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add new item</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Spares & Consumables</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

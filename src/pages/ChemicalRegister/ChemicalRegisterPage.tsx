@@ -270,11 +270,12 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
   return (
     <>
       <SectionTitle
-        action={
-          mode === 'list'
-            ? <button className="secondary-button" onClick={handleStartCreate}>Add chemical</button>
-            : <button className="ghost-button" onClick={handleBackToList}>Back to register</button>
-        }
+        backAction={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>← Back to register</button>
+          : null}
+        action={mode === 'list'
+          ? <button className="secondary-button" onClick={handleStartCreate}>Add chemical</button>
+          : null}
       />
       {mode === 'form' ? (
         <FormWizard

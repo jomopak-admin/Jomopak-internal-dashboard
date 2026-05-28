@@ -95,7 +95,7 @@ export function ShipmentsPage({ shipments, suppliers, onSave, onReceiveIntoStock
       <div className="page-stack shipments-shell">
         <SectionTitle
           title={editingId ? `Edit shipment ${draft.shipmentNumber}` : 'New shipment'}
-          action={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
         />
         <section className="card">
           <h3>Shipment details</h3>

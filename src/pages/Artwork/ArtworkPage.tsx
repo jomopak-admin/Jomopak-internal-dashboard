@@ -134,7 +134,8 @@ export function ArtworkPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Artwork Record</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Artwork</button>}
+        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Artwork Record</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to Artwork</button>}
       />
 
       {mode === 'form' ? (

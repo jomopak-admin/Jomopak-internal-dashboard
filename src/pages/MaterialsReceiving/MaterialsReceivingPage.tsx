@@ -320,13 +320,13 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
   return (
     <>
       <SectionTitle
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Materials Receiving</button> : null}
+
         action={
           mode === 'list' ? (
             <button className="secondary-button" onClick={handleStartCreate}>Add New Material Receipt</button>
-          ) : (
-            <button className="ghost-button" onClick={handleBackToList}>Back to Materials Receiving</button>
-          )
-        }
+          ) : null
+}
       />
 
       {mode === 'form' ? (

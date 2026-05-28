@@ -3,21 +3,25 @@ import { ReactNode } from 'react';
 interface SectionTitleProps {
   title?: string;
   subtitle?: string;
+  /** Right-side primary action (e.g. "+ New", "Print"). */
   action?: ReactNode;
+  /** Left-side back / navigate-up action. Always rendered before the title. */
+  backAction?: ReactNode;
 }
 
-// Title and subtitle are now both optional. Per-page "hero" SectionTitles can
-// drop them entirely since the topbar already shows the page heading + per-page
-// summary chips. When all three props are absent the component renders nothing.
-export function SectionTitle({ title, subtitle, action }: SectionTitleProps) {
-  if (!title && !subtitle && !action) return null;
+// Title and subtitle are both optional. backAction always renders on the LEFT,
+// action always renders on the RIGHT. When everything is absent the component
+// renders nothing.
+export function SectionTitle({ title, subtitle, action, backAction }: SectionTitleProps) {
+  if (!title && !subtitle && !action && !backAction) return null;
   return (
     <div className="section-title">
-      <div>
+      {backAction ? <div className="section-title-back">{backAction}</div> : null}
+      <div className="section-title-text">
         {title ? <h2>{title}</h2> : null}
         {subtitle ? <p className="muted">{subtitle}</p> : null}
       </div>
-      {action}
+      {action ? <div className="section-title-action">{action}</div> : null}
     </div>
   );
 }

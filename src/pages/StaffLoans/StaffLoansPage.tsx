@@ -120,9 +120,8 @@ export function StaffLoansPage({ loans, employees, filters, setFilters, form, se
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New loan</button>
-        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New loan</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

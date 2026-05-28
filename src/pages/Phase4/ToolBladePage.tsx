@@ -88,9 +88,8 @@ export function ToolBladePage({ records, filters, setFilters, form, setForm, edi
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Add tool</button>
-        : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Add tool</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

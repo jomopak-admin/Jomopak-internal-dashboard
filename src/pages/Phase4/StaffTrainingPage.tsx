@@ -128,9 +128,8 @@ export function StaffTrainingPage(props: StaffTrainingPageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={startCreate}>Log training</button>
-        : <button className="ghost-button" onClick={back}>Back</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={startCreate}>Log training</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={back}>← Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard

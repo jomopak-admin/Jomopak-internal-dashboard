@@ -190,9 +190,8 @@ export function CleaningLogsPage(props: CleaningLogsPageProps) {
 
   return (
     <>
-      <SectionTitle action={mode === 'list'
-        ? <button className="secondary-button" onClick={handleStartCreate}>Log cleaning</button>
-        : <button className="ghost-button" onClick={handleBackToList}>Back to logs</button>}
+      <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Log cleaning</button> : null}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={handleBackToList}>← Back to logs</button>}
       />
       {mode === 'form' ? (
         <FormWizard
