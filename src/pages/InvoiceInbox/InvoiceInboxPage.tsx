@@ -21,7 +21,7 @@
  * status is bumped to `duplicate` and the candidate ids are stored.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
@@ -110,16 +110,34 @@ export function InvoiceInboxPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Phase 77 — drag-and-drop UX. dragDepth tracks nested dragenter/leave
+  // events so the overlay doesn't flicker as the cursor moves over child
+  // elements; isDragging is the visible state.
+  const dragDepth = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const selected = useMemo(
     () => items.find((it) => it.id === selectedId) || null,
     [items, selectedId],
   );
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Phase 77 — accept PDFs and images; quietly skip everything else.
+  function isAcceptedType(file: File): boolean {
+    if (file.type === 'application/pdf') return true;
+    if (file.type.startsWith('image/')) return true;
+    // Fallback by extension in case the browser/OS didn't set a mime type.
+    return /\.(pdf|png|jpe?g|gif|webp|tiff?|heic)$/i.test(file.name);
+  }
 
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []);
+    // Process files sequentially so duplicate detection sees prior items.
+    for (const file of list) await processFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function processFile(file: File) {
+    if (!isAcceptedType(file)) return;
     const buf = await file.arrayBuffer();
     const hash = await sha256Hex(buf);
 
@@ -167,7 +185,6 @@ export function InvoiceInboxPage({
         senderSubject: '',
       });
       setSelectedId(id);
-      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -201,8 +218,48 @@ export function InvoiceInboxPage({
     };
     onSave(newItem);
     setSelectedId(id);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }
+
+  // Phase 77 — page-level drag-and-drop. We attach to window so a drop
+  // anywhere on the page (not just inside our shell) is captured.
+  useEffect(() => {
+    function onWindowDragEnter(e: DragEvent) {
+      // Only react to file drags. Ignore text / element drags inside the app.
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      dragDepth.current += 1;
+      setIsDragging(true);
+    }
+    function onWindowDragLeave(e: DragEvent) {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setIsDragging(false);
+    }
+    function onWindowDragOver(e: DragEvent) {
+      // Required — without preventDefault the browser refuses the drop.
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+      }
+    }
+    async function onWindowDrop(e: DragEvent) {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setIsDragging(false);
+      const files = Array.from(e.dataTransfer.files || []);
+      for (const file of files) await processFile(file);
+    }
+    window.addEventListener('dragenter', onWindowDragEnter);
+    window.addEventListener('dragleave', onWindowDragLeave);
+    window.addEventListener('dragover', onWindowDragOver);
+    window.addEventListener('drop', onWindowDrop);
+    return () => {
+      window.removeEventListener('dragenter', onWindowDragEnter);
+      window.removeEventListener('dragleave', onWindowDragLeave);
+      window.removeEventListener('dragover', onWindowDragOver);
+      window.removeEventListener('drop', onWindowDrop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   async function runOcr(item: InvoiceInboxItem) {
     if (busyId) return;
@@ -256,12 +313,24 @@ export function InvoiceInboxPage({
         ref={fileInputRef}
         type="file"
         accept="application/pdf,image/*"
+        multiple
         onChange={handleUpload}
         style={{ display: 'none' }}
       />
 
+      {/* Phase 77 — drag-and-drop overlay. Covers the viewport while a file
+          is being dragged in. CSS lives in styles.css under .invoice-inbox-drop-overlay */}
+      {isDragging ? (
+        <div className="invoice-inbox-drop-overlay" aria-hidden="true">
+          <div className="invoice-inbox-drop-card">
+            <strong>Drop invoice files here</strong>
+            <span>PDFs and images — multiple files OK</span>
+          </div>
+        </div>
+      ) : null}
+
       {items.length === 0 ? (
-        <EmptyState title="Inbox empty" body="Drop a PDF or photo of a supplier invoice to begin." />
+        <EmptyState title="Inbox empty" body="Drop a PDF or photo of a supplier invoice anywhere on this page, or click Upload invoice." />
       ) : (
         <div className="invoice-inbox-grid">
           <div className="invoice-inbox-list">

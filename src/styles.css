@@ -4455,6 +4455,43 @@ th {
   flex-direction: column;
   gap: 0.75rem;
 }
+
+/* Phase 77 — drag-and-drop overlay for the supplier invoice inbox.
+   Fills the viewport while files are being dragged in. Pointer-events
+   are intentionally none so the drop event still fires on the window. */
+.invoice-inbox-drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 25, 35, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+.invoice-inbox-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 2rem 3rem;
+  background: var(--jp-paper, #fffbf4);
+  color: var(--jp-ink, #2a2418);
+  border: 3px dashed var(--jp-accent, #2563eb);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: var(--jp-serif, Georgia, serif);
+  text-align: center;
+}
+.invoice-inbox-drop-card strong {
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+}
+.invoice-inbox-drop-card span {
+  font-size: 0.85rem;
+  color: var(--jp-ink-3, #6f6657);
+}
 .invoice-inbox-grid {
   display: grid;
   grid-template-columns: minmax(220px, 320px) 1fr;
