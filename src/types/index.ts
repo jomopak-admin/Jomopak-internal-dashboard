@@ -3881,6 +3881,13 @@ export interface MaterialReceipt {
   /** Phase 71 — supplier food-contact certification reference
    *  (e.g. ISEGA, BfR XXXVI, FDA 21 CFR 176.170). */
   foodContactCertNumber?: string;
+  /** Phase 75 — slit-child lineage. When a Slitting production log creates
+   *  this receipt, parentMaterialReceiptId points at the parent roll. Food-safe
+   *  + FSC + paper grade are inherited from the parent on creation, so the
+   *  chain-of-custody walk works even if the child's own cert column is blank. */
+  parentMaterialReceiptId?: string;
+  /** Phase 75 — production log entry that produced this receipt (slitting). */
+  producedByProductionLogId?: string;
 }
 
 export interface ProductionLogEntry {

@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
-import { ChemicalRegisterEntry, Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, MaterialReceipt, PaperLog, Product, StockChangeLog } from '../../types';
+import { ChemicalRegisterEntry, Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, MaterialReceipt, PaperLog, Product, ProductionLogEntry, StockChangeLog } from '../../types';
 import { computeFgFoodSafe, computeFgFsc, formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
 
 interface FinishedGoodsStockPageProps {
@@ -33,6 +33,9 @@ interface FinishedGoodsStockPageProps {
   paperLogs?: PaperLog[];
   materialReceipts?: MaterialReceipt[];
   chemicals?: ChemicalRegisterEntry[];
+  /** Phase 75 — Production logs are the new preferred source for the
+   *  paper-batch walk; PaperLogs are kept as legacy fallback. */
+  productionLogs?: ProductionLogEntry[];
   /** Phase 72 — preview of the next auto-generated stock number / barcode,
    *  computed by App.tsx from the storedDate + full existing FGS code list.
    *  Used to show "Auto: FGS-202605-007" on the new-batch form. */
@@ -66,6 +69,7 @@ export function FinishedGoodsStockPage({
   paperLogs = [],
   materialReceipts = [],
   chemicals = [],
+  productionLogs = [],
   nextStockNumberPreview = '',
   onCreateDelivery,
   onCreateInvoice,
@@ -376,8 +380,8 @@ export function FinishedGoodsStockPage({
                       // Phase 71 — derive Food-safe + FSC by walking the chain
                       // FG batch → linked job → paper batch (PaperLog → MaterialReceipt)
                       // + chemicals listed on the job. Reason is shown as tooltip.
-                      const foodSafeVerdict = computeFgFoodSafe(item, jobs, paperLogs, materialReceipts, chemicals);
-                      const fscClaim = computeFgFsc(item, jobs, paperLogs, materialReceipts);
+                      const foodSafeVerdict = computeFgFoodSafe(item, jobs, paperLogs, materialReceipts, chemicals, productionLogs);
+                      const fscClaim = computeFgFsc(item, jobs, paperLogs, materialReceipts, productionLogs);
 
                       return (
                         <tr key={item.id}>

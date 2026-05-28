@@ -6184,7 +6184,64 @@ function App() {
     } else {
       const logNumber = generateCode('PRD', data.productionLogs.map((log) => log.logNumber), productionForm.logDate);
       const newLog: ProductionLogEntry = { id: logNumber, logNumber, createdAt: new Date().toISOString(), ...payload };
-      setData((current) => ({ ...current, productionLogs: [newLog, ...current.productionLogs] }));
+
+      // Phase 75 — Slitting transformation. If logType is Slitting AND a parent
+      // material is selected AND the operator entered N child rolls, auto-create
+      // the child MaterialReceipts (inheriting paper grade + food-safe + FSC +
+      // supplier batch from parent) and deduct the consumed qty from parent.
+      const isSlitting = productionForm.logType === 'Slitting';
+      const childCount = Number(productionForm.numberOfChildRolls || 0);
+      const consumedKg = Number(productionForm.metersKgPrinted || 0) || Number(productionForm.totalWasteKg || 0) || 0;
+      // If consumedKg wasn't entered, fall back to parent.quantityAvailable.
+      const parentReceipt = linkedMaterial;
+      if (isSlitting && parentReceipt && childCount > 0) {
+        const totalConsumed = consumedKg > 0 ? consumedKg : parentReceipt.quantityAvailable;
+        const perChild = totalConsumed / childCount;
+        // Build child codes: parent code + -A, -B, -C ... (zero-pad past Z).
+        const childCodeSuffix = (i: number) => {
+          if (i < 26) return String.fromCharCode(65 + i);
+          return String(i + 1).padStart(3, '0');
+        };
+        const newChildren: MaterialReceipt[] = [];
+        for (let i = 0; i < childCount; i++) {
+          const childCode = `${parentReceipt.internalRollCode}-${childCodeSuffix(i)}`;
+          const childReceiptNumber = `${parentReceipt.receiptNumber}-${childCodeSuffix(i)}`;
+          newChildren.push({
+            ...parentReceipt,
+            id: childCode,
+            receiptNumber: childReceiptNumber,
+            barcode: childCode,
+            internalRollCode: childCode,
+            createdAt: new Date().toISOString(),
+            // Geometry: new width comes from the slit setup; everything else
+            // (paperType, gsm, isFoodSafe, fscClaimType, supplierBatchNumber,
+            // foodContactCertNumber) is inherited from parent above.
+            width: productionForm.targetChildWidth || parentReceipt.width,
+            quantityReceived: perChild,
+            quantityAvailable: perChild,
+            // Lineage.
+            parentMaterialReceiptId: parentReceipt.id,
+            producedByProductionLogId: logNumber,
+            // Photos / inspection notes shouldn't carry to children.
+            photoUrls: [],
+            inspectionNotes: `Slit child of ${parentReceipt.internalRollCode} — production log ${logNumber}`,
+          });
+        }
+        setData((current) => ({
+          ...current,
+          productionLogs: [newLog, ...current.productionLogs],
+          materialReceipts: [
+            // Deduct from parent.
+            ...current.materialReceipts.map((m) => m.id === parentReceipt.id
+              ? { ...m, quantityAvailable: Math.max(m.quantityAvailable - totalConsumed, 0) }
+              : m),
+            // Append children.
+            ...newChildren,
+          ],
+        }));
+      } else {
+        setData((current) => ({ ...current, productionLogs: [newLog, ...current.productionLogs] }));
+      }
     }
     resetProductionEditor();
   }
@@ -10336,6 +10393,7 @@ function App() {
           paperLogs={data.paperLogs}
           materialReceipts={data.materialReceipts}
           chemicals={data.chemicalRegisterEntries}
+          productionLogs={data.productionLogs}
           nextStockNumberPreview={generateCode(
             'FGS',
             data.finishedGoodsStock.map((s) => s.stockNumber),

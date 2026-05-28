@@ -948,6 +948,9 @@ export function mapMaterialReceipt(row: any): MaterialReceipt {
     // Phase 71 — food-safe inheritance
     isFoodSafe: row.is_food_safe ?? 'unknown',
     foodContactCertNumber: row.food_contact_cert_number ?? '',
+    // Phase 75 — slit-child lineage. Empty for parent rolls received from suppliers.
+    parentMaterialReceiptId: row.parent_material_receipt_id ?? undefined,
+    producedByProductionLogId: row.produced_by_production_log_id ?? undefined,
   };
 }
 
@@ -3199,6 +3202,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       // Phase 71 — food-safe inheritance
       is_food_safe: receipt.isFoodSafe ?? 'unknown',
       food_contact_cert_number: receipt.foodContactCertNumber || null,
+      // Phase 75 — slit-child lineage
+      parent_material_receipt_id: receipt.parentMaterialReceiptId || null,
+      produced_by_production_log_id: receipt.producedByProductionLogId || null,
     }))),
     safeUpsert('production_logs', data.productionLogs.map((log) => ({
       id: log.id,

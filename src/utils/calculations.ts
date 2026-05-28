@@ -14,6 +14,34 @@ import {
   WasteReason,
 } from '../types';
 
+/**
+ * Phase 75 — resolve the paper MaterialReceipt that fed a job.
+ *
+ * Preferred path: Production Logs (Bag Making → Bag Printing → Flexo → Slitting).
+ * Legacy fallback: PaperLog rows (kept until all production data flows through
+ * Production Logs, then deprecated).
+ *
+ * If the resolved MaterialReceipt is a slit child, food-safe + FSC are
+ * already inherited at slit time, so a single hop is enough.
+ */
+function findPaperForJob(
+  jobId: string,
+  productionLogs: ProductionLogEntry[],
+  paperLogs: PaperLog[],
+  materialReceipts: MaterialReceipt[],
+): MaterialReceipt | undefined {
+  const priority: ProductionLogType[] = ['Bag Making', 'Bag Printing', 'Flexo Printing', 'Slitting'];
+  for (const t of priority) {
+    const entry = productionLogs.find((p) => p.jobId === jobId && p.logType === t && p.sourceMaterialId);
+    if (entry) {
+      const m = materialReceipts.find((mr) => mr.id === entry.sourceMaterialId);
+      if (m) return m;
+    }
+  }
+  const log = paperLogs.find((pl) => pl.jobId === jobId);
+  return log ? materialReceipts.find((mr) => mr.id === log.materialReceiptId) : undefined;
+}
+
 export const JOB_STATUSES: JobStatus[] = [
   'Draft',
   'Awaiting Artwork',
@@ -236,13 +264,14 @@ export function computeFgFoodSafe(
   paperLogs: PaperLog[],
   materialReceipts: MaterialReceipt[],
   chemicals: ChemicalRegisterEntry[],
+  productionLogs: ProductionLogEntry[] = [],
 ): FgFoodSafeVerdict {
   if (!fg.jobId) return { status: 'unknown', reason: 'No linked job' };
   const job = jobs.find((j) => j.id === fg.jobId);
   if (!job) return { status: 'unknown', reason: 'Linked job not found' };
 
-  const log = paperLogs.find((pl) => pl.jobId === job.id);
-  const paper = log ? materialReceipts.find((m) => m.id === log.materialReceiptId) : undefined;
+  // Phase 75 — Production Log is the preferred source; PaperLog is fallback.
+  const paper = findPaperForJob(job.id, productionLogs, paperLogs, materialReceipts);
 
   const inputs: Array<{ status: FoodSafeStatus; label: string }> = [];
   if (paper) {
@@ -283,11 +312,11 @@ export function computeFgFsc(
   jobs: JobCard[],
   paperLogs: PaperLog[],
   materialReceipts: MaterialReceipt[],
+  productionLogs: ProductionLogEntry[] = [],
 ): FscClaimType | 'Unknown' {
   if (!fg.jobId) return 'Unknown';
   const job = jobs.find((j) => j.id === fg.jobId);
   if (!job) return 'Unknown';
-  const log = paperLogs.find((pl) => pl.jobId === job.id);
-  const paper = log ? materialReceipts.find((m) => m.id === log.materialReceiptId) : undefined;
+  const paper = findPaperForJob(job.id, productionLogs, paperLogs, materialReceipts);
   return paper?.fscClaimType ?? 'Unknown';
 }
