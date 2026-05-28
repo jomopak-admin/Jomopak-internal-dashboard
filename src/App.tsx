@@ -25,6 +25,8 @@ import { DriverPodPage } from './pages/DriverPod/DriverPodPage';
 import { InvoiceInboxPage } from './pages/InvoiceInbox/InvoiceInboxPage';
 import { runOcrOnInboxItem } from './utils/ocrRunner';
 import { attachAutoFlush, flushPodQueue } from './utils/podSync';
+import { buildPodNotificationPlans } from './utils/podNotifications';
+import { notifyRecipients } from './utils/messagingService';
 import { uploadInvoiceInboxFile } from './utils/invoiceInboxStorage';
 import { getRate, RealisedFxResult } from './utils/currency';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
@@ -298,6 +300,7 @@ import {
   ProofOfDelivery,
   InvoiceInboxItem,
   InvoiceExtraction,
+  defaultLandingViewForRole,
 } from './types';
 import {
   PRODUCTION_LOG_TYPES,
@@ -1362,6 +1365,23 @@ function App() {
   );
   const [view, setView] = useState<View>('dashboard');
   const [dashboardMonth, setDashboardMonth] = useState(currentMonth);
+
+  // Phase 60 — Driver auto-route. When a driver profile loads, push them
+  // straight into the POD capture flow. Skip the dashboard entirely so
+  // the PWA on their phone feels like a single-purpose delivery app.
+  // We only do this once per login (tracked by lastRoutedRoleRef) so the
+  // driver can still navigate manually if they go to a different route
+  // (e.g. myPortal) and the role hasn't actually changed.
+  const lastRoutedRoleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!profile?.role) return;
+    if (lastRoutedRoleRef.current === profile.role) return;
+    lastRoutedRoleRef.current = profile.role;
+    const landing = defaultLandingViewForRole(profile.role);
+    if (landing !== 'dashboard') {
+      setView(landing);
+    }
+  }, [profile?.role]);
 
   const [paperRateForm, setPaperRateForm] = useState(createInitialPaperRateForm);
   const [paperRateEditingId, setPaperRateEditingId] = useState<string | null>(null);
@@ -8972,6 +8992,7 @@ function App() {
       topbarAction={topbarAction}
       topbarSummary={topbarSummary}
       onOpenSearch={() => setPaletteOpen(true)}
+      kioskMode={profile?.role === 'driver'}
     >
       {loading && (
         <div className="card">
@@ -9693,6 +9714,20 @@ function App() {
                 return { ...current, proofOfDeliveries: Array.from(byId.values()) };
               });
             });
+            // Phase 60 — fan out staff + client notifications via the
+            // messaging service. Pure fire-and-forget; failures are
+            // logged but never block the driver moving on.
+            try {
+              const { staff, client } = buildPodNotificationPlans(pod, data, profiles);
+              if (staff.recipients.length > 0) {
+                void notifyRecipients(staff.recipients, staff.message);
+              }
+              if (client) {
+                void notifyRecipients(client.recipients, client.message);
+              }
+            } catch (err) {
+              console.warn('[POD notify] failed to compute notification plan:', err);
+            }
           }}
         />
       )}

@@ -242,6 +242,63 @@ export function deriveNotifications(data: AppData): AppNotification[] {
     }
   }
 
+  // ── Driver POD captured (Phase 60) ─────────────────────────────────────
+  // We surface PODs from the last 7 days so dispatch / sales / accounts
+  // can react to refusals or COD-on-delivery quickly. Older PODs aren't
+  // bell-worthy — they belong to the audit trail. We segment by outcome:
+  //   • Delivered → low-priority info ("POD received for X")
+  //   • Partial / Failed → warn (someone needs to chase up)
+  //   • Refused → urgent (customer returned the load — call now)
+  //   • Cash-on-delivery → urgent flag for accounts to collect balance
+  const recentPodCutoff = Date.now() - 7 * DAY_MS;
+  const invoiceByJob = new Map<string, typeof data.invoices[number]>();
+  for (const inv of data.invoices) {
+    if (inv.jobId) invoiceByJob.set(inv.jobId, inv);
+  }
+  for (const pod of data.proofOfDeliveries || []) {
+    const ts = new Date(pod.createdAt).getTime();
+    if (Number.isNaN(ts) || ts < recentPodCutoff) continue;
+    // Base "captured" notification — visible to dispatch / sales / ops.
+    const sev: NotificationSeverity = pod.outcome === 'Refused'
+      ? 'urgent'
+      : pod.outcome === 'Failed' || pod.outcome === 'Partial'
+        ? 'warn'
+        : 'info';
+    list.push({
+      id: `pod-${pod.id}-${pod.outcome}`,
+      kind: pod.outcome === 'Refused' ? 'podRefused' : 'podCaptured',
+      severity: sev,
+      title: pod.outcome === 'Delivered'
+        ? `POD ${pod.podNumber} — Delivered`
+        : `POD ${pod.podNumber} — ${pod.outcome}`,
+      message: pod.outcome === 'Delivered'
+        ? `${pod.clientName} • signed by ${pod.receiverName || 'recipient'}`
+        : `${pod.clientName} • ${pod.failureReason || pod.outcome}`,
+      link: { view: 'deliveryNotes', entityId: pod.dispatchRecordId },
+      createdAt: pod.createdAt,
+    });
+    // Accounts-targeted notification for COD / deposit-required jobs that
+    // were just delivered — they need to collect the outstanding balance.
+    if (pod.outcome === 'Delivered' && pod.jobId) {
+      const inv = invoiceByJob.get(pod.jobId);
+      if (inv && (Number(inv.amountOutstanding) || 0) > 0) {
+        const job = data.jobs.find((j) => j.id === pod.jobId);
+        const isCod = job?.paymentRequirement === 'Full Payment' || job?.paymentRequirement === '50% Deposit';
+        if (isCod) {
+          list.push({
+            id: `pod-cod-${pod.id}`,
+            kind: 'podCodReady',
+            severity: 'urgent',
+            title: `Collect outstanding — ${inv.invoiceNumber}`,
+            message: `${pod.clientName} • ${Math.round(Number(inv.amountOutstanding) || 0).toLocaleString()} owed (COD job delivered)`,
+            link: { view: 'invoices', entityId: inv.id },
+            createdAt: pod.createdAt,
+          });
+        }
+      }
+    }
+  }
+
   // Sort: urgent → warn → info, then by stable id so the list doesn't
   // shuffle every render.
   const order: Record<NotificationSeverity, number> = { urgent: 0, warn: 1, info: 2 };

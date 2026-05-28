@@ -120,6 +120,25 @@ p {
   width: 100%;
 }
 
+/* Phase 60 — Kiosk mode (driver PWA). Sidebar removed, main content
+   takes full width, topbar slims down to title + account menu. Designed
+   for a phone install where the driver only has one screen anyway. */
+.app-shell.kiosk-mode {
+  display: block;
+}
+.app-shell.kiosk-mode .main-content {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  padding: 12px 12px 24px;
+}
+.app-shell.kiosk-mode .topbar {
+  padding-inline: 8px;
+}
+.app-shell.kiosk-mode .topbar-title .eyebrow {
+  display: none;
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;

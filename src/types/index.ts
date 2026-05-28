@@ -88,7 +88,7 @@ export type View =
   | 'expenseClaimsApprove'
   | 'stockStatements'
   | 'companies';
-export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts';
+export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
 export type DashboardWidget =
   | 'stats'
   | 'monthSummary'
@@ -413,6 +413,14 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'products',
     'reports',
   ],
+  driver: [
+    // Phase 60 — Driver role. PWA-only experience: when the driver logs in
+    // on a phone they land directly on Driver POD with no sidebar. Nothing
+    // else is in their menu — they don't see Clients, Invoices, jobs etc.
+    // My Stuff is force-added by normalizeProfilePermissions so they can
+    // still see their own warnings/leave/payslips.
+    'driverPod',
+  ],
   accounts: [
     'dashboard',
     'invoices',
@@ -473,6 +481,16 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
     ? permissions
     : ROLE_DEFAULT_VIEWS[role];
   const valid = source.filter((permission): permission is View => permission in VIEW_LABELS);
+  // Drivers get the tightest possible scope: just driverPod + myPortal so
+  // they can still see their own warnings/payslips. No dashboard, no
+  // sidebar tabs. They are expected to use the PWA on their phone.
+  if (role === 'driver') {
+    const driverRequired = new Set<View>(['driverPod', 'myPortal']);
+    driverRequired.forEach((permission) => {
+      if (!valid.includes(permission)) valid.push(permission);
+    });
+    return Array.from(new Set(valid));
+  }
   const required = new Set<View>(['dashboard', 'myPortal']);
   if (role === 'admin') {
     required.add('permissions');
@@ -485,6 +503,16 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
     }
   });
   return Array.from(new Set(valid));
+}
+
+/**
+ * Phase 60 — Default landing view per role. Drivers land directly on the
+ * POD capture screen (skipping the dashboard entirely) so the PWA feels
+ * like a single-purpose phone app. Other roles still default to dashboard.
+ */
+export function defaultLandingViewForRole(role: UserRole): View {
+  if (role === 'driver') return 'driverPod';
+  return 'dashboard';
 }
 
 export const DASHBOARD_WIDGET_LABELS: Record<DashboardWidget, string> = {
@@ -561,6 +589,9 @@ export const ROLE_DEFAULT_DASHBOARD_WIDGETS: Record<UserRole, DashboardWidget[]>
     'recentJobs',
     'recentDispatch',
   ],
+  // Drivers never see the dashboard — they land on driverPod directly. We
+  // ship an empty widget set anyway so the type-system is happy.
+  driver: [],
 };
 
 export function normalizeDashboardWidgets(role: UserRole, widgets?: string[] | null): DashboardWidget[] {
@@ -1320,6 +1351,11 @@ export interface Client {
   stockHoldingAgreementSignedDate: string;
   stockHoldingAgreementReference: string;
   stockHoldingReviewDate: string;
+  /** Phase 60 — opt out of automatic client-facing notifications when a
+   *  POD is captured (default behaviour is to send a delivery confirmation
+   *  email to contactEmail). Some clients prefer to be contacted by their
+   *  account manager directly rather than receive system emails. */
+  notifyClientOnDelivery?: boolean;
   /** Phase 5.6 — customer-specific food safety requirements. Optional so
    *  existing records load without forcing a migration. */
   foodSafeDeclarationRequired?: boolean;
@@ -6274,7 +6310,10 @@ export type NotificationKind =
   | 'materialLowCover'
   | 'maintenanceDue'
   | 'creditBlock'
-  | 'sarsDeadline';
+  | 'sarsDeadline'
+  | 'podCaptured'
+  | 'podRefused'
+  | 'podCodReady';
 
 export type NotificationSeverity = 'info' | 'warn' | 'urgent';
 

@@ -13,6 +13,10 @@ interface AppLayoutProps {
   /** Opens the global search / command palette. Rendered next to the menu
    *  toggle on the left of the topbar for easy access. */
   onOpenSearch?: () => void;
+  /** Phase 60 — when true, the layout hides the sidebar, hamburger, search,
+   *  and chrome to give a single-purpose PWA feel (used for drivers). The
+   *  account menu still renders so they can sign out. */
+  kioskMode?: boolean;
   children: ReactNode;
 }
 
@@ -44,7 +48,7 @@ function readStoredOpenGroups(): Set<string> | null {
   }
 }
 
-export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, onChangePassword, topbarAction, topbarSummary, onOpenSearch, children }: AppLayoutProps) {
+export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, onChangePassword, topbarAction, topbarSummary, onOpenSearch, kioskMode, children }: AppLayoutProps) {
   const accountName = profile?.fullName || profile?.email || 'Signed in';
   const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
@@ -121,14 +125,20 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
   }
 
   return (
-    <div className={drawerOpen ? 'app-shell drawer-open' : 'app-shell'}>
+    <div className={[
+      drawerOpen ? 'app-shell drawer-open' : 'app-shell',
+      kioskMode ? 'kiosk-mode' : '',
+    ].filter(Boolean).join(' ')}>
       {/* Mobile overlay — tapping it closes the drawer. Always rendered so
           the slide animation can play; CSS hides it on desktop. */}
-      <div
-        className="sidebar-overlay"
-        aria-hidden={!drawerOpen}
-        onClick={() => setDrawerOpen(false)}
-      />
+      {!kioskMode && (
+        <div
+          className="sidebar-overlay"
+          aria-hidden={!drawerOpen}
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
+      {!kioskMode && (
       <aside className={drawerOpen ? 'sidebar is-open' : 'sidebar'}>
         <div className="brand-block">
           <p className="eyebrow">Jomopak OS</p>
@@ -171,19 +181,22 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
           })}
         </nav>
       </aside>
+      )}
 
       <main className="main-content">
         <header className="topbar">
-          <button
-            type="button"
-            className="topbar-menu-toggle"
-            aria-label="Toggle navigation"
-            aria-expanded={drawerOpen}
-            onClick={() => setDrawerOpen((v) => !v)}
-          >
-            <span aria-hidden="true">☰</span>
-          </button>
-          {onOpenSearch ? (
+          {!kioskMode && (
+            <button
+              type="button"
+              className="topbar-menu-toggle"
+              aria-label="Toggle navigation"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((v) => !v)}
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
+          )}
+          {!kioskMode && onOpenSearch ? (
             <button
               type="button"
               className="topbar-search-btn"
