@@ -165,25 +165,70 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
               value={materialForm.supplierId}
               onChange={(value) => {
                 const supplier = suppliers.find((item) => item.id === value);
-                // Phase 79 — when this is a Paper receipt and the supplier
-                // has an FSC certification on file, auto-pull its certificate
-                // number into supplierCertificateCode and tick fscRelated.
-                // We never overwrite an existing override the receiver typed.
-                const fscCert = supplier?.certifications?.find((c) => c.type === 'FSC');
-                const isPaper = (materialForm.materialKind || 'Paper') === 'Paper';
-                const shouldPull = isPaper && fscCert && !materialForm.supplierCertificateCode;
+                // Phase 79/81 — when a supplier is picked, auto-pull the
+                // certification most relevant to the material kind:
+                //   Paper → FSC chain-of-custody
+                //   Ink / Adhesive / Raw material → Food Safety (BRC, ISO 22000)
+                //   anything else → ISO (general quality)
+                // The receiver can still override. We never stomp on a value
+                // they've already typed.
+                const kind = materialForm.materialKind || 'Paper';
+                const certs = supplier?.certifications ?? [];
+                const isPaper = kind === 'Paper';
+                const isFoodContactAdjacent = ['Ink', 'Adhesive', 'Raw material'].includes(kind);
+                const cert =
+                  isPaper ? certs.find((c) => c.type === 'FSC') :
+                  isFoodContactAdjacent ? certs.find((c) => c.type === 'Food Safety') :
+                  certs.find((c) => c.type === 'ISO') ?? certs[0];
+                const shouldPull = cert && !materialForm.supplierCertificateCode;
                 setMaterialForm({
                   ...materialForm,
                   supplierId: supplier?.id ?? '',
                   supplierName: supplier?.name ?? materialForm.supplierName,
-                  supplierCertificateCode: shouldPull ? fscCert.certificateNumber : materialForm.supplierCertificateCode,
-                  fscRelated: shouldPull ? true : materialForm.fscRelated,
+                  supplierCertificateCode: shouldPull ? cert.certificateNumber : materialForm.supplierCertificateCode,
+                  // Only tick fscRelated when an FSC cert was specifically pulled.
+                  fscRelated: shouldPull && cert.type === 'FSC' ? true : materialForm.fscRelated,
                 });
               }}
               placeholder="Search suppliers…"
               emptyMessage="No matching suppliers"
             />
           </label>
+          {(() => {
+            // Phase 81 — surface the supplier's full certification roster as a
+            // read-only info panel so the receiver can pick the right cert
+            // number to type in (or just confirm what auto-pulled is right).
+            const supplier = suppliers.find((s) => s.id === materialForm.supplierId);
+            const certs = supplier?.certifications ?? [];
+            if (!supplier || certs.length === 0) return null;
+            return (
+              <div className="full-span" style={{
+                fontSize: 12,
+                padding: '8px 10px',
+                background: 'var(--jp-paper-2, #faf8f4)',
+                border: '1px solid var(--jp-line, #e6e0d3)',
+                borderRadius: 8,
+              }}>
+                <strong style={{ display: 'block', marginBottom: 4, fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--jp-ink-3, #6f6657)' }}>
+                  {supplier.name} — certifications on file
+                </strong>
+                {certs.map((c) => {
+                  const expired = c.expiryDate && new Date(c.expiryDate) < new Date();
+                  return (
+                    <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0' }}>
+                      <span className={`badge ${c.status === 'Active' && !expired ? 'badge-success' : 'badge-warning'}`}>{c.type}</span>
+                      <span style={{ fontFamily: 'monospace' }}>{c.certificateNumber || '(no cert #)'}</span>
+                      {c.expiryDate ? (
+                        <span style={{ color: expired ? '#b22b2b' : 'var(--jp-ink-3, #6f6657)' }}>
+                          {expired ? 'EXPIRED ' : 'expires '}{formatDate(c.expiryDate)}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <label>
             <span>Supplier batch number</span>
             <input value={materialForm.supplierBatchNumber} onChange={(event) => setMaterialForm({ ...materialForm, supplierBatchNumber: event.target.value })} />

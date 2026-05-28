@@ -6780,17 +6780,46 @@ export interface AppNotification {
  *  we add a kind discriminator so the Materials Receiving page can capture
  *  inks, plates, adhesives, foils, chemicals, etc. without spawning new
  *  forms. Paper-specific fields (gsm/width/fsc) remain optional. */
+// Phase 80 — single materials-receiving dropdown covers everything that
+// physically arrives at the factory door. Paper-specific fields (GSM,
+// width, FSC) only render for 'Paper'; everything else uses itemName.
+// Existing rows tagged 'Chemical' still work — the new options just
+// give the receiver finer-grained choices when categorising a delivery.
 export type MaterialKind =
   | 'Paper'
+  | 'Raw material'
   | 'Ink'
   | 'Plate'
   | 'Adhesive'
   | 'Foil'
+  | 'Lubricant'
+  | 'Solvent'
   | 'Chemical'
+  | 'Spare part'
+  | 'Consumable'
+  | 'PPE'
+  | 'Uniform'
+  | 'Kitchen'
+  | 'Office'
   | 'Other';
 
 export const MATERIAL_KINDS: MaterialKind[] = [
-  'Paper', 'Ink', 'Plate', 'Adhesive', 'Foil', 'Chemical', 'Other',
+  'Paper',
+  'Raw material',
+  'Ink',
+  'Plate',
+  'Adhesive',
+  'Foil',
+  'Lubricant',
+  'Solvent',
+  'Chemical',
+  'Spare part',
+  'Consumable',
+  'PPE',
+  'Uniform',
+  'Kitchen',
+  'Office',
+  'Other',
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────
