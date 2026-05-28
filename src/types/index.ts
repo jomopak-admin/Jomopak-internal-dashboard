@@ -4267,6 +4267,9 @@ export interface DeliveryNote {
   /** Stock-holding link: the paid invoice this partial delivery draws against. */
   parentInvoiceId: string;
   parentInvoiceNumber: string;
+  /** Phase 74 — source FG batch (set when the DN was promoted from a finished
+   *  goods batch). Drives the auto-deduction on first save. */
+  sourceFinishedGoodsStockId?: string;
   /** Signature / collection capture for proof-of-delivery. */
   receiptMode: DeliveryReceiptMode;
   signedByName: string;
@@ -4319,6 +4322,9 @@ export interface Invoice {
   version?: number;
   /** Server-side update timestamp. */
   rowUpdatedAt?: string;
+  /** Phase 74 — source FG batch (set when the invoice was promoted from a
+   *  finished goods batch). Drives the auto-deduction on first save. */
+  sourceFinishedGoodsStockId?: string;
   createdAt: string;
   invoiceDate: string;
   dueDate: string;
@@ -5985,6 +5991,8 @@ export interface DeliveryNoteFormState {
   notes: string;
   customerNote: string;
   parentInvoiceId: string;
+  /** Phase 74 — FG batch this DN draws from (Phase 73 prefill sets it). */
+  sourceFinishedGoodsStockId?: string;
   receiptMode: DeliveryReceiptMode;
   signedByName: string;
   signedByDate: string;
@@ -6576,6 +6584,8 @@ export interface InvoiceFormState {
   dueDate: string;
   clientId: string;
   jobId: string;
+  /** Phase 74 — FG batch this invoice draws from (Phase 73 prefill sets it). */
+  sourceFinishedGoodsStockId?: string;
   quoteId: string;
   productionSpecId: string;
   customerReference: string;

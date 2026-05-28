@@ -37,6 +37,12 @@ interface FinishedGoodsStockPageProps {
    *  computed by App.tsx from the storedDate + full existing FGS code list.
    *  Used to show "Auto: FGS-202605-007" on the new-batch form. */
   nextStockNumberPreview?: string;
+  /** Phase 73 — promote an FG batch to a new Delivery Note (pre-filled
+   *  with client + product + available qty). */
+  onCreateDelivery?: (item: FinishedGoodsStock) => void;
+  /** Phase 73 — promote an FG batch directly to an Invoice (pre-filled
+   *  with client + product + available qty + derived unit price). */
+  onCreateInvoice?: (item: FinishedGoodsStock) => void;
 }
 
 export function FinishedGoodsStockPage({
@@ -61,6 +67,8 @@ export function FinishedGoodsStockPage({
   materialReceipts = [],
   chemicals = [],
   nextStockNumberPreview = '',
+  onCreateDelivery,
+  onCreateInvoice,
 }: FinishedGoodsStockPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   // Phase 72 — UX gate. By default the barcode auto-generates from the stock
@@ -410,6 +418,20 @@ export function FinishedGoodsStockPage({
                           <td>
                             <div className="inline-actions">
                               <button className="table-button" aria-label={`Edit ${item.stockNumber}`} onClick={() => handleStartEdit(item)}>Edit</button>
+                              {onCreateDelivery && item.quantityAvailable > 0 ? (
+                                <button
+                                  className="table-button table-button-promote"
+                                  onClick={() => onCreateDelivery(item)}
+                                  title="Create a Delivery Note pre-filled from this batch (client + product + qty available)"
+                                >+ DN</button>
+                              ) : null}
+                              {onCreateInvoice && item.quantityAvailable > 0 ? (
+                                <button
+                                  className="table-button table-button-promote"
+                                  onClick={() => onCreateInvoice(item)}
+                                  title="Create an Invoice pre-filled from this batch. Unit price derives from the linked job."
+                                >+ Invoice</button>
+                              ) : null}
                               {onFoodSafetyHoldChange && item.foodSafetyHoldStatus !== 'On Hold' ? (
                                 <button className="table-button" onClick={() => {
                                   const reason = typeof window !== 'undefined' ? window.prompt('Reason for hold?') : '';

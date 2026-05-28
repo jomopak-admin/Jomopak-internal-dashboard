@@ -343,6 +343,8 @@ function mapDeliveryNote(row: any): DeliveryNote {
     notes: row.notes ?? '',
     customerNote: row.customer_note ?? '',
     parentInvoiceId: row.parent_invoice_id ?? '',
+    // Phase 74 — source FG batch the DN was drawn from (drives auto-deduction).
+    sourceFinishedGoodsStockId: row.source_finished_goods_stock_id ?? undefined,
     parentInvoiceNumber: row.parent_invoice_number ?? '',
     receiptMode: row.receipt_mode ?? 'Pending',
     signedByName: row.signed_by_name ?? '',
@@ -1357,6 +1359,8 @@ export function mapInvoice(row: any): any {
     clientContactPhone: row.client_contact_phone ?? '',
     jobId: row.job_id ?? '',
     jobNumber: row.job_number ?? '',
+    // Phase 74 — source FG batch the invoice was drawn from.
+    sourceFinishedGoodsStockId: row.source_finished_goods_stock_id ?? undefined,
     quoteId: row.quote_id ?? '',
     quoteNumber: row.quote_number ?? '',
     productionSpecId: row.production_spec_id ?? '',
@@ -2558,6 +2562,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       customer_note: note.customerNote || null,
       dispatch_run_id: note.dispatchRunId || null,
       dispatch_run_number: note.dispatchRunNumber || null,
+      // Phase 74 — source FG batch link, used for traceability of which DN
+      // drew from which finished-goods batch.
+      source_finished_goods_stock_id: note.sourceFinishedGoodsStockId || null,
     }))),
     safeUpsert('dispatch_runs', (data.dispatchRuns ?? []).map((run) => ({
       id: run.id,
@@ -3414,6 +3421,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       stock_holding_start_date: inv.stockHoldingStartDate || null,
       stock_holding_max_days: inv.stockHoldingMaxDays,
       client_visible: inv.clientVisible,
+      // Phase 74 — source FG batch link.
+      source_finished_goods_stock_id: inv.sourceFinishedGoodsStockId || null,
     }))),
     safeUpsert('production_specs', data.productionSpecs.map((s) => ({
       id: s.id, spec_number: s.specNumber, created_at: s.createdAt,

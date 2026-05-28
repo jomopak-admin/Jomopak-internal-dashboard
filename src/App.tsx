@@ -3764,6 +3764,7 @@ function App() {
       parentInvoiceNumber: deliveryNoteForm.parentInvoiceId
         ? (data.invoices.find((inv) => inv.id === deliveryNoteForm.parentInvoiceId)?.invoiceNumber ?? '')
         : '',
+      sourceFinishedGoodsStockId: deliveryNoteForm.sourceFinishedGoodsStockId,
       receiptMode: deliveryNoteForm.receiptMode,
       signedByName: deliveryNoteForm.signedByName,
       signedByDate: deliveryNoteForm.signedByDate,
@@ -3786,10 +3787,49 @@ function App() {
         createdAt: new Date().toISOString(),
         ...payload,
       };
-      setData((current) => ({
-        ...current,
-        deliveryNotes: [newNote, ...current.deliveryNotes],
-      }));
+      // Phase 74 — auto-deduct from the source FG batch on first save.
+      // Deduction = sum of line quantities. Logged to stock_change_logs.
+      const sourceFgId = deliveryNoteForm.sourceFinishedGoodsStockId;
+      const drawnQty = sourceFgId
+        ? deliveryNoteForm.lineItems.reduce((sum, ln) => sum + (Number(ln.quantity) || 0), 0)
+        : 0;
+      const { actorId: dnActorId, actorName: dnActorName } = getActor();
+      setData((current) => {
+        let nextStock = current.finishedGoodsStock;
+        let nextLogs = current.stockChangeLogs;
+        if (sourceFgId && drawnQty > 0) {
+          nextStock = current.finishedGoodsStock.map((s) => {
+            if (s.id !== sourceFgId) return s;
+            const nextAvail = Math.max(s.quantityAvailable - drawnQty, 0);
+            const nextOnHand = Math.max(s.quantityOnHand - drawnQty, 0);
+            return { ...s, quantityAvailable: nextAvail, quantityOnHand: nextOnHand };
+          });
+          const sourceBatch = current.finishedGoodsStock.find((s) => s.id === sourceFgId);
+          if (sourceBatch) {
+            nextLogs = [{
+              id: `stock-log-${Date.now()}`,
+              createdAt: new Date().toISOString(),
+              finishedGoodsStockId: sourceFgId,
+              stockNumber: sourceBatch.stockNumber,
+              productName: sourceBatch.productName,
+              action: 'updated',
+              changedByUserId: dnActorId,
+              changedByName: dnActorName,
+              previousQuantityOnHand: sourceBatch.quantityOnHand,
+              nextQuantityOnHand: Math.max(sourceBatch.quantityOnHand - drawnQty, 0),
+              previousQuantityReserved: sourceBatch.quantityReserved,
+              nextQuantityReserved: sourceBatch.quantityReserved,
+              notes: `Drawn by Delivery Note ${deliveryNoteNumber} — ${drawnQty} ${sourceBatch.quantityUnit}`,
+            }, ...current.stockChangeLogs];
+          }
+        }
+        return {
+          ...current,
+          deliveryNotes: [newNote, ...current.deliveryNotes],
+          finishedGoodsStock: nextStock,
+          stockChangeLogs: nextLogs,
+        };
+      });
     }
     resetDeliveryNoteEditor();
   }
@@ -3897,6 +3937,7 @@ function App() {
       stockHoldingMaxDays: Number(invoiceForm.stockHoldingMaxDays || 0),
       deliveryNoteIds: [] as string[],
       clientVisible: invoiceForm.clientVisible,
+      sourceFinishedGoodsStockId: invoiceForm.sourceFinishedGoodsStockId,
     } as const;
 
     if (invoiceEditingId) {
@@ -3912,10 +3953,49 @@ function App() {
         createdAt: new Date().toISOString(),
         ...payload,
       };
-      setData((current) => ({
-        ...current,
-        invoices: [newInvoice, ...current.invoices],
-      }));
+      // Phase 74 — auto-deduct FG batch when invoice is promoted directly
+      // from finished goods (skipping DN). Mirrors the DN deduction logic.
+      const sourceFgId = invoiceForm.sourceFinishedGoodsStockId;
+      const drawnQty = sourceFgId
+        ? lineItems.reduce((sum, ln) => sum + ln.quantity, 0)
+        : 0;
+      const { actorId: invActorId, actorName: invActorName } = getActor();
+      setData((current) => {
+        let nextStock = current.finishedGoodsStock;
+        let nextLogs = current.stockChangeLogs;
+        if (sourceFgId && drawnQty > 0) {
+          nextStock = current.finishedGoodsStock.map((s) => {
+            if (s.id !== sourceFgId) return s;
+            const nextAvail = Math.max(s.quantityAvailable - drawnQty, 0);
+            const nextOnHand = Math.max(s.quantityOnHand - drawnQty, 0);
+            return { ...s, quantityAvailable: nextAvail, quantityOnHand: nextOnHand };
+          });
+          const sourceBatch = current.finishedGoodsStock.find((s) => s.id === sourceFgId);
+          if (sourceBatch) {
+            nextLogs = [{
+              id: `stock-log-${Date.now()}`,
+              createdAt: new Date().toISOString(),
+              finishedGoodsStockId: sourceFgId,
+              stockNumber: sourceBatch.stockNumber,
+              productName: sourceBatch.productName,
+              action: 'updated',
+              changedByUserId: invActorId,
+              changedByName: invActorName,
+              previousQuantityOnHand: sourceBatch.quantityOnHand,
+              nextQuantityOnHand: Math.max(sourceBatch.quantityOnHand - drawnQty, 0),
+              previousQuantityReserved: sourceBatch.quantityReserved,
+              nextQuantityReserved: sourceBatch.quantityReserved,
+              notes: `Drawn by Invoice ${invoiceNumber} — ${drawnQty} ${sourceBatch.quantityUnit}`,
+            }, ...current.stockChangeLogs];
+          }
+        }
+        return {
+          ...current,
+          invoices: [newInvoice, ...current.invoices],
+          finishedGoodsStock: nextStock,
+          stockChangeLogs: nextLogs,
+        };
+      });
     }
     resetInvoiceEditor();
   }
@@ -9232,6 +9312,7 @@ function App() {
       notes: note.notes,
       customerNote: note.customerNote ?? '',
       parentInvoiceId: note.parentInvoiceId || '',
+      sourceFinishedGoodsStockId: note.sourceFinishedGoodsStockId,
       receiptMode: note.receiptMode || 'Pending',
       signedByName: note.signedByName || '',
       signedByDate: note.signedByDate || '',
@@ -9400,6 +9481,96 @@ function App() {
     setView('customerStock');
   }
 
+  /**
+   * Phase 73 — derive a per-unit price for an FG batch:
+   *   1. Linked job's order value ÷ planned quantity (the price actually quoted)
+   *   2. Otherwise 0 — user fills it in manually on the Invoice form.
+   * Tier-pricing fallback is intentionally NOT wired here yet; resolveClientPrice
+   * requires a full ProductPricingSpec + cost masters which the FG flow doesn't
+   * carry. For batches without a linked job the operator picks the price.
+   */
+  function deriveFgUnitPrice(item: FinishedGoodsStock): number {
+    if (!item.jobId) return 0;
+    const job = data.jobs.find((j) => j.id === item.jobId);
+    if (!job) return 0;
+    if (job.quantityPlanned > 0 && job.orderValue > 0) {
+      return job.orderValue / job.quantityPlanned;
+    }
+    return 0;
+  }
+
+  /**
+   * Phase 73 — open the DN form pre-filled with the FG batch's client + product
+   * + available quantity. Same flow as the "from invoice" promotion, but pulls
+   * from a single FG batch instead of an invoice's line items.
+   */
+  function handleCreateDeliveryFromFGStock(item: FinishedGoodsStock) {
+    const client = item.clientId ? data.clients.find((c) => c.id === item.clientId) : undefined;
+    const deliveryAddress = client
+      ? [client.deliveryAddressLine1, client.deliveryAddressLine2, client.deliveryCity, client.deliveryState, client.deliveryPostalCode, client.deliveryCountry]
+          .filter(Boolean).join(', ')
+      : '';
+    setDeliveryNoteEditingId(null);
+    setDeliveryNoteForm({
+      ...createInitialDeliveryNoteForm(),
+      noteDate: getToday(),
+      clientId: item.clientId,
+      clientContactName: client?.contactName ?? '',
+      clientContactPhone: client?.phoneNumber ?? client?.mobileNumber ?? '',
+      clientEmail: client?.contactEmail ?? '',
+      clientAddress: deliveryAddress,
+      companyName: data.appSettings.company.name,
+      companyPhone: data.appSettings.company.phone,
+      companyEmail: data.appSettings.company.email,
+      companyAddress: `${data.appSettings.company.addressLine1}\n${data.appSettings.company.addressLine2}`,
+      jobId: item.jobId,
+      sourceFinishedGoodsStockId: item.id,
+      lineItems: [{
+        id: `dl-${Date.now().toString(36)}`,
+        productName: item.productName,
+        stockNumber: item.stockNumber,
+        description: `Drawn from FG batch ${item.stockNumber}`,
+        quantity: item.quantityAvailable,
+        quantityUnit: item.quantityUnit,
+        dispatchRecordId: '',
+        customerStockReleaseId: '',
+      }],
+    });
+    setDeliveryNoteMessage(`Pre-filled from FG batch ${item.stockNumber}. Available: ${item.quantityAvailable} ${item.quantityUnit}. On save, the batch's available qty will drop by the total line quantity. Reduce the line for a partial dispatch.`);
+    setView('deliveryNotes');
+  }
+
+  /**
+   * Phase 73 — open the Invoice form pre-filled with the FG batch. Per-unit
+   * price derives from the linked job; user can override.
+   */
+  function handleCreateInvoiceFromFGStock(item: FinishedGoodsStock) {
+    const unitPrice = deriveFgUnitPrice(item);
+    setInvoiceEditingId(null);
+    setInvoiceForm({
+      ...createInitialInvoiceForm(),
+      invoiceDate: getToday(),
+      clientId: item.clientId,
+      jobId: item.jobId,
+      sourceFinishedGoodsStockId: item.id,
+      lineItems: [{
+        id: `il-${Date.now().toString(36)}`,
+        productId: item.productId,
+        productName: item.productName,
+        description: `Drawn from FG batch ${item.stockNumber}`,
+        quantity: String(item.quantityAvailable),
+        quantityUnit: item.quantityUnit,
+        unitPriceExclVat: unitPrice > 0 ? unitPrice.toFixed(2) : '',
+        vatRatePercent: '15',
+      }],
+    });
+    const priceNote = unitPrice > 0
+      ? `Unit price derived from job ${item.jobNumber || '-'} (${unitPrice.toFixed(2)} per ${item.quantityUnit}).`
+      : 'No linked-job price found — set the unit price manually.';
+    setInvoiceMessage(`Pre-filled from FG batch ${item.stockNumber}. On save, the batch's available qty drops by the total line quantity. ${priceNote}`);
+    setView('invoices');
+  }
+
   function editInvoice(invoice: Invoice) {
     setInvoiceEditingId(invoice.id);
     setInvoiceForm({
@@ -9407,6 +9578,7 @@ function App() {
       dueDate: invoice.dueDate,
       clientId: invoice.clientId,
       jobId: invoice.jobId,
+      sourceFinishedGoodsStockId: invoice.sourceFinishedGoodsStockId,
       quoteId: invoice.quoteId,
       productionSpecId: invoice.productionSpecId,
       customerReference: invoice.customerReference,
@@ -10169,6 +10341,8 @@ function App() {
             data.finishedGoodsStock.map((s) => s.stockNumber),
             stockForm.storedDate || new Date().toISOString().slice(0, 10),
           )}
+          onCreateDelivery={handleCreateDeliveryFromFGStock}
+          onCreateInvoice={handleCreateInvoiceFromFGStock}
         />
       )}
 
