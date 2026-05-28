@@ -4841,6 +4841,10 @@ export interface Shipment {
   notes: string;
   /** True once the shipment's lines have been booked into material receipts. */
   receivedIntoStock: boolean;
+  /** Phase 78 — uploaded shipping documents (bill of lading, packing list,
+   *  customs paperwork, commercial invoice). Captured via the global
+   *  drag-drop dropzone or directly on the Shipment form. */
+  documentUrls?: string[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

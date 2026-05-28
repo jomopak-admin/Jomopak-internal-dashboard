@@ -4492,6 +4492,101 @@ th {
   font-size: 0.85rem;
   color: var(--jp-ink-3, #6f6657);
 }
+
+/* Phase 78 — global document drop overlay + type-picker modal. */
+.global-doc-drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 25, 35, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+.global-doc-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 2rem 3rem;
+  background: var(--jp-paper, #fffbf4);
+  color: var(--jp-ink, #2a2418);
+  border: 3px dashed var(--jp-accent, #2563eb);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-family: var(--jp-serif, Georgia, serif);
+  text-align: center;
+}
+.global-doc-drop-card strong { font-size: 1.3rem; letter-spacing: -0.01em; }
+.global-doc-drop-card span { font-size: 0.85rem; color: var(--jp-ink-3, #6f6657); }
+
+.global-doc-drop-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 25, 35, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+.global-doc-drop-modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--jp-paper, #fffbf4);
+  color: var(--jp-ink, #2a2418);
+  border-radius: 14px;
+  padding: 1.5rem 1.5rem 1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  font-family: var(--jp-sans, system-ui, sans-serif);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.global-doc-drop-modal-card h3 {
+  font-family: var(--jp-serif, Georgia, serif);
+  font-size: 1.2rem;
+  margin: 0;
+  letter-spacing: -0.012em;
+}
+.global-doc-drop-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.global-doc-drop-options button {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.75rem 1rem;
+  line-height: 1.25;
+}
+.global-doc-drop-options button small {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--jp-ink-3, #6f6657);
+  font-weight: normal;
+}
+.global-doc-drop-shipment-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.global-doc-drop-shipment-row select {
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--jp-line, #e6e0d3);
+  font-size: 0.85rem;
+}
+.global-doc-drop-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
 .invoice-inbox-grid {
   display: grid;
   grid-template-columns: minmax(220px, 320px) 1fr;

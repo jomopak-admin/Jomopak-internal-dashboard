@@ -1928,6 +1928,8 @@ function mapShipment(row: any): any {
     landedCostTotal: Number(row.landed_cost_total ?? 0),
     notes: row.notes ?? '',
     receivedIntoStock: Boolean(row.received_into_stock),
+    // Phase 78 — shipping documents attached via global drop or Shipment form.
+    documentUrls: Array.isArray(row.document_urls) ? row.document_urls : [],
   };
 }
 
@@ -3770,6 +3772,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       landed_cost_total: s.landedCostTotal,
       notes: s.notes || '',
       received_into_stock: s.receivedIntoStock,
+      // Phase 78 — shipping documents
+      document_urls: s.documentUrls ?? null,
     }))),
     safeUpsert('documents', data.documents.map((d) => ({
       id: d.id,

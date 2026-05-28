@@ -28,6 +28,8 @@ import { attachAutoFlush, flushPodQueue } from './utils/podSync';
 import { buildPodNotificationPlans } from './utils/podNotifications';
 import { notifyRecipients } from './utils/messagingService';
 import { uploadInvoiceInboxFile } from './utils/invoiceInboxStorage';
+import { GlobalDocumentDrop } from './components/GlobalDocumentDrop';
+import { uploadPhoto } from './utils/photoStorage';
 import { getRate, RealisedFxResult } from './utils/currency';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { computeQuote, emptyCalculatorState } from './utils/calculatorEngine';
@@ -9835,6 +9837,114 @@ function App() {
           <p className="muted">Loading shared JomoPak data from Supabase...</p>
         </div>
       )}
+
+      {/* Phase 78 — global document drop. Available on every page (except
+          Invoice Inbox, which has its own direct drop). Type picker routes
+          to: Invoice Inbox / Shipment.documentUrls / Doc Vault. */}
+      <GlobalDocumentDrop
+        activeView={view}
+        shipments={data.shipments.map((s) => ({
+          id: s.id,
+          shipmentNumber: s.shipmentNumber,
+          supplierName: s.supplierName,
+        }))}
+        onDropAsInvoice={async (files) => {
+          for (const file of files) {
+            const id = `INV-INBOX-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+            let uploaded;
+            try {
+              uploaded = await uploadInvoiceInboxFile(file, id);
+            } catch (err: any) {
+              console.error('Global drop invoice upload failed', err);
+              continue;
+            }
+            const buf = await file.arrayBuffer();
+            const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+            const hash = Array.from(new Uint8Array(hashBuf))
+              .map((b) => b.toString(16).padStart(2, '0')).join('');
+            const item: InvoiceInboxItem = {
+              id,
+              inboxNumber: id,
+              createdAt: new Date().toISOString(),
+              source: 'manualUpload',
+              uploaderName: profile?.fullName ?? '',
+              uploaderUserId: profile?.id ?? '',
+              fileName: uploaded.fileName,
+              fileMimeType: uploaded.fileMimeType,
+              fileSizeBytes: uploaded.fileSizeBytes,
+              fileUrl: uploaded.signedUrl,
+              storagePath: uploaded.storagePath,
+              fileHash: hash,
+              status: 'pending',
+              ocrError: '',
+              extractedJson: null,
+              validatedJson: null,
+              reviewedByName: '',
+              reviewedAt: '',
+              reviewNotes: '',
+              postedAsMaterialReceiptId: '',
+              postedAsMaterialReceiptNumber: '',
+              postedAsApInvoiceId: '',
+              postedAt: '',
+              duplicateCandidateIds: [],
+              senderHandle: '',
+              senderSubject: '',
+            };
+            setData((cur) => ({ ...cur, invoiceInboxItems: [item, ...cur.invoiceInboxItems] }));
+          }
+          setView('invoiceInbox');
+        }}
+        onDropAsShipmentDoc={async (files, shipmentId) => {
+          const urls: string[] = [];
+          for (const file of files) {
+            try {
+              const url = await uploadPhoto(file, 'shipments', shipmentId);
+              urls.push(url);
+            } catch (err: any) {
+              console.error('Global drop shipment doc upload failed', err);
+            }
+          }
+          if (urls.length === 0) return;
+          setData((cur) => ({
+            ...cur,
+            shipments: cur.shipments.map((s) => s.id === shipmentId
+              ? { ...s, documentUrls: [...(s.documentUrls ?? []), ...urls] }
+              : s),
+          }));
+          setView('shipments');
+        }}
+        onDropAsGeneral={async (files) => {
+          for (const file of files) {
+            const docId = `DOC-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+            try {
+              const url = await uploadPhoto(file, 'docvault', docId);
+              const doc: DocumentRecord = {
+                id: docId,
+                createdAt: new Date().toISOString(),
+                ownerType: 'internal',
+                ownerId: '',
+                ownerName: '',
+                category: 'Other',
+                title: file.name,
+                fileName: file.name,
+                fileMimeType: file.type || 'application/octet-stream',
+                fileSizeBytes: file.size,
+                fileUrl: url,
+                storagePath: url,
+                issueDate: new Date().toISOString().slice(0, 10),
+                expiryDate: '',
+                uploadedByName: profile?.fullName ?? '',
+                notes: 'Uploaded via global drag-drop.',
+                visibleToRoles: [],
+              };
+              setData((cur) => ({ ...cur, documents: [doc, ...(cur.documents ?? [])] }));
+            } catch (err: any) {
+              console.error('Global drop general upload failed', err);
+            }
+          }
+          setView('documentVault');
+        }}
+      />
 
       {!loading && (
         <>
