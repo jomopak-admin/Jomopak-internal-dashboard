@@ -613,6 +613,12 @@ function mapProduct(row: any): Product {
     active: row.active !== false,
     pricingEnabled: Boolean(row.pricing_enabled),
     pricingSpec: row.pricing_spec ?? undefined,
+    // Phase 85 — bag spec + sale units live on the Product itself.
+    bagWidthMm: row.bag_width_mm ?? '',
+    bagHeightMm: row.bag_height_mm ?? '',
+    gussetMm: row.gusset_mm ?? '',
+    handleType: row.handle_type ?? 'None',
+    salesUnits: Array.isArray(row.sales_units) ? row.sales_units : [],
   };
 }
 
@@ -2743,6 +2749,12 @@ export async function syncAppData(data: AppData): Promise<void> {
       active: product.active,
       pricing_enabled: product.pricingEnabled ?? false,
       pricing_spec: product.pricingSpec ?? null,
+      // Phase 85 — bag spec + sale units persisted on Product directly.
+      bag_width_mm: product.bagWidthMm ?? '',
+      bag_height_mm: product.bagHeightMm ?? '',
+      gusset_mm: product.gussetMm ?? '',
+      handle_type: product.handleType ?? 'None',
+      sales_units: product.salesUnits ?? [],
     }))),
     safeUpsert('product_price_versions', data.productPriceVersions.map((v) => ({
       id: v.id,

@@ -25,6 +25,9 @@ interface ProductsPageProps {
   filteredProducts: Product[];
   onEdit: (product: Product) => void;
   onDelete: () => void;
+  /** Phase 83 — jump to the Cost Inputs page so the user can populate
+   *  PaperRate / CostProfile masters when they're empty. */
+  onOpenCostInputs?: () => void;
 }
 
 export function ProductsPage({
@@ -44,6 +47,7 @@ export function ProductsPage({
   filteredProducts,
   onEdit,
   onDelete,
+  onOpenCostInputs,
 }: ProductsPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -79,13 +83,21 @@ export function ProductsPage({
   );
 
   // Live cost-plus preview computed from the same engine the Price List uses.
-  const pricingPreview = useMemo(
-    () =>
-      productForm.pricingEnabled
-        ? computeProductPricing(formToPricingSpec(productForm), { paperRates, costProfiles, pricingTiers })
-        : null,
-    [productForm, paperRates, costProfiles, pricingTiers],
-  );
+  // Phase 84 — force the print-related inputs to no-print before the engine
+  // sees them. Products in our model are always unprinted stock; the
+  // Calculator handles branded work per-quote, and we don't want a stale
+  // print value left over on an old product to contaminate the preview.
+  const pricingPreview = useMemo(() => {
+    if (!productForm.pricingEnabled) return null;
+    const noPrintForm = {
+      ...productForm,
+      printMethod: 'Plain' as const,
+      colors: '0',
+      printAreaCm2: '',
+      coverageBand: 'None' as const,
+    };
+    return computeProductPricing(formToPricingSpec(noPrintForm), { paperRates, costProfiles, pricingTiers });
+  }, [productForm, paperRates, costProfiles, pricingTiers]);
 
   const sections: FormWizardSection[] = [
     {
@@ -107,28 +119,30 @@ export function ProductsPage({
     },
     {
       key: 'defaults',
-      title: 'Defaults & specification',
-      subtitle: 'Sensible defaults so jobs and quotes pre-fill correctly.',
+      title: 'Specification',
+      subtitle: 'Paper + dimensions live here once. Jobs, quotes, finished stock, and the pricing engine all pull from these fields — never re-enter them.',
       body: (
         <div className="form-grid">
-          <label><span>Default unit</span><select value={productForm.defaultUnit} onChange={(event) => setProductForm({ ...productForm, defaultUnit: event.target.value as Product['defaultUnit'] })}><option>units</option><option>kg</option><option>rolls</option><option>sheets</option></select></label>
-          <label><span>Default paper type</span><input value={productForm.defaultPaperType} onChange={(event) => setProductForm({ ...productForm, defaultPaperType: event.target.value })} /></label>
-          <label><span>Default GSM</span><input value={productForm.defaultGsm} onChange={(event) => setProductForm({ ...productForm, defaultGsm: event.target.value })} /></label>
-          <label className="checkbox-row"><input type="checkbox" checked={productForm.brandingAllowed} onChange={(event) => setProductForm({ ...productForm, brandingAllowed: event.target.checked })} />Branding allowed</label>
+          <label><span>Paper type</span><input value={productForm.defaultPaperType} onChange={(event) => setProductForm({ ...productForm, defaultPaperType: event.target.value })} placeholder="e.g. Kraft brown" /></label>
+          <label><span>GSM</span><input value={productForm.defaultGsm} onChange={(event) => setProductForm({ ...productForm, defaultGsm: event.target.value })} placeholder="e.g. 80" /></label>
+          <label><span>Bag width (mm)</span><input value={productForm.bagWidthMm} onChange={(event) => setProductForm({ ...productForm, bagWidthMm: event.target.value })} /></label>
+          <label><span>Bag height (mm)</span><input value={productForm.bagHeightMm} onChange={(event) => setProductForm({ ...productForm, bagHeightMm: event.target.value })} /></label>
+          <label><span>Gusset (mm)</span><input value={productForm.gussetMm} onChange={(event) => setProductForm({ ...productForm, gussetMm: event.target.value })} /></label>
+          <label><span>Handle</span>
+            <select value={productForm.handleType} onChange={(event) => setProductForm({ ...productForm, handleType: event.target.value as ProductFormState['handleType'] })}>
+              <option>None</option><option>Flat Handle</option><option>Rope Handle</option><option>Roll Handle</option>
+            </select>
+          </label>
+          <label><span>Base unit</span><select value={productForm.defaultUnit} onChange={(event) => setProductForm({ ...productForm, defaultUnit: event.target.value as Product['defaultUnit'] })}><option>units</option><option>kg</option><option>rolls</option><option>sheets</option><option>pieces</option></select></label>
+          <label className="checkbox-row"><input type="checkbox" checked={productForm.brandingAllowed} onChange={(event) => setProductForm({ ...productForm, brandingAllowed: event.target.checked })} />Can be branded (for custom quotes)</label>
           <label className="checkbox-row"><input type="checkbox" checked={productForm.active} onChange={(event) => setProductForm({ ...productForm, active: event.target.checked })} />Active</label>
         </div>
       ),
     },
     {
       key: 'pricing',
-      title: 'Standard pricing',
-      subtitle: 'Save a spec here and the Price List computes a cost-plus price from your live paper + cost inputs — adjust the margin and it recalculates.',
-      missingRequired: productForm.pricingEnabled
-        ? [
-            ...(productForm.paperRateId ? [] : ['Paper rate']),
-            ...(productForm.costProfileId ? [] : ['Cost profile']),
-          ]
-        : [],
+      title: 'Margin & sale units',
+      subtitle: 'Just the commercial knobs. Paper, dimensions, and handle come from the Specification section above. Paper cost will pull from Materials Receiving (the actual paid R/ton on your stock). Bag-making cost comes from the cost profile masters. Final unit price = (paper + bag-making) × (1 + margin). Calculations are stubbed for now — the form structure is what matters at this stage.',
       body: (
         <div className="form-grid">
           <label className="checkbox-row full-span">
@@ -137,75 +151,94 @@ export function ProductsPage({
           </label>
           {productForm.pricingEnabled && (
             <>
-              <label><span>Paper rate <RequiredMarker /></span>
-                <select value={productForm.paperRateId} onChange={(event) => setProductForm({ ...productForm, paperRateId: event.target.value })}>
-                  <option value="">Select paper…</option>
-                  {paperRates.filter((rate) => rate.active).map((rate) => (
-                    <option key={rate.id} value={rate.id}>{rate.name} · {rate.paperType} {rate.gsm}gsm · R{formatNumber(rate.pricePerTon, 0)}/t</option>
-                  ))}
-                </select>
+              <label><span>Margin %</span>
+                <input value={productForm.baseMarginPercent} onChange={(event) => setProductForm({ ...productForm, baseMarginPercent: event.target.value })} placeholder="e.g. 35" />
               </label>
-              <label><span>Cost profile <RequiredMarker /></span>
-                <select value={productForm.costProfileId} onChange={(event) => setProductForm({ ...productForm, costProfileId: event.target.value })}>
-                  <option value="">Select profile…</option>
-                  {costProfiles.filter((profile) => profile.active).map((profile) => (
-                    <option key={profile.id} value={profile.id}>{profile.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label><span>Bag width (mm)</span><input value={productForm.bagWidthMm} onChange={(event) => setProductForm({ ...productForm, bagWidthMm: event.target.value })} /></label>
-              <label><span>Bag height (mm)</span><input value={productForm.bagHeightMm} onChange={(event) => setProductForm({ ...productForm, bagHeightMm: event.target.value })} /></label>
-              <label><span>Gusset (mm)</span><input value={productForm.gussetMm} onChange={(event) => setProductForm({ ...productForm, gussetMm: event.target.value })} /></label>
-              <label><span>Handle</span>
-                <select value={productForm.handleType} onChange={(event) => setProductForm({ ...productForm, handleType: event.target.value as ProductFormState['handleType'] })}>
-                  <option>None</option><option>Flat Handle</option><option>Rope Handle</option><option>Roll Handle</option>
-                </select>
-              </label>
-              <label><span>Print method</span>
-                <select value={productForm.printMethod} onChange={(event) => setProductForm({ ...productForm, printMethod: event.target.value as ProductFormState['printMethod'] })}>
-                  <option>Plain</option><option>Auto</option><option>Screen Print</option><option>Flexo</option><option>Digital Print</option><option>Litho</option>
-                </select>
-              </label>
-              <label><span>Colours</span><input value={productForm.colors} onChange={(event) => setProductForm({ ...productForm, colors: event.target.value })} /></label>
-              <label><span>Print area (cm²)</span><input value={productForm.printAreaCm2} onChange={(event) => setProductForm({ ...productForm, printAreaCm2: event.target.value })} /></label>
-              <label><span>Coverage</span>
-                <select value={productForm.coverageBand} onChange={(event) => setProductForm({ ...productForm, coverageBand: event.target.value as ProductFormState['coverageBand'] })}>
-                  <option>None</option><option>Light</option><option>Medium</option><option>Heavy</option>
-                </select>
-              </label>
-              <label><span>Plate billing</span>
-                <select value={productForm.plateBilling} onChange={(event) => setProductForm({ ...productForm, plateBilling: event.target.value as ProductFormState['plateBilling'] })}>
-                  <option value="amortized">Amortised into unit price</option>
-                  <option value="upfront">Billed upfront</option>
-                </select>
-              </label>
-              <label><span>Base margin (%)</span><input value={productForm.baseMarginPercent} onChange={(event) => setProductForm({ ...productForm, baseMarginPercent: event.target.value })} placeholder="e.g. 35" /></label>
-              <label><span>Base quantity</span><input value={productForm.baseQuantity} onChange={(event) => setProductForm({ ...productForm, baseQuantity: event.target.value })} /></label>
-              <label className="full-span"><span>MOQ break quantities (comma-separated)</span><input value={productForm.breakQuantities} onChange={(event) => setProductForm({ ...productForm, breakQuantities: event.target.value })} placeholder="5000, 10000, 25000" /></label>
-              {pricingPreview ? (
-                pricingPreview.ok ? (
-                  <div className="full-span">
-                    <h4 className="accounting-group-head"><span className="sars-tag">Live price preview</span></h4>
-                    <table className="data-table">
-                      <thead><tr><th>Quantity</th><th style={{ textAlign: 'right' }}>Unit cost</th><th style={{ textAlign: 'right' }}>Unit price</th><th style={{ textAlign: 'right' }}>Margin</th><th style={{ textAlign: 'right' }}>Plate setup</th></tr></thead>
-                      <tbody>
-                        {pricingPreview.breaks.map((row) => (
-                          <tr key={row.quantity}>
-                            <td>{formatNumber(row.quantity, 0)}</td>
-                            <td style={{ textAlign: 'right' }}>R {formatNumber(row.unitCost, 4)}</td>
-                            <td style={{ textAlign: 'right' }}><strong>R {formatNumber(row.unitPrice, 4)}</strong></td>
-                            <td style={{ textAlign: 'right' }}>{formatNumber(row.marginPercent, 1)}%</td>
-                            <td style={{ textAlign: 'right' }}>{row.plateSetupFee ? `R ${formatNumber(row.plateSetupFee, 2)}` : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <p className="muted" style={{ fontSize: '0.72rem' }}>Preview uses live cost inputs. Approve a version on the Price List to lock the price + assumptions.</p>
-                  </div>
-                ) : (
-                  <p className="muted full-span">{pricingPreview.reason}</p>
-                )
-              ) : null}
+
+              <div className="full-span">
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #6f6657)', display: 'block', marginBottom: 8 }}>
+                  How customers can buy it
+                </span>
+                {(productForm.salesUnits ?? []).length === 0 ? (
+                  <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
+                    No sale units yet. Add Pallet / Box / Bale / Case / Single — each with how many bags it contains so the customer can order "1 pallet" and the system knows that's 12,000 bags.
+                  </p>
+                ) : null}
+                <table className="data-table" style={{ fontSize: 13 }}>
+                  <thead><tr><th>Pack name</th><th style={{ width: 160 }}>Bags per pack</th><th>Notes</th><th style={{ width: 60 }}></th></tr></thead>
+                  <tbody>
+                    {(productForm.salesUnits ?? []).map((unit, idx) => (
+                      <tr key={unit.id}>
+                        <td>
+                          <input
+                            value={unit.name}
+                            placeholder="Pallet / Box / Bale…"
+                            onChange={(e) => {
+                              const next = [...(productForm.salesUnits ?? [])];
+                              next[idx] = { ...unit, name: e.target.value };
+                              setProductForm({ ...productForm, salesUnits: next });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            value={unit.quantityInBaseUnit || ''}
+                            onChange={(e) => {
+                              const next = [...(productForm.salesUnits ?? [])];
+                              next[idx] = { ...unit, quantityInBaseUnit: Number(e.target.value) || 0 };
+                              setProductForm({ ...productForm, salesUnits: next });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={unit.notes ?? ''}
+                            placeholder="e.g. brown shrink wrap"
+                            onChange={(e) => {
+                              const next = [...(productForm.salesUnits ?? [])];
+                              next[idx] = { ...unit, notes: e.target.value };
+                              setProductForm({ ...productForm, salesUnits: next });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="table-button"
+                            onClick={() => {
+                              const next = (productForm.salesUnits ?? []).filter((_, i) => i !== idx);
+                              setProductForm({ ...productForm, salesUnits: next });
+                            }}
+                          >Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    const next = [...(productForm.salesUnits ?? []), {
+                      id: `su-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                      name: '',
+                      quantityInBaseUnit: 0,
+                      notes: '',
+                    }];
+                    setProductForm({ ...productForm, salesUnits: next });
+                  }}
+                >+ Add sale unit</button>
+              </div>
+
+              <p className="muted full-span" style={{ fontSize: 12 }}>
+                Paper cost will pull from <strong>Materials Receiving</strong> (the actual paid R/ton on
+                your paper stock) once that's wired in. Bag-making cost comes from a single
+                cost-profile master. There's no need to re-enter dimensions or paper here — they're
+                in the Specification section above.
+              </p>
             </>
           )}
         </div>

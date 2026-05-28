@@ -1392,7 +1392,11 @@ const createInitialProductForm = (): ProductFormState => ({
   defaultGsm: '',
   notes: '',
   active: true,
-  pricingEnabled: false,
+  // Phase 83 — default cost-plus pricing ON for new manufactured products.
+  // The engine computes everything from paper rate + cost profile + spec +
+  // margin, so the operator should opt OUT (for purchased/re-sold goods)
+  // rather than opt IN.
+  pricingEnabled: true,
   bagWidthMm: '',
   bagHeightMm: '',
   gussetMm: '',
@@ -1407,6 +1411,7 @@ const createInitialProductForm = (): ProductFormState => ({
   baseMarginPercent: '',
   baseQuantity: '1000',
   breakQuantities: '5000, 10000, 25000',
+  salesUnits: [],
 });
 
 function App() {
@@ -5847,7 +5852,27 @@ function App() {
       notes: productForm.notes,
       active: productForm.active,
       pricingEnabled: productForm.pricingEnabled,
-      pricingSpec: productForm.pricingEnabled ? formToPricingSpec(productForm) : undefined,
+      // Phase 84 — products are unprinted stock. Hard-zero the print fields
+      // before the pricing spec is persisted so the Price List + engine
+      // always see a no-print product, regardless of any legacy form values.
+      pricingSpec: productForm.pricingEnabled
+        ? formToPricingSpec({
+            ...productForm,
+            printMethod: 'Plain',
+            colors: '0',
+            printAreaCm2: '',
+            coverageBand: 'None',
+          })
+        : undefined,
+      // Phase 85 — bag spec + sale units live on the Product itself now,
+      // not inside the pricing spec only. This way jobs, quotes, finished
+      // stock, and the (future) materials-driven pricing all read from
+      // one place.
+      bagWidthMm: productForm.bagWidthMm,
+      bagHeightMm: productForm.bagHeightMm,
+      gussetMm: productForm.gussetMm,
+      handleType: productForm.handleType,
+      salesUnits: productForm.salesUnits ?? [],
       photoUrls: productForm.photoUrls ?? [],
     };
     if (productEditingId) {
@@ -9408,11 +9433,13 @@ function App() {
       defaultGsm: product.defaultGsm,
       notes: product.notes,
       active: product.active,
-      pricingEnabled: product.pricingEnabled ?? false,
-      bagWidthMm: spec ? String(spec.bagWidthMm) : '',
-      bagHeightMm: spec ? String(spec.bagHeightMm) : '',
-      gussetMm: spec ? String(spec.gussetMm) : '',
-      handleType: spec?.handleType ?? 'None',
+      pricingEnabled: product.pricingEnabled ?? true,
+      // Phase 85 — bag spec lives on the Product directly; pricingSpec is a
+      // legacy fallback for very old records.
+      bagWidthMm: product.bagWidthMm ?? (spec ? String(spec.bagWidthMm) : ''),
+      bagHeightMm: product.bagHeightMm ?? (spec ? String(spec.bagHeightMm) : ''),
+      gussetMm: product.gussetMm ?? (spec ? String(spec.gussetMm) : ''),
+      handleType: product.handleType ?? spec?.handleType ?? 'None',
       printMethod: spec?.printMethod ?? 'Plain',
       colors: spec ? String(spec.colors) : '0',
       printAreaCm2: spec ? String(spec.printAreaCm2) : '',
@@ -9423,6 +9450,7 @@ function App() {
       baseMarginPercent: spec ? String(spec.baseMarginPercent) : '',
       baseQuantity: spec ? String(spec.baseQuantity) : '1000',
       breakQuantities: spec ? spec.breakQuantities.join(', ') : '5000, 10000, 25000',
+      salesUnits: product.salesUnits ?? [],
       photoUrls: product.photoUrls ?? [],
     });
     setView('products');
@@ -10583,6 +10611,7 @@ function App() {
           filteredProducts={filteredProducts}
           onEdit={editProduct}
           onDelete={handleDeleteCurrentProduct}
+          onOpenCostInputs={() => setView('costInputs')}
         />
       )}
 

@@ -1633,6 +1633,27 @@ export interface Product {
   pricingEnabled?: boolean;
   /** Phase 33 — the standard costing spec used to compute cost-plus prices. */
   pricingSpec?: ProductPricingSpec;
+  /** Phase 85 — bag dimensions live on the Product as the single source of
+   *  truth. Pulled into pricing + jobs + finished stock automatically. */
+  bagWidthMm?: string;
+  bagHeightMm?: string;
+  gussetMm?: string;
+  handleType?: 'None' | 'Flat Handle' | 'Rope Handle' | 'Roll Handle';
+  /** Phase 85 — the units in which this product is offered for sale. Each
+   *  carries the number of base units (bags / pieces) it contains, so a
+   *  customer can order "1 pallet" and the system knows that's 12,000 bags. */
+  salesUnits?: ProductSalesUnit[];
+}
+
+/** Phase 85 — a packing/sale unit available for a product. */
+export interface ProductSalesUnit {
+  id: string;
+  /** Display name — Pallet, Box, Bale, Case, Single, Roll, etc. */
+  name: string;
+  /** How many base units (bags / pieces) this packing unit contains. */
+  quantityInBaseUnit: number;
+  /** Optional descriptor (e.g. "Brown shrink wrap, blue strapping"). */
+  notes?: string;
 }
 
 /**
@@ -6482,6 +6503,8 @@ export interface ProductFormState {
   baseQuantity: string;
   /** Comma-separated MOQ break quantities, e.g. "5000, 10000, 25000". */
   breakQuantities: string;
+  /** Phase 85 — packing / sale units the product is offered in. */
+  salesUnits?: ProductSalesUnit[];
   /** Phase 59 — Supabase public URLs for product photos. */
   photoUrls?: string[];
 }
