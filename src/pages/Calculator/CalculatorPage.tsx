@@ -70,6 +70,11 @@ interface CalculatorPageProps {
    *  records and persisting them. Should return the new quote number(s)
    *  so we can show a confirmation. */
   onSaveAsQuote?: (state: CalculatorState) => Promise<{ quoteNumbers: string[] }> | { quoteNumbers: string[] };
+  /** Phase 86 — translate the current calculator state into a pre-filled
+   *  Invoice form and navigate the user to the Invoice page so accounts
+   *  can confirm + post. Skipped quote step entirely for direct-bill
+   *  clients. App.tsx does the prefill + view switch. */
+  onSaveAsInvoice?: (state: CalculatorState) => void;
   /** Company + footer for the printable quote. */
   company?: AppSettingsCompany;
   defaultFooterLines?: string[];
@@ -92,6 +97,7 @@ export function CalculatorPage({
   state,
   setState,
   onSaveAsQuote,
+  onSaveAsInvoice,
   company,
   defaultFooterLines,
   preparedByName,
@@ -201,6 +207,39 @@ export function CalculatorPage({
       {/* Shared header --------------------------------------------------- */}
       <section className="card calculator2-shared">
         <h3>Quote header</h3>
+
+        {/* Phase 86 — client privileges panel. Once a client is picked,
+            surface their pricing tier + credit + standing flags so the
+            sales person knows what to honour on this quote. */}
+        {selectedClient ? (
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+            padding: '8px 12px', marginBottom: 12,
+            background: 'var(--jp-paper-2, #faf8f4)',
+            border: '1px solid var(--jp-line, #e6e0d3)',
+            borderRadius: 8, fontSize: 12,
+          }}>
+            <strong style={{ fontSize: 13 }}>{selectedClient.name}</strong>
+            {selectedClient.companyName ? <span className="muted">· {selectedClient.companyName}</span> : null}
+            {pricingTiers.find((t) => t.id === selectedClient.pricingTierId) ? (
+              <span className="badge">{pricingTiers.find((t) => t.id === selectedClient.pricingTierId)?.name} tier</span>
+            ) : null}
+            {selectedClient.creditLimit > 0 ? (
+              <span className="muted">
+                Credit: R{Math.round(selectedClient.currentBalance ?? 0)} / R{Math.round(selectedClient.creditLimit)}
+                {(selectedClient.currentBalance ?? 0) >= selectedClient.creditLimit
+                  ? <span className="badge badge-danger" style={{ marginLeft: 4 }}>Over limit</span>
+                  : null}
+              </span>
+            ) : null}
+            {selectedClient.accountHold ? <span className="badge badge-danger">On account hold</span> : null}
+            {selectedClient.defaultFscClaim ? <span className="badge badge-success">FSC claim by default</span> : null}
+            {selectedClient.foodSafeDeclarationRequired ? <span className="badge">Food-safe declaration required</span> : null}
+            {selectedClient.batchNumberRequiredOnDeliveryNote ? <span className="badge">Batch # on DN</span> : null}
+            {selectedClient.coaRequired ? <span className="badge">CoA required</span> : null}
+          </div>
+        ) : null}
+
         <div className="calculator2-shared-grid">
           <label>
             <span>Client *</span>
@@ -345,11 +384,22 @@ export function CalculatorPage({
           </button>
           <button
             type="button"
-            className="primary-button"
+            className="secondary-button"
             onClick={handleSaveAsQuote}
             disabled={saving || blockingIssues.length > 0 || !onSaveAsQuote}
           >
             {saving ? 'Saving…' : 'Save as Quote'}
+          </button>
+          {/* Phase 86 — direct-to-invoice for clients who skip the quote step
+              (already approved, accounts can post straight away). */}
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => onSaveAsInvoice && onSaveAsInvoice(state)}
+            disabled={blockingIssues.length > 0 || !onSaveAsInvoice}
+            title="Pre-fill an Invoice from this calculation. Sales / accounts confirm + post on the Invoice page."
+          >
+            Save as Invoice →
           </button>
         </div>
       </section>

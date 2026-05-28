@@ -3432,6 +3432,53 @@ function App() {
     return { quoteNumbers: created.map((q) => q.quoteNumber) };
   }
 
+  /**
+   * Phase 86 — same prefill but routed to the Invoice form instead of the
+   * Quote register. Use this for direct-bill clients who skip the formal
+   * quote step. Accounts confirms + posts on the Invoice page.
+   */
+  function handleSaveCalculatorAsInvoice(state: import('./types').CalculatorState) {
+    const client = clientsById.get(state.shared.clientId);
+    if (!client) return;
+    const computation = computeQuote(state, {
+      clients: data.clients,
+      pricingTiers: data.pricingTiers,
+      paperRates: data.paperRates,
+      costProfiles: data.costProfiles,
+    });
+    const billingAddress = [
+      client.billingAddressLine1,
+      client.billingAddressLine2,
+      [client.billingCity, client.billingState, client.billingPostalCode].filter(Boolean).join(', '),
+      client.billingCountry,
+    ].filter(Boolean).join('\n');
+    void billingAddress;
+    setInvoiceEditingId(null);
+    setInvoiceForm({
+      ...createInitialInvoiceForm(),
+      invoiceDate: getToday(),
+      clientId: client.id,
+      lineItems: state.lines.map((line, idx) => {
+        const result = computation.lines[idx];
+        const product = line.productId ? productsById.get(line.productId) : undefined;
+        return {
+          id: `il-${Date.now().toString(36)}-${idx}`,
+          productId: product?.id ?? '',
+          productName: product?.name || line.productName || 'Calculator line',
+          description: line.description || [line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join(' x '),
+          quantity: String(Number(line.quantity) || 0),
+          quantityUnit: (product?.defaultUnit ?? 'units') as any,
+          unitPriceExclVat: result?.quotedUnitPrice ? result.quotedUnitPrice.toFixed(4) : '',
+          vatRatePercent: '15',
+        };
+      }),
+    });
+    setInvoiceMessage(`Pre-filled from Calculator for ${client.name}. ${state.lines.length} line${state.lines.length === 1 ? '' : 's'}. Confirm and post.`);
+    // Reset the calculator after the handoff so the next session starts fresh.
+    setCalculatorState(emptyCalculatorState(getToday()));
+    setView('invoices');
+  }
+
   function handleSaveLead() {
     // Minimal validation — leads are often captured fast with partial info.
     // We only require *some* way to identify who this is (name, phone, email,
@@ -10243,6 +10290,7 @@ function App() {
           state={calculatorState}
           setState={setCalculatorState}
           onSaveAsQuote={handleSaveCalculatorAsQuote}
+          onSaveAsInvoice={handleSaveCalculatorAsInvoice}
           company={data.appSettings.company}
           defaultFooterLines={data.appSettings.templates.invoiceFooterLines}
           preparedByName={profile?.fullName || profile?.email || ''}
