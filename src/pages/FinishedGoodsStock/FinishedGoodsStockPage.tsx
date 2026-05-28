@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, Product, StockChangeLog } from '../../types';
+import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, isFoodPackagingLevel, JobCard, Product, StockChangeLog } from '../../types';
 import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
 
 interface FinishedGoodsStockPageProps {
@@ -296,7 +296,8 @@ export function FinishedGoodsStockPage({
                       <th>Changed by</th>
                       <th>Location</th>
                       <th>Stored</th>
-                      <th>Food-safety status</th>
+                      <th>Food-safe</th>
+                      <th>Release status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -307,6 +308,11 @@ export function FinishedGoodsStockPage({
                         .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
                       const latestLog = itemLogs[0];
                       const stockClient = clients.find((client) => client.id === item.clientId);
+                      // Food-safe = is the paper itself food-contact certified?
+                      // We read this from the linked job's foodContactLevel.
+                      const linkedJob = item.jobId ? jobs.find((j) => j.id === item.jobId) : undefined;
+                      const foodSafeKnown = !!linkedJob;
+                      const foodSafe = linkedJob ? isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') : false;
 
                       return (
                         <tr key={item.id}>
@@ -323,6 +329,13 @@ export function FinishedGoodsStockPage({
                           <td>{latestLog?.changedByName || 'System'}</td>
                           <td>{item.storageLocation || 'Not set'}</td>
                           <td>{formatDate(item.storedDate)}</td>
+                          <td>
+                            {foodSafeKnown
+                              ? (foodSafe
+                                  ? <span className="badge badge-success">Yes</span>
+                                  : <span className="badge">No</span>)
+                              : <span className="muted" style={{ fontSize: 11 }}>—</span>}
+                          </td>
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <span className={`badge ${item.foodSafetyHoldStatus === 'Released' || item.foodSafetyHoldStatus === 'Dispatched' ? 'badge-success' : item.foodSafetyHoldStatus === 'Rejected' || item.foodSafetyHoldStatus === 'Recalled' ? 'badge-danger' : item.foodSafetyHoldStatus === 'On Hold' ? 'badge-warning' : ''}`}>{item.foodSafetyHoldStatus}</span>
