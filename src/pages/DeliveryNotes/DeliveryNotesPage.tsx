@@ -99,11 +99,6 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
     [customerStockReleases, deliveryNoteForm.clientId],
   );
 
-  function handleStartCreate() {
-    onReset();
-    setMode('form');
-  }
-
   function handleStartEdit(note: DeliveryNote) {
     onEdit(note);
     setMode('form');
@@ -360,8 +355,19 @@ export function DeliveryNotesPage(props: DeliveryNotesPageProps) {
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Delivery Note</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Delivery Notes</button>}
+        action={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>Back to Delivery Notes</button>
+          : null}
       />
+      {mode === 'list' && (
+        <section className="card subtle-card">
+          <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+            Delivery notes are generated from a <strong>job card</strong>, an <strong>invoice</strong>, or a
+            <strong> client profile</strong> — not from this tab. Use the Create Delivery Note button on
+            those records so the new note inherits the right client, address, and line items.
+          </p>
+        </section>
+      )}
 
       {mode === 'form' ? (
         <FormWizard

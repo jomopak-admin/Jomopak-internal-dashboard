@@ -8687,6 +8687,92 @@ function App() {
     setView('deliveryNotes');
   }
 
+  /**
+   * Promote a Client (with no specific job) to a new Delivery Note. Pre-fills
+   * recipient / address from the client profile so the user only needs to
+   * pick the dispatch records or stock-release lines on the form.
+   *
+   * Used from the Client register row + stock-holding card to keep the DN
+   * tab as a pure search/list.
+   */
+  function handleCreateDeliveryFromClient(client: Client) {
+    const deliveryAddress = [
+      client.deliveryAddressLine1,
+      client.deliveryAddressLine2,
+      client.deliveryCity,
+      client.deliveryState,
+      client.deliveryPostalCode,
+      client.deliveryCountry,
+    ].filter(Boolean).join(', ');
+    setDeliveryNoteEditingId(null);
+    setDeliveryNoteForm({
+      ...createInitialDeliveryNoteForm(),
+      noteDate: getToday(),
+      clientId: client.id,
+      clientContactName: client.contactName ?? '',
+      clientContactPhone: client.phoneNumber ?? client.mobileNumber ?? '',
+      clientEmail: client.contactEmail ?? '',
+      clientAddress: deliveryAddress,
+      companyName: data.appSettings.company.name,
+      companyPhone: data.appSettings.company.phone,
+      companyEmail: data.appSettings.company.email,
+      companyAddress: `${data.appSettings.company.addressLine1}\n${data.appSettings.company.addressLine2}`,
+    });
+    setDeliveryNoteMessage(`New delivery note for ${client.name}. Add dispatch lines or stock releases on the form.`);
+    setView('deliveryNotes');
+  }
+
+  /**
+   * Promote an Invoice to a new Delivery Note. Pre-fills client, address and
+   * one line per invoice line so a typical "invoice first, deliver second"
+   * flow becomes a single click.
+   */
+  function handleCreateDeliveryFromInvoice(invoice: Invoice) {
+    const client = data.clients.find((c) => c.id === invoice.clientId);
+    const deliveryAddress = client
+      ? [client.deliveryAddressLine1, client.deliveryAddressLine2, client.deliveryCity, client.deliveryState, client.deliveryPostalCode, client.deliveryCountry]
+          .filter(Boolean)
+          .join(', ')
+      : '';
+    setDeliveryNoteEditingId(null);
+    setDeliveryNoteForm({
+      ...createInitialDeliveryNoteForm(),
+      noteDate: getToday(),
+      clientId: invoice.clientId,
+      clientContactName: client?.contactName ?? '',
+      clientContactPhone: client?.phoneNumber ?? client?.mobileNumber ?? '',
+      clientEmail: client?.contactEmail ?? '',
+      clientAddress: deliveryAddress,
+      companyName: data.appSettings.company.name,
+      companyPhone: data.appSettings.company.phone,
+      companyEmail: data.appSettings.company.email,
+      companyAddress: `${data.appSettings.company.addressLine1}\n${data.appSettings.company.addressLine2}`,
+      jobId: invoice.jobId || '',
+      parentInvoiceId: invoice.id,
+      lineItems: invoice.lineItems.map((line, index) => ({
+        id: `dl-${Date.now().toString(36)}-${index}`,
+        productName: line.productName || line.description || '',
+        stockNumber: '',
+        description: line.description || '',
+        quantity: Math.max(line.quantity - (line.quantityDeliveredToDate || 0), 0),
+        quantityUnit: line.quantityUnit,
+        dispatchRecordId: '',
+        customerStockReleaseId: '',
+      })),
+    });
+    setDeliveryNoteMessage(`Pre-filled from invoice ${invoice.invoiceNumber}. Adjust quantities and recipient, then save.`);
+    setView('deliveryNotes');
+  }
+
+  /**
+   * Jump to the Delivery Notes tab pre-filtered to this client. Used as the
+   * "View delivery notes" companion to the Create button.
+   */
+  function handleViewClientDeliveryNotes(client: Client) {
+    setDeliveryNoteFilters({ ...deliveryNoteFilters, client: client.name, search: '' });
+    setView('deliveryNotes');
+  }
+
   function editInvoice(invoice: Invoice) {
     setInvoiceEditingId(invoice.id);
     setInvoiceForm({
@@ -9265,6 +9351,7 @@ function App() {
           filteredInvoices={filteredInvoices}
           onEdit={editInvoice}
           currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
+          onCreateDeliveryNote={handleCreateDeliveryFromInvoice}
         />
       )}
 
@@ -9376,6 +9463,9 @@ function App() {
           invoices={data.invoices}
           deliveryNotes={data.deliveryNotes}
           dispatchRecords={data.dispatchRecords}
+          onCreateDeliveryNote={handleCreateDeliveryFromClient}
+          onViewDeliveryNotes={handleViewClientDeliveryNotes}
+          onOpenDeliveryNote={editDeliveryNote}
           clientForm={clientForm}
           setClientForm={setClientForm}
           clientEditingId={clientEditingId}

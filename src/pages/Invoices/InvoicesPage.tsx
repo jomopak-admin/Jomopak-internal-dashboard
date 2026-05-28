@@ -51,6 +51,8 @@ interface InvoicesPageProps {
   onEdit: (invoice: Invoice) => void;
   /** Current authed user — used for the edit-lock presence banner. */
   currentUser?: { id?: string; name?: string };
+  /** Spawn a new Delivery Note pre-filled from this invoice. */
+  onCreateDeliveryNote?: (invoice: Invoice) => void;
 }
 
 function makeBlankLine(): InvoiceLineItemFormState {
@@ -106,6 +108,7 @@ export function InvoicesPage({
   filteredInvoices,
   onEdit,
   currentUser,
+  onCreateDeliveryNote,
 }: InvoicesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
@@ -397,7 +400,7 @@ export function InvoicesPage({
           />
         </>
       ) : previewInvoice ? (
-        <InvoicePreview invoice={previewInvoice} deliveryNotes={deliveryNotes} settings={settings} onClose={() => setPreviewInvoiceId(null)} onEdit={() => { onEdit(previewInvoice); setMode('form'); }} />
+        <InvoicePreview invoice={previewInvoice} deliveryNotes={deliveryNotes} settings={settings} onClose={() => setPreviewInvoiceId(null)} onEdit={() => { onEdit(previewInvoice); setMode('form'); }} onCreateDeliveryNote={onCreateDeliveryNote} />
       ) : (
         <section className="card">
           <SectionTitle title="Invoice register" subtitle={`${filteredInvoices.length} invoice(s) shown`} />
@@ -451,9 +454,10 @@ interface InvoicePreviewProps {
   settings: AppSettings;
   onClose: () => void;
   onEdit: () => void;
+  onCreateDeliveryNote?: (invoice: Invoice) => void;
 }
 
-function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit }: InvoicePreviewProps) {
+function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit, onCreateDeliveryNote }: InvoicePreviewProps) {
   const stockSummary = invoice.stockHoldingApplies
     ? summariseInvoiceStockHolding(invoice, deliveryNotes)
     : null;
@@ -504,6 +508,9 @@ function InvoicePreview({ invoice, deliveryNotes, settings, onClose, onEdit }: I
           <>
             <button className="ghost-button" onClick={onClose}>Back to register</button>
             <button className="secondary-button" onClick={onEdit}>Edit</button>
+            {onCreateDeliveryNote ? (
+              <button className="secondary-button" onClick={() => onCreateDeliveryNote(invoice)}>+ Delivery Note</button>
+            ) : null}
             <button className="primary-button" onClick={() => window.print()}>Print / Save PDF</button>
           </>
         }

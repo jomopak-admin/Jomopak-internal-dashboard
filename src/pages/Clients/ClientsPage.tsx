@@ -15,6 +15,9 @@ interface ClientsPageProps {
   invoices: Invoice[];
   deliveryNotes: DeliveryNote[];
   dispatchRecords: DispatchRecord[];
+  onCreateDeliveryNote: (client: Client) => void;
+  onViewDeliveryNotes: (client: Client) => void;
+  onOpenDeliveryNote?: (note: DeliveryNote) => void;
   clientForm: ClientFormState;
   setClientForm: (value: ClientFormState) => void;
   clientEditingId: string | null;
@@ -40,6 +43,9 @@ export function ClientsPage({
   invoices,
   deliveryNotes,
   dispatchRecords,
+  onCreateDeliveryNote,
+  onViewDeliveryNotes,
+  onOpenDeliveryNote,
   clientForm,
   setClientForm,
   clientEditingId,
@@ -102,6 +108,22 @@ export function ClientsPage({
       }))
       .filter(({ overview }) => overview.invoices.length > 0 || overview.totalRemainingQuantity > 0);
   }, [filteredClients, invoices, deliveryNotes, dispatchRecords]);
+
+  // Recent DN lookup per client — used by both the stock-holding cards and
+  // the main client register so a user can see / open notes without leaving
+  // the page. Sorted newest first.
+  const deliveryNotesByClient = useMemo(() => {
+    const map = new Map<string, DeliveryNote[]>();
+    for (const note of deliveryNotes) {
+      const list = map.get(note.clientId) || [];
+      list.push(note);
+      map.set(note.clientId, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (b.noteDate || '').localeCompare(a.noteDate || ''));
+    }
+    return map;
+  }, [deliveryNotes]);
 
   const trendMax = useMemo(() => {
     let max = 0;
@@ -427,7 +449,10 @@ export function ClientsPage({
                           <strong>{client.name}</strong>
                           <div className="table-subtext">{client.companyName || client.code || 'No company set'}</div>
                         </div>
-                        <button className="table-button" type="button" onClick={() => handleStartEdit(client)}>Edit profile</button>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <button className="secondary-button" type="button" onClick={() => onCreateDeliveryNote(client)}>+ Delivery Note</button>
+                          <button className="table-button" type="button" onClick={() => handleStartEdit(client)}>Edit profile</button>
+                        </div>
                       </header>
                       <div className="stock-holding-panel">
                         <div className="stock-holding-stat"><span>In warehouse</span><strong>{formatNumber(overview.totalRemainingQuantity)}</strong></div>
@@ -456,6 +481,50 @@ export function ClientsPage({
                           })}
                         </div>
                       </div>
+                      {(() => {
+                        const recent = (deliveryNotesByClient.get(client.id) || []).slice(0, 4);
+                        if (recent.length === 0) {
+                          return (
+                            <div className="client-stock-dn-empty muted" style={{ marginTop: '0.6rem', fontSize: '0.78rem' }}>
+                              No delivery notes for this client yet.
+                            </div>
+                          );
+                        }
+                        const total = deliveryNotesByClient.get(client.id)?.length ?? 0;
+                        return (
+                          <div className="client-stock-dn" style={{ marginTop: '0.6rem' }}>
+                            <div className="table-subtext" style={{ marginBottom: '0.25rem' }}>
+                              Recent delivery notes ({total} total)
+                            </div>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              {recent.map((note) => (
+                                <li key={note.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                  <button
+                                    type="button"
+                                    className="ghost-button"
+                                    style={{ padding: '0.15rem 0.35rem', fontSize: '0.78rem' }}
+                                    onClick={() => onOpenDeliveryNote?.(note)}
+                                    disabled={!onOpenDeliveryNote}
+                                  >
+                                    {note.deliveryNoteNumber}
+                                  </button>
+                                  <span className="muted">{note.noteDate} · {note.status}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {total > recent.length ? (
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                style={{ marginTop: '0.35rem', padding: '0.2rem 0.4rem', fontSize: '0.78rem' }}
+                                onClick={() => onViewDeliveryNotes(client)}
+                              >
+                                View all in Delivery Notes →
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </article>
                   );
                 })}
@@ -472,8 +541,31 @@ export function ClientsPage({
           {filteredClients.length ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
-                <tbody>{filteredClients.map((client) => <tr key={client.id}><td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td><td>{client.pricingTierName || 'Not set'}</td><td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td><td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td><td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td><td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td><td><button className="table-button" onClick={() => handleStartEdit(client)}>Edit</button></td></tr>)}</tbody>
+                <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
+                <tbody>{filteredClients.map((client) => {
+                  const clientDns = deliveryNotesByClient.get(client.id) || [];
+                  return (
+                    <tr key={client.id}>
+                      <td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td>
+                      <td>{client.pricingTierName || 'Not set'}</td>
+                      <td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td>
+                      <td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td>
+                      <td>
+                        <strong>{clientDns.length}</strong>
+                        <div className="table-subtext">{clientDns[0] ? `Last ${clientDns[0].noteDate}` : 'None yet'}</div>
+                        <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                          <button className="table-button" type="button" onClick={() => onCreateDeliveryNote(client)}>+ DN</button>
+                          {clientDns.length ? (
+                            <button className="table-button" type="button" onClick={() => onViewDeliveryNotes(client)}>View</button>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td>
+                      <td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td>
+                      <td><button className="table-button" onClick={() => handleStartEdit(client)}>Edit</button></td>
+                    </tr>
+                  );
+                })}</tbody>
               </table>
             </div>
             ) : <EmptyState title="No clients yet" body="Add clients so pricing and jobs can follow real commercial profiles." />}
