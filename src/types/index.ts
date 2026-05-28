@@ -1684,13 +1684,27 @@ export interface FinishedGoodsStock {
  * category is free text in the DB but the app surfaces these as the standard
  * options. Admins can type anything custom.
  */
+/**
+ * Phase 63 — broadened from "spares only" to cover everything it takes
+ * to run a factory. Production grouping (Spare / Consumable / Tool / PPE)
+ * stays; we add categories for inks, glues, raw materials, lubricants,
+ * uniforms and kitchen so the same register can hold a forklift battery,
+ * a tin of glue, or a packet of coffee.
+ */
 export type StockItemCategory =
   | 'Machine Spare'
   | 'Consumable'
   | 'Tool'
   | 'PPE'
+  | 'Uniform'
   | 'Cleaning'
   | 'Office'
+  | 'Kitchen'
+  | 'Ink'
+  | 'Glue'
+  | 'Adhesive'
+  | 'Lubricant'
+  | 'Raw Material'
   | 'Other';
 
 export const STOCK_ITEM_CATEGORIES: StockItemCategory[] = [
@@ -1698,8 +1712,15 @@ export const STOCK_ITEM_CATEGORIES: StockItemCategory[] = [
   'Consumable',
   'Tool',
   'PPE',
+  'Uniform',
   'Cleaning',
   'Office',
+  'Kitchen',
+  'Ink',
+  'Glue',
+  'Adhesive',
+  'Lubricant',
+  'Raw Material',
   'Other',
 ];
 
@@ -1803,6 +1824,11 @@ export interface StockCountLine {
   variance: number;
   notes: string;
   createdAt: string;
+  /** Phase 63 — which register this line came from. Lets reconcile
+   *  write the count back to the right table even when a single count
+   *  spans spares + chemicals + materials + finished goods. Optional
+   *  for backwards compat with pre-Phase-63 counts. */
+  itemSource?: 'General Stock' | 'Chemicals' | 'Materials' | 'Finished Goods';
 }
 
 export interface StockCount {

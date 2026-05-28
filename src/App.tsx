@@ -4989,29 +4989,43 @@ function App() {
     }
     const today = getToday();
     const countId = generateCode('SC', data.stockCounts.map((count) => count.id), today);
-    const scope = stockCountForm.scope;
-    // Resolve each counted item's system quantity + label from the right
-    // source for the scope. Paper/Finished use quantityAvailable; spares (the
-    // default, incl. the existing free-text spares scope) use quantityOnHand.
-    const lines: StockCountLine[] = stockCountForm.selectedItemIds.map((itemId, index) => {
+    // Phase 63 — item ids now carry a source prefix (`spare:` / `chem:` /
+    // `mat:` / `fg:`) so a single count can span every factory register.
+    // We parse the prefix here, resolve to the right register, strip it
+    // before persisting so the raw id round-trips for reconcile.
+    const lines: StockCountLine[] = stockCountForm.selectedItemIds.map((compoundId, index) => {
+      const [rawPrefix, ...rest] = compoundId.split(':');
+      // Legacy counts (pre-Phase-63) didn't carry a prefix; fall back to
+      // 'spare' so the existing behaviour is preserved on old data.
+      const prefix = rest.length > 0 ? rawPrefix : 'spare';
+      const itemId = rest.length > 0 ? rest.join(':') : compoundId;
       let systemQty = 0;
       let itemName = 'Unknown item';
-      if (scope === 'Paper / Materials') {
+      let itemSource: NonNullable<StockCountLine['itemSource']> = 'General Stock';
+      if (prefix === 'mat') {
         const r = data.materialReceipts.find((m) => m.id === itemId);
         systemQty = r?.quantityAvailable ?? 0;
         itemName = r
           ? `${(r.paperType || r.itemName || 'Material')} ${r.gsm || ''} · ${r.internalRollCode || r.receiptNumber}`.replace(/\s+/g, ' ').trim()
           : 'Unknown material';
-      } else if (scope === 'Finished Goods') {
+        itemSource = 'Materials';
+      } else if (prefix === 'fg') {
         const f = data.finishedGoodsStock.find((s) => s.id === itemId);
         systemQty = f?.quantityAvailable ?? 0;
         itemName = f ? `${f.productName} · ${f.stockNumber}` : 'Unknown stock';
+        itemSource = 'Finished Goods';
+      } else if (prefix === 'chem') {
+        const c = data.chemicalRegisterEntries.find((entry) => entry.id === itemId);
+        systemQty = c?.currentOnSiteQuantity ?? 0;
+        itemName = c ? `${c.chemicalName || c.tradeName} · ${c.registerNumber}` : 'Unknown chemical';
+        itemSource = 'Chemicals';
       } else {
         const item = data.spareParts.find((part) => part.id === itemId);
         systemQty = item?.quantityOnHand ?? 0;
         itemName = item?.partName ?? 'Unknown item';
+        itemSource = 'General Stock';
       }
-      const countedQty = Number(stockCountForm.countedQty[itemId] ?? 0);
+      const countedQty = Number(stockCountForm.countedQty[compoundId] ?? 0);
       return {
         id: `${countId}-L${String(index + 1).padStart(3, '0')}`,
         countId,
@@ -5022,6 +5036,7 @@ function App() {
         variance: countedQty - systemQty,
         notes: '',
         createdAt: new Date().toISOString(),
+        itemSource,
       };
     });
     const count: StockCount = {
@@ -5049,7 +5064,26 @@ function App() {
   function handleReconcileStockCount(countId: string, reconciledByName: string) {
     const target = data.stockCounts.find((count) => count.id === countId);
     if (!target || target.reconciled) return;
-    const lineById = new Map(target.lines.map((l) => [l.itemId, l]));
+    // Phase 63 — bucket lines by source so one count can reconcile spares,
+    // chemicals, materials and finished goods in a single pass. Pre-Phase-63
+    // counts have no itemSource on lines; we fall back to the saved scope.
+    const linesBy = {
+      general: new Map<string, typeof target.lines[number]>(),
+      chemicals: new Map<string, typeof target.lines[number]>(),
+      materials: new Map<string, typeof target.lines[number]>(),
+      finished: new Map<string, typeof target.lines[number]>(),
+    };
+    for (const line of target.lines) {
+      const explicit = line.itemSource;
+      const inferred = explicit
+        ?? (target.scope === 'Paper / Materials' || target.scope === 'Paper / Raw Materials' ? 'Materials'
+        : target.scope === 'Finished Goods' ? 'Finished Goods'
+        : 'General Stock');
+      if (inferred === 'Materials') linesBy.materials.set(line.itemId, line);
+      else if (inferred === 'Finished Goods') linesBy.finished.set(line.itemId, line);
+      else if (inferred === 'Chemicals') linesBy.chemicals.set(line.itemId, line);
+      else linesBy.general.set(line.itemId, line);
+    }
     setData((current) => {
       const stockCounts = current.stockCounts.map((count) => count.id === countId
         ? {
@@ -5060,38 +5094,39 @@ function App() {
           }
         : count);
 
-      // Apply the counted quantities back to the right stock source for the
-      // count's scope. Paper/Finished adjust quantityAvailable (and keep any
-      // reserved qty intact); spares set quantityOnHand directly.
-      if (target.scope === 'Paper / Materials') {
-        return {
-          ...current,
-          stockCounts,
-          materialReceipts: current.materialReceipts.map((m) => {
-            const line = lineById.get(m.id);
+      const materialReceipts = linesBy.materials.size > 0
+        ? current.materialReceipts.map((m) => {
+            const line = linesBy.materials.get(m.id);
             return line ? { ...m, quantityAvailable: line.countedQty } : m;
-          }),
-        };
-      }
-      if (target.scope === 'Finished Goods') {
-        return {
-          ...current,
-          stockCounts,
-          finishedGoodsStock: current.finishedGoodsStock.map((s) => {
-            const line = lineById.get(s.id);
+          })
+        : current.materialReceipts;
+
+      const finishedGoodsStock = linesBy.finished.size > 0
+        ? current.finishedGoodsStock.map((s) => {
+            const line = linesBy.finished.get(s.id);
             if (!line) return s;
             const reserved = s.quantityReserved || 0;
             return { ...s, quantityAvailable: line.countedQty, quantityOnHand: line.countedQty + reserved };
-          }),
-        };
-      }
+          })
+        : current.finishedGoodsStock;
+
+      const chemicalRegisterEntries = linesBy.chemicals.size > 0
+        ? current.chemicalRegisterEntries.map((c) => {
+            const line = linesBy.chemicals.get(c.id);
+            return line ? { ...c, currentOnSiteQuantity: line.countedQty } : c;
+          })
+        : current.chemicalRegisterEntries;
+
       return {
         ...current,
         stockCounts,
-        spareParts: current.spareParts.map((part) => {
-          const line = lineById.get(part.id);
+        materialReceipts,
+        finishedGoodsStock,
+        chemicalRegisterEntries,
+        spareParts: linesBy.general.size > 0 ? current.spareParts.map((part) => {
+          const line = linesBy.general.get(part.id);
           return line ? { ...part, quantityOnHand: line.countedQty } : part;
-        }),
+        }) : current.spareParts,
       };
     });
   }
@@ -10961,6 +10996,7 @@ function App() {
           spareParts={data.spareParts}
           materialReceipts={data.materialReceipts}
           finishedGoodsStock={data.finishedGoodsStock}
+          chemicalRegisterEntries={data.chemicalRegisterEntries}
           stockCounts={data.stockCounts}
           form={stockCountForm}
           setForm={setStockCountForm}

@@ -1,31 +1,58 @@
 /**
  * Stock Take — periodic physical count vs system, with variance + reconcile.
  *
- * Works across three scopes using the shared StockCount model:
- *   • Spare Parts / Consumables  → counts quantityOnHand
- *   • Paper / Materials          → counts material receipt quantityAvailable
+ * Phase 63 — expanded to cover everything it takes to run a factory:
+ *   • All                        → walks the entire register in one go
+ *   • General Stock              → spares + consumables + ink + glue +
+ *                                   uniform + kitchen + cleaning + office
+ *                                   (i.e. anything in the spare_parts
+ *                                   register, regardless of category)
+ *   • Chemicals                  → counts on-site quantity from MSDS register
+ *   • Paper / Raw Materials      → counts material receipt quantityAvailable
  *   • Finished Goods             → counts finished stock quantityAvailable
  *
- * Flow: pick a scope → tick the items you're counting → type the physical
- * count → Save. The saved count shows each line's system vs counted vs
- * variance. "Reconcile" writes the counted figures back to the live stock
- * (so the system matches reality) and locks the count.
+ * When the scope is General Stock, an optional Category filter lets the
+ * stocktaker scope to just one slice (e.g. count just inks today, kitchen
+ * tomorrow). The category list mirrors STOCK_ITEM_CATEGORIES.
+ *
+ * Flow: pick a scope → optional category filter → tick the items you're
+ * counting → type the physical count → Save. The saved count shows each
+ * line's system vs counted vs variance. "Reconcile" writes the counted
+ * figures back to the live stock and locks the count.
  */
 
 import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
+  ChemicalRegisterEntry,
   FinishedGoodsStock,
   MaterialReceipt,
   SparePart,
   StockCount,
   StockCountFormState,
+  STOCK_ITEM_CATEGORIES,
 } from '../../types';
 import { formatNumber } from '../../utils/calculations';
 
-type Scope = 'Spare Parts' | 'Paper / Materials' | 'Finished Goods';
-const SCOPES: Scope[] = ['Spare Parts', 'Paper / Materials', 'Finished Goods'];
+type Scope = 'All' | 'General Stock' | 'Chemicals' | 'Paper / Raw Materials' | 'Finished Goods';
+const SCOPES: Scope[] = ['All', 'General Stock', 'Chemicals', 'Paper / Raw Materials', 'Finished Goods'];
+
+/** Legacy scope strings saved before Phase 63 are remapped on read so
+ *  historical counts still load correctly. */
+function normaliseScope(raw: string | undefined): Scope {
+  switch (raw) {
+    case 'Spare Parts': return 'General Stock';
+    case 'Paper / Materials': return 'Paper / Raw Materials';
+    case 'All':
+    case 'General Stock':
+    case 'Chemicals':
+    case 'Paper / Raw Materials':
+    case 'Finished Goods':
+      return raw;
+    default: return 'All';
+  }
+}
 
 interface CountItem {
   id: string;
@@ -33,12 +60,20 @@ interface CountItem {
   detail: string;
   systemQty: number;
   unit: string;
+  /** Which register this item lives in — used to badge the All view so
+   *  the user knows whether they're counting a forklift battery, a
+   *  drum of glue, or a tin of coffee. */
+  source: 'General Stock' | 'Chemicals' | 'Materials' | 'Finished Goods';
+  /** Category from the source row (only set for General Stock items). */
+  category?: string;
 }
 
 interface StockTakePageProps {
   spareParts: SparePart[];
   materialReceipts: MaterialReceipt[];
   finishedGoodsStock: FinishedGoodsStock[];
+  /** Phase 63 — chemicals now count too. */
+  chemicalRegisterEntries?: ChemicalRegisterEntry[];
   stockCounts: StockCount[];
   form: StockCountFormState;
   setForm: (value: StockCountFormState) => void;
@@ -51,6 +86,7 @@ export function StockTakePage({
   spareParts,
   materialReceipts,
   finishedGoodsStock,
+  chemicalRegisterEntries = [],
   stockCounts,
   form,
   setForm,
@@ -59,36 +95,68 @@ export function StockTakePage({
   onReconcile,
 }: StockTakePageProps) {
   const [search, setSearch] = useState('');
-  const scope = (form.scope || 'Spare Parts') as Scope;
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const scope = normaliseScope(form.scope);
+
+  // ---- Per-register projections ----------------------------------------
+  const generalStockItems = useMemo<CountItem[]>(() => spareParts.map((p) => ({
+    id: `spare:${p.id}`,
+    label: p.partName,
+    detail: `${p.partCode} · ${p.category || 'Uncategorised'}`.trim(),
+    systemQty: p.quantityOnHand ?? 0,
+    unit: p.unitOfMeasure || 'units',
+    source: 'General Stock' as const,
+    category: p.category || 'Other',
+  })), [spareParts]);
+
+  const chemicalItems = useMemo<CountItem[]>(() => chemicalRegisterEntries
+    .filter((c) => !c.archived)
+    .map((c) => ({
+      id: `chem:${c.id}`,
+      label: c.chemicalName || c.tradeName || 'Chemical',
+      detail: `${c.registerNumber || ''} · ${c.tradeName || ''}`.trim(),
+      systemQty: c.currentOnSiteQuantity ?? 0,
+      unit: c.quantityUnit || 'L',
+      source: 'Chemicals' as const,
+    })),
+  [chemicalRegisterEntries]);
+
+  const materialItems = useMemo<CountItem[]>(() => materialReceipts.map((m) => ({
+    id: `mat:${m.id}`,
+    label: `${m.paperType || m.itemName || 'Material'} ${m.gsm || ''}`.trim(),
+    detail: `${m.internalRollCode || m.receiptNumber} · ${m.supplierName || ''}`.trim(),
+    systemQty: m.quantityAvailable ?? 0,
+    unit: m.quantityUnit || '',
+    source: 'Materials' as const,
+  })), [materialReceipts]);
+
+  const finishedItems = useMemo<CountItem[]>(() => finishedGoodsStock.map((s) => ({
+    id: `fg:${s.id}`,
+    label: s.productName || 'Finished stock',
+    detail: `${s.stockNumber} · ${s.clientName || ''}`.trim(),
+    systemQty: s.quantityAvailable ?? 0,
+    unit: s.quantityUnit || 'units',
+    source: 'Finished Goods' as const,
+  })), [finishedGoodsStock]);
 
   // Build the candidate item list for the current scope.
   const items = useMemo<CountItem[]>(() => {
-    if (scope === 'Paper / Materials') {
-      return materialReceipts.map((m) => ({
-        id: m.id,
-        label: `${m.paperType || m.itemName || 'Material'} ${m.gsm || ''}`.trim(),
-        detail: `${m.internalRollCode || m.receiptNumber} · ${m.supplierName || ''}`.trim(),
-        systemQty: m.quantityAvailable ?? 0,
-        unit: m.quantityUnit || '',
-      }));
+    let list: CountItem[];
+    switch (scope) {
+      case 'Chemicals': list = chemicalItems; break;
+      case 'Paper / Raw Materials': list = materialItems; break;
+      case 'Finished Goods': list = finishedItems; break;
+      case 'General Stock': list = generalStockItems; break;
+      case 'All':
+      default:
+        list = [...generalStockItems, ...chemicalItems, ...materialItems, ...finishedItems];
     }
-    if (scope === 'Finished Goods') {
-      return finishedGoodsStock.map((s) => ({
-        id: s.id,
-        label: s.productName || 'Finished stock',
-        detail: `${s.stockNumber} · ${s.clientName || ''}`.trim(),
-        systemQty: s.quantityAvailable ?? 0,
-        unit: s.quantityUnit || 'units',
-      }));
+    // Category sub-filter only applies to General Stock items.
+    if (categoryFilter !== 'all') {
+      list = list.filter((i) => i.source !== 'General Stock' || i.category === categoryFilter);
     }
-    return spareParts.map((p) => ({
-      id: p.id,
-      label: p.partName,
-      detail: `${p.partCode} · ${p.category || ''}`.trim(),
-      systemQty: p.quantityOnHand ?? 0,
-      unit: 'units',
-    }));
-  }, [scope, spareParts, materialReceipts, finishedGoodsStock]);
+    return list;
+  }, [scope, generalStockItems, chemicalItems, materialItems, finishedItems, categoryFilter]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,7 +190,7 @@ export function StockTakePage({
     <div className="page-stack stocktake-shell">
       <SectionTitle
         title="Stock Take"
-        subtitle="Physical count vs system, with variance and one-click reconcile. Covers spares, paper, and finished goods."
+        subtitle="Physical count vs system, with variance and one-click reconcile. Covers everything it takes to run the factory — spares, consumables, ink, glue, chemicals, paper, raw materials, uniforms, kitchen, and finished goods."
       />
 
       {/* New count -------------------------------------------------------- */}
@@ -135,6 +203,15 @@ export function StockTakePage({
               {SCOPES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
+          {(scope === 'General Stock' || scope === 'All') && (
+            <label>
+              <span>Category filter</span>
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="all">All categories</option>
+                {STOCK_ITEM_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
           <label>
             <span>Counted by</span>
             <input value={form.countedByName} onChange={(e) => setForm({ ...form, countedByName: e.target.value })} placeholder="Your name" />
@@ -146,7 +223,11 @@ export function StockTakePage({
         </div>
 
         {items.length === 0 ? (
-          <EmptyState title={`No ${scope.toLowerCase()} to count`} body="There are no items in this scope yet." />
+          <EmptyState title={`Nothing to count in ${scope}`} body={
+            scope === 'Chemicals'
+              ? 'Add chemicals to the Chemical Register (MSDS) first — once they have an on-site quantity, they show up here.'
+              : 'There are no items in this scope yet. Add them via Spares & Consumables, Materials Receiving, or the Chemical Register.'
+          } />
         ) : (
           <div className="stocktake-table-wrap">
             <table className="data-table stocktake-table">
@@ -174,6 +255,7 @@ export function StockTakePage({
                       </td>
                       <td>
                         <strong>{item.label}</strong>
+                        {' '}<span className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 6px', border: '1px solid #cbd5e1', borderRadius: 999 }}>{item.source}</span>
                         <div className="muted" style={{ fontSize: '0.78rem' }}>{item.detail}</div>
                       </td>
                       <td style={{ textAlign: 'right' }}>{formatNumber(item.systemQty)} {item.unit}</td>

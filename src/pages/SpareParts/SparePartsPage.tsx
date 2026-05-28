@@ -324,7 +324,10 @@ export function SparePartsPage({
         />
       ) : (
         <section className="card">
-          <SectionTitle title="Spares & consumables register" subtitle={`${filteredSpares.length} record(s) shown`} />
+          <SectionTitle
+            title="Spares & consumables register"
+            subtitle={`${filteredSpares.length} record(s) shown · This is your general factory stock register: spares, consumables, ink, glue, uniform, kitchen, cleaning, office — anything you stock to keep the factory running. Chemicals live in the MSDS register; both are counted together at stock-take.`}
+          />
           <div className="filters-grid">
             <label><span>Search</span><input value={spareFilters.search} onChange={(event) => setSpareFilters({ ...spareFilters, search: event.target.value })} /></label>
             <label>
