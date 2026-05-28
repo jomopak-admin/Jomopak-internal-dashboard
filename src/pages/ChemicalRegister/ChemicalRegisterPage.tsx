@@ -265,6 +265,42 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
         </div>
       ),
     },
+    {
+      key: 'foodsafe',
+      title: 'Food-safe & solvent status',
+      subtitle: 'Drives the food-safe verdict on FG batches that use this chemical, and flags solvent-based chemicals that need a machine changeover before the next food-safe job.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Food-safe</span>
+            <select
+              value={form.isFoodSafe ?? 'unknown'}
+              onChange={(e) => setForm({ ...form, isFoodSafe: e.target.value as 'yes' | 'no' | 'unknown' })}
+            >
+              <option value="unknown">Unknown — receiver to confirm</option>
+              <option value="yes">Yes — supplier-certified food-safe</option>
+              <option value="no">No — not food-safe</option>
+            </select>
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(form.isSolventBased)}
+              onChange={(e) => setForm({ ...form, isSolventBased: e.target.checked })}
+            />
+            Solvent-based — printing machine needs cleaning + pipe changeover before next food-safe job
+          </label>
+          <label className="full-span">
+            <span>Food-contact cert # (ISEGA, BfR, FDA 21 CFR…)</span>
+            <input
+              value={form.foodContactCertNumber ?? ''}
+              onChange={(e) => setForm({ ...form, foodContactCertNumber: e.target.value })}
+              placeholder="Optional — record the cert ref for audit"
+            />
+          </label>
+        </div>
+      ),
+    },
   ];
 
   return (

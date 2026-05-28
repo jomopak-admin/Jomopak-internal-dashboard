@@ -5,8 +5,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, isFoodPackagingLevel, JobCard, Product, StockChangeLog } from '../../types';
-import { formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
+import { ChemicalRegisterEntry, Client, FinishedGoodsStock, FinishedGoodsStockFilters, FinishedGoodsStockFormState, FoodSafetyHoldStatus, JobCard, MaterialReceipt, PaperLog, Product, StockChangeLog } from '../../types';
+import { computeFgFoodSafe, computeFgFsc, formatDate, formatNumber, getDaysInStorage, getStorageAgeBand } from '../../utils/calculations';
 
 interface FinishedGoodsStockPageProps {
   products: Product[];
@@ -28,6 +28,11 @@ interface FinishedGoodsStockPageProps {
   onFoodSafetyHoldChange?: (stockId: string, nextStatus: FoodSafetyHoldStatus, reason?: string) => void;
   /** True when the active user has a release-permitted role (admin/ops). */
   canReleaseFoodSafetyBatches?: boolean;
+  /** Phase 71 — for deriving Food-safe + FSC on the FG batch from the
+   *  upstream paper + chemicals. */
+  paperLogs?: PaperLog[];
+  materialReceipts?: MaterialReceipt[];
+  chemicals?: ChemicalRegisterEntry[];
 }
 
 export function FinishedGoodsStockPage({
@@ -48,6 +53,9 @@ export function FinishedGoodsStockPage({
   onDelete,
   onFoodSafetyHoldChange,
   canReleaseFoodSafetyBatches = false,
+  paperLogs = [],
+  materialReceipts = [],
+  chemicals = [],
 }: FinishedGoodsStockPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
@@ -297,6 +305,7 @@ export function FinishedGoodsStockPage({
                       <th>Location</th>
                       <th>Stored</th>
                       <th>Food-safe</th>
+                      <th>FSC</th>
                       <th>Release status</th>
                       <th>Actions</th>
                     </tr>
@@ -308,11 +317,11 @@ export function FinishedGoodsStockPage({
                         .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
                       const latestLog = itemLogs[0];
                       const stockClient = clients.find((client) => client.id === item.clientId);
-                      // Food-safe = is the paper itself food-contact certified?
-                      // We read this from the linked job's foodContactLevel.
-                      const linkedJob = item.jobId ? jobs.find((j) => j.id === item.jobId) : undefined;
-                      const foodSafeKnown = !!linkedJob;
-                      const foodSafe = linkedJob ? isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') : false;
+                      // Phase 71 — derive Food-safe + FSC by walking the chain
+                      // FG batch → linked job → paper batch (PaperLog → MaterialReceipt)
+                      // + chemicals listed on the job. Reason is shown as tooltip.
+                      const foodSafeVerdict = computeFgFoodSafe(item, jobs, paperLogs, materialReceipts, chemicals);
+                      const fscClaim = computeFgFsc(item, jobs, paperLogs, materialReceipts);
 
                       return (
                         <tr key={item.id}>
@@ -329,12 +338,19 @@ export function FinishedGoodsStockPage({
                           <td>{latestLog?.changedByName || 'System'}</td>
                           <td>{item.storageLocation || 'Not set'}</td>
                           <td>{formatDate(item.storedDate)}</td>
+                          <td title={foodSafeVerdict.reason}>
+                            {foodSafeVerdict.status === 'yes'
+                              ? <span className="badge badge-success">Yes</span>
+                              : foodSafeVerdict.status === 'no'
+                                ? <span className="badge badge-danger">No</span>
+                                : <span className="badge">Unknown</span>}
+                          </td>
                           <td>
-                            {foodSafeKnown
-                              ? (foodSafe
-                                  ? <span className="badge badge-success">Yes</span>
-                                  : <span className="badge">No</span>)
-                              : <span className="muted" style={{ fontSize: 11 }}>—</span>}
+                            {fscClaim === 'Unknown'
+                              ? <span className="muted" style={{ fontSize: 11 }}>—</span>
+                              : fscClaim === 'None'
+                                ? <span className="badge">Not FSC</span>
+                                : <span className="badge badge-success">{fscClaim}</span>}
                           </td>
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

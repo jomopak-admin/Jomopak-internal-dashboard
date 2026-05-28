@@ -294,6 +294,34 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
       ),
     },
     {
+      key: 'foodsafe',
+      title: 'Food-safe certification',
+      subtitle: 'Does the supplier certify this material as food-contact safe? Drives the food-safe verdict on finished-goods batches that use this paper.',
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Food-safe</span>
+            <select
+              value={materialForm.isFoodSafe ?? 'unknown'}
+              onChange={(event) => setMaterialForm({ ...materialForm, isFoodSafe: event.target.value as 'yes' | 'no' | 'unknown' })}
+            >
+              <option value="unknown">Unknown — receiver to confirm</option>
+              <option value="yes">Yes — supplier-certified food-safe</option>
+              <option value="no">No — not food-safe</option>
+            </select>
+          </label>
+          <label>
+            <span>Food-contact cert # (ISEGA, BfR, FDA 21 CFR…)</span>
+            <input
+              value={materialForm.foodContactCertNumber ?? ''}
+              onChange={(event) => setMaterialForm({ ...materialForm, foodContactCertNumber: event.target.value })}
+              placeholder="Optional — record the cert ref so it shows on the FG audit trail"
+            />
+          </label>
+        </div>
+      ),
+    },
+    {
       key: 'notes',
       title: 'Inspection notes & photos',
       body: (

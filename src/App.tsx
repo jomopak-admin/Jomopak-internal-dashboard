@@ -10012,6 +10012,7 @@ function App() {
           pricingTiers={data.pricingTiers}
           finishedGoodsStock={data.finishedGoodsStock}
           tooling={(data.tooling ?? []).map((t) => ({ id: t.id, code: t.code, name: t.name, clientId: t.clientId, toolType: t.toolType, active: t.active, designVersion: t.designVersion } as any))}
+          chemicals={data.chemicalRegisterEntries}
           jobForm={jobForm}
           setJobForm={setJobForm}
           jobEditingId={jobEditingId}
@@ -10160,6 +10161,9 @@ function App() {
           onDelete={handleDeleteCurrentFinishedStock}
           onFoodSafetyHoldChange={handleFoodSafetyHoldChange}
           canReleaseFoodSafetyBatches={canUserReleaseFoodSafetyBatch(profile?.role ?? 'production')}
+          paperLogs={data.paperLogs}
+          materialReceipts={data.materialReceipts}
+          chemicals={data.chemicalRegisterEntries}
         />
       )}
 

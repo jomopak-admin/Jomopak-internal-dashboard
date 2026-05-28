@@ -19,6 +19,7 @@ import {
   CHANGEOVER_CHECKLIST_KEYS,
   CHANGEOVER_CHECKLIST_LABELS,
   ChangeoverChecklistItem,
+  ChemicalRegisterEntry,
   Client,
   CleaningLogEntry,
   DispatchRecord,
@@ -127,6 +128,9 @@ interface JobCardsPageProps {
   onPrintJobCard?: (job: JobCard) => void;
   /** Mark the job as Completed in one click (close it out). */
   onMarkComplete?: (job: JobCard) => void;
+  /** Phase 71 — chemicals (inks/glues/adhesives) the operator can attach
+   *  to this job. Drives the FG batch's food-safe verdict downstream. */
+  chemicals?: ChemicalRegisterEntry[];
 }
 
 export function JobCardsPage(props: JobCardsPageProps) {
@@ -172,6 +176,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
     onPrintJobCard,
     onMarkComplete,
     currentUser,
+    chemicals = [],
   } = props;
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
   // Tracks which client we last auto-filled defaults from in Quick Add, so we
@@ -751,6 +756,74 @@ export function JobCardsPage(props: JobCardsPageProps) {
             ) : (
               <p className="muted full-span">Non-food packaging job — food-safety gate disabled.</p>
             )}
+          </div>
+        );
+      })(),
+    },
+    {
+      key: 'chemicals-used',
+      title: 'Chemicals used on this job',
+      subtitle: 'Pick every ink / glue / adhesive / lubricant that touches the product. Drives the food-safe verdict on the finished-goods batch downstream.',
+      contextActive: (jobForm.chemicalIds?.length ?? 0) > 0,
+      body: (() => {
+        const selected = new Set(jobForm.chemicalIds ?? []);
+        const available = chemicals.filter((c) => !c.archived);
+        function toggle(id: string) {
+          const next = selected.has(id)
+            ? (jobForm.chemicalIds ?? []).filter((existing) => existing !== id)
+            : [...(jobForm.chemicalIds ?? []), id];
+          setJobForm({ ...jobForm, chemicalIds: next });
+        }
+        const anySolvent = (jobForm.chemicalIds ?? []).some((id) => {
+          const c = chemicals.find((ch) => ch.id === id);
+          return c?.isSolventBased;
+        });
+        const anyUnsafe = (jobForm.chemicalIds ?? []).some((id) => {
+          const c = chemicals.find((ch) => ch.id === id);
+          return c?.isFoodSafe === 'no';
+        });
+        return (
+          <div className="form-grid">
+            {available.length === 0 ? (
+              <p className="muted full-span">No chemicals captured yet. Add inks / glues / adhesives on the Chemical Register first, then come back here.</p>
+            ) : (
+              <div className="full-span chem-pictogram-grid">
+                {available.map((c) => {
+                  const on = selected.has(c.id);
+                  const fs = c.isFoodSafe ?? 'unknown';
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggle(c.id)}
+                      className={`chem-pictogram-pill${on ? ' chem-pictogram-pill-on' : ''}`}
+                      title={c.tradeName ? `${c.tradeName} (${c.supplierName})` : c.supplierName}
+                    >
+                      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <strong>{c.chemicalName}</strong>
+                        <span style={{ fontSize: 10, opacity: 0.85 }}>
+                          {c.supplierName}
+                          {fs === 'yes' ? ' · Food-safe' : fs === 'no' ? ' · NOT food-safe' : ' · food-safe unknown'}
+                          {c.isSolventBased ? ' · solvent' : ''}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {anyUnsafe ? (
+              <div className="full-span food-safety-block-panel">
+                <strong>One or more selected chemicals are NOT food-safe.</strong>
+                The downstream FG batch will inherit a "No" food-safe verdict.
+              </div>
+            ) : null}
+            {anySolvent ? (
+              <div className="full-span food-safety-block-panel" style={{ background: '#fff8e6', borderColor: '#e9c46a' }}>
+                <strong>Solvent-based chemical on this job.</strong>
+                Before the next food-safe job can run on this machine, you'll need a documented changeover (clean stations, change pipes, wash machine). Tracked separately in Phase 72.
+              </div>
+            ) : null}
           </div>
         );
       })(),

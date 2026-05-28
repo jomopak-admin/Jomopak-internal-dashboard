@@ -1,8 +1,12 @@
 import {
   AppData,
+  ChemicalRegisterEntry,
+  FinishedGoodsStock,
+  FoodSafeStatus,
   FscClaimType,
   JobCard,
   JobStatus,
+  MaterialReceipt,
   PaperLog,
   ProductionLogEntry,
   ProductionLogType,
@@ -204,4 +208,86 @@ export function downloadCsv(filename: string, rows: Array<Record<string, string 
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/* ---------- Phase 71 — Food-safe + FSC derivation for FG batches ---------- */
+
+/**
+ * Result of the food-safe walk for a finished-goods batch. `reason` explains
+ * which input drove the verdict so we can show it as a hover tooltip / audit row.
+ */
+export interface FgFoodSafeVerdict {
+  status: FoodSafeStatus;
+  reason: string;
+}
+
+/**
+ * Walk the chain  FG batch → linked job → paper batch (via PaperLog) +
+ * chemicals listed on the job. Returns the rolled-up food-safe verdict:
+ *   - 'no'      if any input is not food-safe
+ *   - 'yes'     if paper + all chemicals are food-safe
+ *   - 'unknown' if any input has not been set yet
+ *
+ * Per JomoPak's process there is exactly ONE paper batch per job.
+ */
+export function computeFgFoodSafe(
+  fg: FinishedGoodsStock,
+  jobs: JobCard[],
+  paperLogs: PaperLog[],
+  materialReceipts: MaterialReceipt[],
+  chemicals: ChemicalRegisterEntry[],
+): FgFoodSafeVerdict {
+  if (!fg.jobId) return { status: 'unknown', reason: 'No linked job' };
+  const job = jobs.find((j) => j.id === fg.jobId);
+  if (!job) return { status: 'unknown', reason: 'Linked job not found' };
+
+  const log = paperLogs.find((pl) => pl.jobId === job.id);
+  const paper = log ? materialReceipts.find((m) => m.id === log.materialReceiptId) : undefined;
+
+  const inputs: Array<{ status: FoodSafeStatus; label: string }> = [];
+  if (paper) {
+    inputs.push({
+      status: paper.isFoodSafe ?? 'unknown',
+      label: `Paper ${paper.receiptNumber}`,
+    });
+  }
+  for (const cid of job.chemicalIds ?? []) {
+    const c = chemicals.find((ch) => ch.id === cid);
+    if (c) inputs.push({ status: c.isFoodSafe ?? 'unknown', label: c.chemicalName });
+  }
+
+  if (inputs.length === 0) {
+    return { status: 'unknown', reason: 'No paper batch or chemicals linked to job yet' };
+  }
+
+  const blocker = inputs.find((i) => i.status === 'no');
+  if (blocker) return { status: 'no', reason: `${blocker.label} is not food-safe` };
+
+  if (inputs.every((i) => i.status === 'yes')) {
+    return { status: 'yes', reason: 'Paper + all chemicals certified food-safe' };
+  }
+
+  const unknown = inputs.find((i) => i.status === 'unknown');
+  return {
+    status: 'unknown',
+    reason: `${unknown?.label ?? 'Some inputs'} — food-safe flag not yet set`,
+  };
+}
+
+/**
+ * Returns the FSC claim for the FG batch's paper, or 'Unknown' if no paper
+ * batch has been logged yet for the linked job.
+ */
+export function computeFgFsc(
+  fg: FinishedGoodsStock,
+  jobs: JobCard[],
+  paperLogs: PaperLog[],
+  materialReceipts: MaterialReceipt[],
+): FscClaimType | 'Unknown' {
+  if (!fg.jobId) return 'Unknown';
+  const job = jobs.find((j) => j.id === fg.jobId);
+  if (!job) return 'Unknown';
+  const log = paperLogs.find((pl) => pl.jobId === job.id);
+  const paper = log ? materialReceipts.find((m) => m.id === log.materialReceiptId) : undefined;
+  return paper?.fscClaimType ?? 'Unknown';
 }

@@ -659,6 +659,10 @@ export type WasteReason =
   | 'Other';
 
 export type FscClaimType = 'None' | 'FSC Mix' | 'FSC Recycled' | 'FSC 100%';
+
+/** Tri-state food-safe flag used on materials, chemicals, and derived FG batches.
+ *  Defaults to 'unknown' so receivers/operators must explicitly pick. */
+export type FoodSafeStatus = 'yes' | 'no' | 'unknown';
 export type ProductionLogType = 'Slitting' | 'Flexo Printing' | 'Bag Printing' | 'Bag Making';
 export type HandleType = 'None' | 'Flat Handle' | 'Rope Handle' | 'Roll Handle';
 export type PrintMethod = 'Plain' | 'Auto' | 'Screen Print' | 'Flexo' | 'Digital Print' | 'Litho';
@@ -1655,6 +1659,10 @@ export interface JobCard {
   foodContactLevel: FoodContactLevel;
   /** IDs of FoodSafeMaterial records selected for this job's materials. */
   foodSafeMaterialIds: string[];
+  /** Phase 71 — Chemicals (inks, glues, adhesives, lubricants) used on this
+   *  job. Drives the FG-batch food-safe derivation: every chemical must be
+   *  food-safe for the batch to inherit a food-safe 'Yes'. */
+  chemicalIds?: string[];
   /** Internal batch number assigned at job start (propagates to production + dispatch). */
   internalBatchNumber: string;
   /** Free-text food-safety notes (intended food use, customer-specific rules, etc.). */
@@ -1953,6 +1961,15 @@ export interface ChemicalRegisterEntry {
   photoUrls?: string[];
   /** Soft delete / archive flag. Disabled chemicals don't show on default list. */
   archived: boolean;
+  /** Phase 71 — is this chemical food-safe? Drives the FG-batch food-safe
+   *  derivation when this chemical is selected on a job. */
+  isFoodSafe?: FoodSafeStatus;
+  /** Phase 71 — solvent-based chemicals (e.g. solvent inks) require a
+   *  machine cleaning + pipe changeover before the line can run a
+   *  food-safe job. Drives the Phase 72 changeover gate. */
+  isSolventBased?: boolean;
+  /** Phase 71 — supplier food-contact certification reference. */
+  foodContactCertNumber?: string;
 }
 
 export interface ChemicalRegisterFormState {
@@ -1979,6 +1996,10 @@ export interface ChemicalRegisterFormState {
   /** Phase 64 — drum + label photos. */
   photoUrls?: string[];
   archived: boolean;
+  /** Phase 71 — food-safe + solvent flags + cert ref. */
+  isFoodSafe?: FoodSafeStatus;
+  isSolventBased?: boolean;
+  foodContactCertNumber?: string;
 }
 
 export interface ChemicalRegisterFilters {
@@ -3854,6 +3875,12 @@ export interface MaterialReceipt {
    *  label/wrapper showing roll code + GSM. For inks/glues/chemicals
    *  routed through Materials Receiving it's the drum + label. */
   photoUrls?: string[];
+  /** Phase 71 — is this material itself food-safe? Drives the FG-batch
+   *  food-safe derivation. Defaults to 'unknown' so receivers must pick. */
+  isFoodSafe?: FoodSafeStatus;
+  /** Phase 71 — supplier food-contact certification reference
+   *  (e.g. ISEGA, BfR XXXVI, FDA 21 CFR 176.170). */
+  foodContactCertNumber?: string;
 }
 
 export interface ProductionLogEntry {
@@ -6355,6 +6382,8 @@ export interface JobFormState {
   fscRelated: boolean;
   foodContactLevel: FoodContactLevel;
   foodSafeMaterialIds: string[];
+  /** Phase 71 — chemicals (inks/glues/adhesives/lubricants) used. */
+  chemicalIds?: string[];
   internalBatchNumber: string;
   foodSafetyNotes: string;
   assignedMachineId: string;
@@ -6432,6 +6461,9 @@ export interface MaterialReceiptFormState {
   fscRelated: boolean;
   /** Phase 64 — roll wrapper / label / drum photos. */
   photoUrls?: string[];
+  /** Phase 71 — food-safety flag + cert ref. */
+  isFoodSafe?: FoodSafeStatus;
+  foodContactCertNumber?: string;
 }
 
 export interface InventoryScanFormState {

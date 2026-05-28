@@ -736,6 +736,8 @@ export function mapJob(row: any): JobCard {
     // until the Phase 1 schema migration adds the columns.
     foodContactLevel: row.food_contact_level ?? 'NonFood',
     foodSafeMaterialIds: Array.isArray(row.food_safe_material_ids) ? row.food_safe_material_ids : [],
+    // Phase 71 — chemicals (inks/glues/etc.) used on this job
+    chemicalIds: Array.isArray(row.chemical_ids) ? row.chemical_ids : [],
     internalBatchNumber: row.internal_batch_number ?? '',
     foodSafetyNotes: row.food_safety_notes ?? '',
     // Phase 2 fields — also local-only until schema lands.
@@ -941,6 +943,9 @@ export function mapMaterialReceipt(row: any): MaterialReceipt {
     inspectionNotes: row.inspection_notes ?? '',
     fscRelated: Boolean(row.fsc_related),
     photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    // Phase 71 — food-safe inheritance
+    isFoodSafe: row.is_food_safe ?? 'unknown',
+    foodContactCertNumber: row.food_contact_cert_number ?? '',
   };
 }
 
@@ -1498,6 +1503,10 @@ function mapChemicalRegisterEntry(row: any): any {
     notes: row.notes ?? '',
     photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
     archived: Boolean(row.archived),
+    // Phase 71 — food-safe inheritance + solvent flag
+    isFoodSafe: row.is_food_safe ?? 'unknown',
+    isSolventBased: Boolean(row.is_solvent_based),
+    foodContactCertNumber: row.food_contact_cert_number ?? '',
   };
 }
 
@@ -2974,6 +2983,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       // Food safety + scheduling (Phase 1 + 2 + 5)
       food_contact_level: job.foodContactLevel ?? 'NonFood',
       food_safe_material_ids: job.foodSafeMaterialIds ?? [],
+      // Phase 71 — chemicals used on this job
+      chemical_ids: job.chemicalIds ?? [],
       internal_batch_number: job.internalBatchNumber ?? '',
       food_safety_notes: job.foodSafetyNotes ?? '',
       assigned_machine_id: job.assignedMachineId || null,
@@ -3178,6 +3189,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       inspection_notes: receipt.inspectionNotes || null,
       fsc_related: receipt.fscRelated,
       photo_urls: receipt.photoUrls ?? null,
+      // Phase 71 — food-safe inheritance
+      is_food_safe: receipt.isFoodSafe ?? 'unknown',
+      food_contact_cert_number: receipt.foodContactCertNumber || null,
     }))),
     safeUpsert('production_logs', data.productionLogs.map((log) => ({
       id: log.id,
@@ -3470,6 +3484,10 @@ export async function syncAppData(data: AppData): Promise<void> {
       fire_suppression_type: c.fireSuppressionType,
       notes: c.notes, archived: c.archived,
       photo_urls: c.photoUrls ?? null,
+      // Phase 71 — food-safe / solvent flags + cert ref
+      is_food_safe: c.isFoodSafe ?? 'unknown',
+      is_solvent_based: Boolean(c.isSolventBased),
+      food_contact_cert_number: c.foodContactCertNumber || null,
     }))),
     safeUpsert('food_safe_materials', data.foodSafeMaterials.map((m) => ({
       id: m.id, material_number: m.materialNumber, created_at: m.createdAt,
