@@ -48,11 +48,6 @@ export function CustomerStockPage({
     }
   }, [releaseEditingId]);
 
-  function handleStartCreate() {
-    onReset();
-    setMode('form');
-  }
-
   function handleBackToList() {
     onReset();
     setMode('list');
@@ -155,8 +150,20 @@ export function CustomerStockPage({
   return (
     <>
       <SectionTitle
-        action={mode === 'list' ? <button className="secondary-button" onClick={handleStartCreate}>Add New Release</button> : <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>}
+        action={mode === 'form'
+          ? <button className="ghost-button" onClick={handleBackToList}>Back to Customer Stock</button>
+          : null}
       />
+      {mode === 'list' && (
+        <section className="card subtle-card">
+          <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+            Stock releases are created from a <strong>client profile</strong>, not from this tab.
+            Open the client (Clients page) and use the <strong>+ Release</strong> button on their
+            stock-holding card so the new release inherits the client + available stock batches.
+            This tab is the searchable history.
+          </p>
+        </section>
+      )}
 
       {mode === 'form' ? (
         <FormWizard

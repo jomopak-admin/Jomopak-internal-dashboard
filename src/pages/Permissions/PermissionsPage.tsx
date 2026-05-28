@@ -382,6 +382,9 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
   const [draftRole, setDraftRole] = useState<UserProfile['role']>('ops');
   const [draftPermissions, setDraftPermissions] = useState<View[]>(ROLE_DEFAULT_VIEWS.ops);
   const [draftDashboardWidgets, setDraftDashboardWidgets] = useState<DashboardWidget[]>(ROLE_DEFAULT_DASHBOARD_WIDGETS.ops);
+  // Phase 66 — stock security drafts.
+  const [draftStockVisibility, setDraftStockVisibility] = useState<'full' | 'restricted'>('full');
+  const [draftApprovalPin, setDraftApprovalPin] = useState('');
   const [createUserForm, setCreateUserForm] = useState(initialCreateUserForm);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [message, setMessage] = useState('');
@@ -412,6 +415,8 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
         role: draftRole,
         permissions: normalizeProfilePermissions(draftRole, draftPermissions),
         dashboardWidgets: normalizeDashboardWidgets(draftRole, draftDashboardWidgets),
+        stockVisibility: draftStockVisibility,
+        approvalPin: draftApprovalPin.trim() || undefined,
       });
       setMessage('Permissions updated.');
     } catch (error) {
@@ -428,6 +433,8 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
     setDraftPhoneNumber(profile.phoneNumber);
     setDraftClientId(profile.clientId);
     setDraftLinkedEmployeeId(profile.linkedEmployeeId ?? '');
+    setDraftStockVisibility(profile.stockVisibility === 'restricted' ? 'restricted' : 'full');
+    setDraftApprovalPin(profile.approvalPin ?? '');
     setDraftAccountType(profile.accountType);
     setDraftPublicDisplayName(profile.publicDisplayName);
     setDraftPublicDisplayRole(profile.publicDisplayRole);
@@ -674,6 +681,26 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
                         <option key={e.id} value={e.id}>{e.firstName} {e.lastName}{e.jobTitle ? ` · ${e.jobTitle}` : ''}</option>
                       ))}
                     </select>
+                  </label>
+                  <label>
+                    <span>Stock visibility</span>
+                    <select value={draftStockVisibility} onChange={(e) => setDraftStockVisibility(e.target.value as 'full' | 'restricted')}>
+                      <option value="full">Full — see qty + cost (default)</option>
+                      <option value="restricted">Restricted — see "In stock / Out" only</option>
+                    </select>
+                    <small className="muted">Restricted users can't compute skim value — useful for new joiners or production-floor logins.</small>
+                  </label>
+                  <label>
+                    <span>Stock approval PIN</span>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      value={draftApprovalPin}
+                      onChange={(e) => setDraftApprovalPin(e.target.value)}
+                      placeholder="4-digit (foremen / ops / admin only)"
+                    />
+                    <small className="muted">Required to approve issuance of high-value items. Leave blank for users who can't approve.</small>
                   </label>
                   <label>
                     <span>Account type</span>

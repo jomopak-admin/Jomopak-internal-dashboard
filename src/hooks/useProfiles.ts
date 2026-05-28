@@ -31,6 +31,8 @@ interface CreateUserResultRow {
   role: string | null;
   permissions: string[] | null;
   dashboard_widgets?: string[] | null;
+  stock_visibility?: string | null;
+  approval_pin?: string | null;
 }
 
 const DASHBOARD_WIDGETS_STORAGE_KEY = 'jomopak-dashboard-widgets';
@@ -96,6 +98,8 @@ export function useProfiles(enabled: boolean) {
               row.role ?? 'ops',
               row.dashboard_widgets ?? widgetOverrides[row.id],
             ),
+            stockVisibility: row.stock_visibility === 'restricted' ? 'restricted' : 'full',
+            approvalPin: row.approval_pin ?? undefined,
           })),
         );
       }
@@ -127,9 +131,17 @@ export function useProfiles(enabled: boolean) {
       role: nextProfile.role,
       permissions: nextProfile.permissions,
       dashboard_widgets: nextProfile.dashboardWidgets,
+      stock_visibility: nextProfile.stockVisibility || 'full',
+      approval_pin: nextProfile.approvalPin || null,
     };
 
     let { error } = await supabase.from('profiles').upsert(payload);
+    if (error && String(error.message || '').includes('stock_visibility')) {
+      // Phase 66 SQL not yet applied — retry without the security fields.
+      const { stock_visibility: _sv, approval_pin: _pin, ...rest } = payload;
+      void _sv; void _pin;
+      ({ error } = await supabase.from('profiles').upsert(rest));
+    }
     if (error && String(error.message || '').includes('linked_employee_id')) {
       // Column not migrated yet — retry without it. Phase 40 SQL adds it.
       const { linked_employee_id: _drop, ...rest } = payload;

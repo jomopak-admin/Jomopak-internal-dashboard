@@ -5,6 +5,7 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { JobCard, Machine, SparePart, SparePartFilters, SparePartFormState, STOCK_ITEM_CATEGORIES, StockCount, StockCountFormState, StockIssue, StockIssueFilters, StockIssueFormState, StockItemCategory, Supplier } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
 import { PhotoUploader } from '../../components/PhotoUploader';
+import { SignaturePad } from '../../components/SignaturePad';
 
 interface SparePartsPageProps {
   machines: Machine[];
@@ -41,6 +42,8 @@ interface SparePartsPageProps {
   onCancelStockCount: () => void;
   onReconcileStockCount: (countId: string, reconciledByName: string) => void;
   isAdmin: boolean;
+  /** Phase 66 — when true, hide qty + cost and show "In stock / Out". */
+  restrictedView?: boolean;
 }
 
 export function SparePartsPage({
@@ -76,6 +79,7 @@ export function SparePartsPage({
   onCancelStockCount,
   onReconcileStockCount,
   isAdmin,
+  restrictedView = false,
 }: SparePartsPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [showCountForm, setShowCountForm] = useState(false);
@@ -280,10 +284,22 @@ export function SparePartsPage({
     },
     {
       key: 'notes',
-      title: 'Notes',
+      title: 'Notes & security',
       body: (
         <div className="form-grid">
           <label className="full-span"><span>Notes</span><textarea value={spareForm.notes} onChange={(event) => setSpareForm({ ...spareForm, notes: event.target.value })} /></label>
+          <label className="checkbox-row full-span">
+            <input
+              type="checkbox"
+              checked={Boolean(spareForm.isHighValue)}
+              onChange={(e) => setSpareForm({ ...spareForm, isHighValue: e.target.checked })}
+            />
+            <span>
+              <strong>⚠ High-value item</strong> — requires a foreman/ops PIN to issue.
+              Use for theft-prone consumables (premium ink drums, branded uniforms,
+              valuable tools).
+            </span>
+          </label>
           <div className="full-span">
             <PhotoUploader
               urls={spareForm.photoUrls ?? []}
@@ -362,6 +378,7 @@ export function SparePartsPage({
                     <tr key={part.id}>
                       <td>
                         <strong>{part.partName}</strong>
+                        {part.isHighValue ? <span style={{ marginLeft: 6, fontSize: '0.65rem', padding: '1px 5px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 999 }}>⚠ HIGH VALUE</span> : null}
                         <div className="table-subtext">
                           {part.partCode} · {part.category || 'No category'}
                           {part.productionUse ? '' : ' · Non-production'}
@@ -369,7 +386,13 @@ export function SparePartsPage({
                       </td>
                       <td>{part.itemType}</td>
                       <td>{part.machineReference || (part.itemType === 'Tool' ? 'Tool' : 'General')}</td>
-                      <td>{formatNumber(part.quantityOnHand)} {part.unitOfMeasure}</td>
+                      <td>
+                        {/* Phase 66 — restricted users see "In stock / Out of stock"
+                            instead of an exact count + can't compute skim value. */}
+                        {restrictedView
+                          ? (part.quantityOnHand > 0 ? <span className="ok-pill">In stock</span> : <span className="warn-pill">Out</span>)
+                          : `${formatNumber(part.quantityOnHand)} ${part.unitOfMeasure}`}
+                      </td>
                       <td>
                         {part.itemType === 'Tool'
                           ? (part.currentStatus === 'Out'
@@ -379,7 +402,7 @@ export function SparePartsPage({
                               ? <span className="warn-pill">Reorder</span>
                               : <span className="ok-pill">Healthy</span>)}
                       </td>
-                      <td>{formatNumber(part.reorderLevel)} {part.unitOfMeasure}</td>
+                      <td>{restrictedView ? '—' : `${formatNumber(part.reorderLevel)} ${part.unitOfMeasure}`}</td>
                       <td>{part.supplierName || 'Not set'}</td>
                       <td>
                         <div className="row-actions">
@@ -474,6 +497,54 @@ export function SparePartsPage({
               />
             </label>
           </div>
+
+          {/* Phase 66 — high-value approval banner. Visible only when
+              the item being issued is flagged high-value. App.tsx
+              enforces the PIN check on save; here we just collect it
+              and signal the requirement to the operator. */}
+          {activeIssueItem.isHighValue && (
+            <div className="card subtle-card" style={{ background: '#fef3c7', border: '1px solid #f59e0b', marginTop: 10 }}>
+              <p style={{ margin: 0, fontWeight: 600 }}>⚠ High-value item — foreman approval required</p>
+              <p className="muted" style={{ margin: '4px 0 8px', fontSize: '0.82rem' }}>
+                A foreman / ops / admin user must enter their 4-digit approval PIN. The PIN
+                is set per profile via Permissions. Both names are stored on the issue.
+              </p>
+              <div className="form-grid">
+                <label>
+                  <span>Approver name <RequiredMarker /></span>
+                  <input
+                    value={stockIssueForm.approverName || ''}
+                    onChange={(e) => setStockIssueForm({ ...stockIssueForm, approverName: e.target.value })}
+                    placeholder="Foreman / ops user"
+                  />
+                </label>
+                <label>
+                  <span>Approval PIN <RequiredMarker /></span>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={stockIssueForm.approverPin || ''}
+                    onChange={(e) => setStockIssueForm({ ...stockIssueForm, approverPin: e.target.value })}
+                    placeholder="4-digit"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Phase 66 — receiver signature (always required from here on). */}
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>Receiver signature <RequiredMarker /></span>
+            <SignaturePad
+              label="Sign to confirm receipt"
+              onChange={(dataUrl) => setStockIssueForm({ ...stockIssueForm, signatureDataUrl: dataUrl })}
+            />
+            {stockIssueForm.signatureDataUrl && (
+              <img src={stockIssueForm.signatureDataUrl} alt="Signature" style={{ maxWidth: 200, marginTop: 6, border: '1px solid #ddd', borderRadius: 4 }} />
+            )}
+          </div>
+
           <div className="form-footer">
             <button className="primary-button" onClick={onSaveStockIssue}>
               {activeIssueItem.itemType === 'Tool' ? 'Check out tool' : 'Issue stock'}

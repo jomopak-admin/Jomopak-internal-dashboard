@@ -91,7 +91,8 @@ export type View =
   | 'dispatchRuns'
   | 'dies'
   | 'stereos'
-  | 'labels';
+  | 'labels'
+  | 'stockMovements';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
 export type DashboardWidget =
   | 'stats'
@@ -204,6 +205,7 @@ export const VIEW_LABELS: Record<View, string> = {
   dies: 'Dies',
   stereos: 'Stereos',
   labels: 'Labels',
+  stockMovements: 'Stock Movements',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -267,6 +269,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dies',
     'stereos',
     'labels',
+    'stockMovements',
     'invoiceInbox',
     'production',
     'waste',
@@ -351,6 +354,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dies',
     'stereos',
     'labels',
+    'stockMovements',
     'invoiceInbox',
     'production',
     'waste',
@@ -1199,6 +1203,17 @@ export interface UserProfile {
   /** Phase 40 — staff portal. Links this login to an Employee row so the
    *  staff member can see their own payslips, training, SOPs, and notices. */
   linkedEmployeeId?: string;
+  /** Phase 66 — granular stock-security flags.
+   *  - stockVisibility: when 'restricted', qty-on-hand + unit cost are
+   *    redacted on the Spares page (and elsewhere) so the user sees
+   *    'In stock' / 'Out of stock' instead of exact counts + values.
+   *    Stops untrusted users from calculating skim opportunities.
+   *  - approvalPin: 4-digit PIN required to approve high-value stock
+   *    issues. Only set for foremen / ops / admin. Stored as plain text
+   *    inside the workspace because the workspace itself is the
+   *    security boundary; not a public secret. */
+  stockVisibility?: 'full' | 'restricted';
+  approvalPin?: string;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1778,6 +1793,11 @@ export interface SparePart {
   storageLocation: string;
   lastPurchaseDate: string;
   notes: string;
+  /** Phase 66 — mark expensive / theft-prone items as high-value. Issuing
+   *  one requires a foreman/ops PIN before it can leave the rack, and
+   *  every movement fires an extra audit event. Examples: master die
+   *  set, premium ink drums, branded uniforms with cash value. */
+  isHighValue?: boolean;
 }
 
 /**
@@ -1811,6 +1831,18 @@ export interface StockIssue {
   returnedByUserId: string;
   returnedByName: string;
   createdAt: string;
+  /** Phase 66 — receiver's signature captured on the SignaturePad. Empty
+   *  for legacy issues; enforced going forward. */
+  signatureDataUrl?: string;
+  /** Phase 66 — when issuing a high-value item, the foreman/ops user who
+   *  approved the issue via PIN. Different from issuedBy (who held the
+   *  store counter) so dual-authorisation is auditable. */
+  approverUserId?: string;
+  approverName?: string;
+  /** Phase 66 — whether the source item was flagged high-value at the
+   *  time of issue. Snapshotted so later reclassifications don't lose
+   *  the security context of past issues. */
+  highValueAtIssue?: boolean;
 }
 
 /**
@@ -6372,6 +6404,8 @@ export interface SparePartFormState {
   storageLocation: string;
   lastPurchaseDate: string;
   notes: string;
+  /** Phase 66 — flag as theft-prone / high-value. */
+  isHighValue?: boolean;
 }
 
 export interface MaterialReceiptFormState {
@@ -6592,6 +6626,10 @@ export interface StockIssueFormState {
   jobId: string;
   jobNumber: string;
   notes: string;
+  /** Phase 66 — captured signature + approver fields. */
+  signatureDataUrl?: string;
+  approverPin?: string;
+  approverName?: string;
 }
 export interface StockIssueFilters { search: string; status: string; itemType: string; }
 export interface StockCountFormState {

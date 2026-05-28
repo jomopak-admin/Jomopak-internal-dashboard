@@ -18,6 +18,10 @@ interface ClientsPageProps {
   onCreateDeliveryNote: (client: Client) => void;
   onViewDeliveryNotes: (client: Client) => void;
   onOpenDeliveryNote?: (note: DeliveryNote) => void;
+  /** Phase 67 — customer-stock releases on the client profile. */
+  customerStockReleases?: Array<{ id: string; releaseNumber: string; releaseDate: string; clientId: string; clientName: string; quantityReleased?: number; quantityUnit?: string }>;
+  onCreateRelease?: (client: Client) => void;
+  onViewReleases?: (client: Client) => void;
   /** Phase 62.5 — Tooling (dies + stereos) owned by clients. */
   tooling?: Array<{ id: string; code: string; name: string; toolType: 'die' | 'stereo'; clientId: string; status: string; active: boolean }>;
   onViewToolingForClient?: (client: Client, toolType: 'die' | 'stereo') => void;
@@ -49,6 +53,9 @@ export function ClientsPage({
   onCreateDeliveryNote,
   onViewDeliveryNotes,
   onOpenDeliveryNote,
+  customerStockReleases = [],
+  onCreateRelease,
+  onViewReleases,
   tooling = [],
   onViewToolingForClient,
   clientForm,
@@ -128,6 +135,22 @@ export function ClientsPage({
     }
     return map;
   }, [tooling]);
+
+  // Phase 67 — recent customer-stock releases per client, sorted newest
+  // first. Used by the stock-holding card to surface the release history
+  // without forcing the user into the (now list-only) Customer Stock tab.
+  const releasesByClient = useMemo(() => {
+    const map = new Map<string, typeof customerStockReleases>();
+    for (const r of customerStockReleases) {
+      const list = map.get(r.clientId) || [];
+      list.push(r);
+      map.set(r.clientId, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''));
+    }
+    return map;
+  }, [customerStockReleases]);
 
   // Recent DN lookup per client — used by both the stock-holding cards and
   // the main client register so a user can see / open notes without leaving
@@ -471,6 +494,9 @@ export function ClientsPage({
                         </div>
                         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                           <button className="secondary-button" type="button" onClick={() => onCreateDeliveryNote(client)}>+ Delivery Note</button>
+                          {onCreateRelease ? (
+                            <button className="secondary-button" type="button" onClick={() => onCreateRelease(client)}>+ Release</button>
+                          ) : null}
                           <button className="table-button" type="button" onClick={() => handleStartEdit(client)}>Edit profile</button>
                         </div>
                       </header>
@@ -540,6 +566,46 @@ export function ClientsPage({
                                 onClick={() => onViewDeliveryNotes(client)}
                               >
                                 View all in Delivery Notes →
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                      {/* Phase 67 — recent customer stock releases (mirrors the DN block above). */}
+                      {(() => {
+                        const all = releasesByClient.get(client.id) || [];
+                        const recent = all.slice(0, 4);
+                        if (recent.length === 0) {
+                          return (
+                            <div className="muted" style={{ marginTop: '0.6rem', fontSize: '0.78rem' }}>
+                              No customer-stock releases for this client yet.
+                            </div>
+                          );
+                        }
+                        return (
+                          <div style={{ marginTop: '0.6rem' }}>
+                            <div className="table-subtext" style={{ marginBottom: '0.25rem' }}>
+                              Recent stock releases ({all.length} total)
+                            </div>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              {recent.map((r) => (
+                                <li key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                  <strong>{r.releaseNumber}</strong>
+                                  <span className="muted">
+                                    {r.releaseDate}
+                                    {r.quantityReleased ? ` · ${r.quantityReleased} ${r.quantityUnit || ''}` : ''}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                            {all.length > recent.length && onViewReleases ? (
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                style={{ marginTop: '0.35rem', padding: '0.2rem 0.4rem', fontSize: '0.78rem' }}
+                                onClick={() => onViewReleases(client)}
+                              >
+                                View all in Customer Stock →
                               </button>
                             ) : null}
                           </div>

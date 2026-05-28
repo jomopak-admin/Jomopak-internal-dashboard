@@ -61,6 +61,7 @@ import { CompaniesPage } from './pages/Companies/CompaniesPage';
 import { DispatchRunsPage } from './pages/DispatchRuns/DispatchRunsPage';
 import { ToolingPage } from './pages/Tooling/ToolingPage';
 import { LabelsPage } from './pages/Labels/LabelsPage';
+import { StockMovementsPage } from './pages/StockMovements/StockMovementsPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -4829,6 +4830,7 @@ function App() {
       lastPurchaseDate: spareForm.lastPurchaseDate,
       notes: spareForm.notes,
       photoUrls: spareForm.photoUrls ?? [],
+      isHighValue: Boolean(spareForm.isHighValue),
     };
     if (spareEditingId) {
       setData((current) => ({
@@ -4876,6 +4878,9 @@ function App() {
       jobId: '',
       jobNumber: '',
       notes: '',
+      signatureDataUrl: '',
+      approverPin: '',
+      approverName: '',
     });
     setStockIssueMessage('');
   }
@@ -4921,6 +4926,36 @@ function App() {
       setStockIssueMessage(`This tool is already checked out to ${item.currentHolderName || 'someone'}. Mark it returned first.`);
       return;
     }
+    // Phase 66 — signature enforcement. No receipt, no issue.
+    if (!stockIssueForm.signatureDataUrl) {
+      setStockIssueMessage('Receiver signature is required before stock can leave the store.');
+      return;
+    }
+    // Phase 66 — high-value items need foreman/ops PIN approval.
+    let approverUserId: string | undefined;
+    let approverName: string | undefined;
+    if (item.isHighValue) {
+      const enteredPin = (stockIssueForm.approverPin || '').trim();
+      const enteredName = (stockIssueForm.approverName || '').trim();
+      if (!enteredPin || !enteredName) {
+        setStockIssueMessage('High-value item — approver name + PIN are both required.');
+        return;
+      }
+      // Match the entered name+PIN against any profile with an approval_pin
+      // set. Only foremen / ops / admin are expected to have one.
+      const approver = profiles.find((p) =>
+        (p.fullName || p.email || '').toLowerCase() === enteredName.toLowerCase()
+        && p.approvalPin
+        && p.approvalPin === enteredPin
+        && (p.role === 'admin' || p.role === 'ops')
+      );
+      if (!approver) {
+        setStockIssueMessage('Approval PIN did not match a foreman / ops / admin user with that name. Issue blocked.');
+        return;
+      }
+      approverUserId = approver.id;
+      approverName = approver.fullName || approver.email;
+    }
     const issueId = generateCode('SI', data.stockIssues.map((issue) => issue.id), getToday());
     const issue: StockIssue = {
       id: issueId,
@@ -4944,6 +4979,10 @@ function App() {
       returnedByUserId: '',
       returnedByName: '',
       createdAt: new Date().toISOString(),
+      signatureDataUrl: stockIssueForm.signatureDataUrl,
+      approverUserId,
+      approverName,
+      highValueAtIssue: Boolean(item.isHighValue),
     };
     setData((current) => ({
       ...current,
@@ -6376,6 +6415,7 @@ function App() {
       lastPurchaseDate: part.lastPurchaseDate,
       notes: part.notes,
       photoUrls: part.photoUrls ?? [],
+      isHighValue: Boolean(part.isHighValue),
     });
     setView('spares');
   }
@@ -9338,6 +9378,28 @@ function App() {
     setView('deliveryNotes');
   }
 
+  /**
+   * Phase 67 — spawn a customer-stock release for this client.
+   * Pre-fills the release form with the client and jumps to the
+   * customer-stock view so the form mode opens automatically.
+   */
+  function handleCreateReleaseFromClient(client: Client) {
+    setCustomerStockReleaseEditingId(null);
+    setCustomerStockReleaseForm({
+      ...createInitialCustomerStockReleaseForm(),
+      releaseDate: getToday(),
+      clientId: client.id,
+    });
+    setCustomerStockReleaseMessage(`New release for ${client.name}. Pick the stock batch + quantity, then save.`);
+    setView('customerStock');
+  }
+
+  /** Jump to the Customer Stock register pre-filtered to this client. */
+  function handleViewClientReleases(client: Client) {
+    setCustomerStockReleaseFilters({ ...customerStockReleaseFilters, client: client.name, search: '' });
+    setView('customerStock');
+  }
+
   function editInvoice(invoice: Invoice) {
     setInvoiceEditingId(invoice.id);
     setInvoiceForm({
@@ -10035,6 +10097,17 @@ function App() {
           onCreateDeliveryNote={handleCreateDeliveryFromClient}
           onViewDeliveryNotes={handleViewClientDeliveryNotes}
           onOpenDeliveryNote={editDeliveryNote}
+          customerStockReleases={data.customerStockReleases.map((r) => ({
+            id: r.id,
+            releaseNumber: r.releaseNumber,
+            releaseDate: r.releaseDate,
+            clientId: r.clientId,
+            clientName: r.clientName,
+            quantityReleased: r.quantityReleased,
+            quantityUnit: r.quantityUnit,
+          }))}
+          onCreateRelease={handleCreateReleaseFromClient}
+          onViewReleases={handleViewClientReleases}
           tooling={(data.tooling ?? []).map((t) => ({ id: t.id, code: t.code, name: t.name, toolType: t.toolType, clientId: t.clientId, status: t.status, active: t.active }))}
           onViewToolingForClient={handleViewToolingForClient}
           clientForm={clientForm}
@@ -10124,6 +10197,7 @@ function App() {
           onCancelStockCount={resetStockCountForm}
           onReconcileStockCount={handleReconcileStockCount}
           isAdmin={profile?.role === 'admin'}
+          restrictedView={profile?.stockVisibility === 'restricted'}
         />
       )}
 
@@ -11247,6 +11321,10 @@ function App() {
           onLinkClient={handleLinkCompanyToClient}
           onLinkSupplier={handleLinkCompanyToSupplier}
         />
+      )}
+
+      {view === 'stockMovements' && (
+        <StockMovementsPage stockIssues={data.stockIssues} />
       )}
 
       {view === 'labels' && (

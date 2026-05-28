@@ -852,6 +852,7 @@ function mapSparePart(row: any): SparePart {
     storageLocation: row.storage_location ?? '',
     lastPurchaseDate: row.last_purchase_date ?? '',
     notes: row.notes ?? '',
+    isHighValue: row.is_high_value === true,
   };
 }
 
@@ -878,6 +879,10 @@ function mapStockIssue(row: any): StockIssue {
     returnedByUserId: row.returned_by_user_id ?? '',
     returnedByName: row.returned_by_name ?? '',
     createdAt: row.created_at ?? row.issued_at ?? '',
+    signatureDataUrl: row.signature_data_url ?? undefined,
+    approverUserId: row.approver_user_id ?? undefined,
+    approverName: row.approver_name ?? undefined,
+    highValueAtIssue: row.high_value_at_issue === true,
   };
 }
 
@@ -3092,6 +3097,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       current_status: part.currentStatus,
       current_holder_user_id: part.currentHolderUserId || null,
       current_holder_name: part.currentHolderName || null,
+      is_high_value: part.isHighValue === true,
     }))),
     safeUpsert('stock_issues', data.stockIssues.map((issue) => ({
       id: issue.id,
@@ -3115,6 +3121,10 @@ export async function syncAppData(data: AppData): Promise<void> {
       returned_by_user_id: issue.returnedByUserId || null,
       returned_by_name: issue.returnedByName || null,
       created_at: issue.createdAt,
+      signature_data_url: issue.signatureDataUrl || null,
+      approver_user_id: issue.approverUserId || null,
+      approver_name: issue.approverName || null,
+      high_value_at_issue: issue.highValueAtIssue === true,
     }))),
     safeUpsert('stock_counts', data.stockCounts.map((count) => ({
       id: count.id,
