@@ -4437,6 +4437,20 @@ function App() {
         };
       });
       focusSavedJob(nextEditedJob);
+      // Phase 62.5 — bump runCount + lastUsedAt only on NEWLY linked
+      // tooling. If the user kept the same die/stereo across an edit,
+      // we don't double-count; if they switched dies mid-job, the new
+      // one's counter goes up but the old one's stays where it was.
+      const newlyLinked: string[] = [];
+      if (nextEditedJob.dieToolId && nextEditedJob.dieToolId !== previousJob?.dieToolId) {
+        newlyLinked.push(nextEditedJob.dieToolId);
+      }
+      if (nextEditedJob.stereoToolId && nextEditedJob.stereoToolId !== previousJob?.stereoToolId) {
+        newlyLinked.push(nextEditedJob.stereoToolId);
+      }
+      if (newlyLinked.length > 0) {
+        bumpToolingUsage(newlyLinked);
+      }
       void syncJobThread(nextEditedJob, previousJob, profile).catch((error) => {
         console.error('Failed to sync job thread', error);
       });
@@ -4589,6 +4603,9 @@ function App() {
           : current.quoteEstimates,
       }));
       focusSavedJob(newJob);
+      // Phase 62.5 — bump runCount + lastUsedAt on any die / stereo this
+      // new job references. Edits do their own conditional bump below.
+      bumpToolingUsage([newJob.dieToolId, newJob.stereoToolId].filter(Boolean) as string[]);
       void syncJobThread(newJob, null, profile).catch((error) => {
         console.error('Failed to sync job thread', error);
       });
@@ -8159,6 +8176,39 @@ function App() {
     if (dieEditingId === id) resetToolingEditor('die');
     if (stereoEditingId === id) resetToolingEditor('stereo');
   }
+  /** Phase 62.5 — bump runCount + lastUsedAt for any tool ids passed in.
+   *  Called from handleSaveJob when a job is created or its die/stereo
+   *  link changes, so the register reflects real usage automatically. */
+  function bumpToolingUsage(toolIds: string[]) {
+    if (toolIds.length === 0) return;
+    const toBump = new Set(toolIds);
+    const nowIso = new Date().toISOString();
+    setData((current) => ({
+      ...current,
+      tooling: (current.tooling ?? []).map((t) => toBump.has(t.id) ? {
+        ...t,
+        runCount: (t.runCount || 0) + 1,
+        lastUsedAt: nowIso,
+      } : t),
+    }));
+  }
+
+  /** Phase 62.5 — open the Dies / Stereos page pre-filtered to this client. */
+  function handleViewToolingForClient(client: Client, toolType: 'die' | 'stereo') {
+    if (toolType === 'die') {
+      setDieFilters({ ...dieFilters, client: client.name, activeOnly: true, search: '' });
+      setView('dies');
+    } else {
+      setStereoFilters({ ...stereoFilters, client: client.name, activeOnly: true, search: '' });
+      setView('stereos');
+    }
+  }
+  /** Phase 62.5 — open Dies + Stereos filtered to a supplier (External tooling). */
+  function handleViewToolingForSupplier(supplier: Supplier) {
+    setDieFilters({ ...dieFilters, supplier: supplier.name, location: 'External', activeOnly: true, search: '' });
+    setView('dies');
+  }
+
   function handleAddSharpeningEvent(toolId: string, event: ToolingSharpeningEvent) {
     setData((current) => ({
       ...current,
@@ -9701,6 +9751,8 @@ function App() {
           onEdit={editSupplier}
           companies={(data.companies ?? []).map((c) => ({ id: c.id, name: c.name, roles: c.roles }))}
           onConvertToCompany={handleConvertSupplierToCompany}
+          tooling={(data.tooling ?? []).map((t) => ({ id: t.id, code: t.code, name: t.name, toolType: t.toolType, supplierId: t.supplierId, location: t.location, active: t.active }))}
+          onViewToolingForSupplier={handleViewToolingForSupplier}
         />
       )}
 
@@ -9942,6 +9994,8 @@ function App() {
           onCreateDeliveryNote={handleCreateDeliveryFromClient}
           onViewDeliveryNotes={handleViewClientDeliveryNotes}
           onOpenDeliveryNote={editDeliveryNote}
+          tooling={(data.tooling ?? []).map((t) => ({ id: t.id, code: t.code, name: t.name, toolType: t.toolType, clientId: t.clientId, status: t.status, active: t.active }))}
+          onViewToolingForClient={handleViewToolingForClient}
           clientForm={clientForm}
           setClientForm={setClientForm}
           clientEditingId={clientEditingId}

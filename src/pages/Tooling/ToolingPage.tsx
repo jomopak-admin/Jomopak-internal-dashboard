@@ -392,7 +392,12 @@ export function ToolingPage(props: ToolingPageProps) {
     <>
       <SectionTitle
         action={mode === 'list'
-          ? <button className="secondary-button" onClick={handleStartCreate}>Add {labelSingular}</button>
+          ? (
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button className="ghost-button" onClick={() => printToolingRegister(filtered, labelPlural, filters, toolType)}>Print register</button>
+              <button className="secondary-button" onClick={handleStartCreate}>Add {labelSingular}</button>
+            </div>
+          )
           : <button className="ghost-button" onClick={handleBackToList}>Back to {labelPlural}</button>}
       />
 
@@ -516,6 +521,110 @@ export function ToolingPage(props: ToolingPageProps) {
       )}
     </>
   );
+}
+
+/** Phase 62.5 — open a printable register so the user can take it to a
+ *  supplier for an annual tooling audit. Shows code, name, dimensions
+ *  (dies) / version (stereos), supplier, internal location, status, run
+ *  count, last used, and a tick column for the auditor to mark each as
+ *  "seen on premises". The current page filters are applied so the
+ *  printout matches what you're looking at. */
+function printToolingRegister(
+  rows: Tooling[],
+  labelPlural: string,
+  filters: ToolingFilters,
+  toolType: ToolType,
+) {
+  const w = window.open('', '_blank', 'width=1100,height=1400');
+  if (!w) return;
+  const filterDescParts = [
+    filters.status !== 'all' && `Status: ${filters.status}`,
+    filters.location !== 'all' && `Location: ${filters.location}`,
+    filters.client && `Client contains "${filters.client}"`,
+    filters.supplier && `Supplier contains "${filters.supplier}"`,
+    filters.sizeQuery && `Size: ${filters.sizeQuery}`,
+    filters.activeOnly && 'Active only',
+  ].filter(Boolean) as string[];
+  const isDie = toolType === 'die';
+  const headers = isDie
+    ? ['☐', 'Code', 'Name', 'Client', 'Dimensions', 'Location / supplier', 'Status', 'Runs', 'Last used', 'Auditor notes']
+    : ['☐', 'Code', 'Name', 'Client', 'Version', 'Signed off', 'Location / supplier', 'Status', 'Runs', 'Auditor notes'];
+  const rowsHtml = rows.map((t) => {
+    const where = t.location === 'External' ? (t.supplierName || '—') : (t.internalLocation || 'Internal');
+    if (isDie) {
+      const dims = t.dimensions ? `${t.dimensions.widthMm} × ${t.dimensions.heightMm} × ${t.dimensions.depthMm} mm` : '—';
+      return `<tr>
+        <td style="text-align:center;font-size:14px">☐</td>
+        <td><strong>${t.code}</strong></td>
+        <td>${escapeHtml(t.name)}</td>
+        <td>${escapeHtml(t.clientName || 'Generic')}</td>
+        <td>${dims}<div style="font-size:11px;color:#666">${escapeHtml(t.bagType || '')}</div></td>
+        <td>${escapeHtml(where)}</td>
+        <td>${escapeHtml(t.status)}</td>
+        <td style="text-align:right">${t.runCount}</td>
+        <td>${t.lastUsedAt ? t.lastUsedAt.slice(0, 10) : '—'}</td>
+        <td style="min-width:160px;border-bottom:1px dashed #aaa">&nbsp;</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td style="text-align:center;font-size:14px">☐</td>
+      <td><strong>${t.code}</strong></td>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.clientName || '—')}</td>
+      <td>v${t.designVersion || 1}</td>
+      <td>${t.signedOffByName ? `✓ ${escapeHtml(t.signedOffByName)}<div style="font-size:11px;color:#666">${t.signedOffAt ? t.signedOffAt.slice(0, 10) : ''}</div>` : '—'}</td>
+      <td>${escapeHtml(where)}</td>
+      <td>${escapeHtml(t.status)}</td>
+      <td style="text-align:right">${t.runCount}</td>
+      <td style="min-width:160px;border-bottom:1px dashed #aaa">&nbsp;</td>
+    </tr>`;
+  }).join('');
+  const totalCost = rows.reduce((s, t) => s + (Number(t.cost) || 0), 0);
+  w.document.write(`<!DOCTYPE html><html><head><title>${labelPlural} register</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; padding: 24px; color: #111; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .meta { font-size: 12px; color: #555; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 12px; vertical-align: top; }
+      th { background: #f3f4f6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+      .total-row td { border-top: 2px solid #111; font-weight: 600; }
+      .footer { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 12px; }
+      .sig-line { margin-top: 30px; border-top: 1px solid #111; padding-top: 4px; }
+    </style></head><body>
+    <h1>${labelPlural} register</h1>
+    <div class="meta">
+      Generated ${new Date().toLocaleString()} · ${rows.length} record(s)
+      ${filterDescParts.length ? `· Filters: ${filterDescParts.join(' · ')}` : ''}
+    </div>
+    <table>
+      <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${rowsHtml}
+        <tr class="total-row"><td colspan="${isDie ? 9 : 9}" style="text-align:right">Total tooling cost on register</td><td style="text-align:right">${totalCost ? totalCost.toLocaleString('en-ZA', { minimumFractionDigits: 2 }) : '—'}</td></tr>
+      </tbody>
+    </table>
+    <div class="footer">
+      <div>
+        <div class="sig-line">JomoPak representative — name + signature</div>
+        <div class="sig-line">Date</div>
+      </div>
+      <div>
+        <div class="sig-line">Supplier / site representative — name + signature</div>
+        <div class="sig-line">Date</div>
+      </div>
+    </div>
+    <script>window.print();</script>
+    </body></html>`);
+  w.document.close();
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 interface SharpeningRegisterProps {

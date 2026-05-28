@@ -23,6 +23,10 @@ interface SuppliersPageProps {
   /** Phase 58 — unified Companies for the linker. */
   companies?: { id: string; name: string; roles?: string[] }[];
   onConvertToCompany?: (supplierId: string) => void;
+  /** Phase 62.5 — tooling held externally at suppliers (annual audit
+   *  surface so you can sanity-check what's physically on their floor). */
+  tooling?: Array<{ id: string; code: string; name: string; toolType: 'die' | 'stereo'; supplierId: string; location: 'Internal' | 'External'; active: boolean }>;
+  onViewToolingForSupplier?: (supplier: Supplier) => void;
 }
 
 export function SuppliersPage({
@@ -42,6 +46,8 @@ export function SuppliersPage({
   onDelete,
   companies = [],
   onConvertToCompany,
+  tooling = [],
+  onViewToolingForSupplier,
 }: SuppliersPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -519,21 +525,37 @@ export function SuppliersPage({
                     <th>Type</th>
                     <th>Contact</th>
                     <th>Email</th>
+                    <th>Tooling held</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSuppliers.map((supplier) => (
-                    <tr key={supplier.id}>
-                      <td><strong>{supplier.name}</strong></td>
-                      <td>{supplier.supplierType}</td>
-                      <td>{supplier.contacts.length ? `${supplier.contactPerson || supplier.contacts[0]?.fullName || 'Primary not set'} (+${supplier.contacts.length} contacts)` : supplier.contactPerson || supplier.phone || 'Not set'}</td>
-                      <td>{supplier.email || 'Not set'}</td>
-                      <td>{supplier.active ? 'Active' : 'Inactive'}</td>
-                      <td><button className="table-button" aria-label={`Edit ${supplier.name}`} onClick={() => handleStartEdit(supplier)}>✎</button></td>
-                    </tr>
-                  ))}
+                  {filteredSuppliers.map((supplier) => {
+                    const held = tooling.filter((t) => t.active && t.location === 'External' && t.supplierId === supplier.id);
+                    const dies = held.filter((t) => t.toolType === 'die').length;
+                    const stereos = held.filter((t) => t.toolType === 'stereo').length;
+                    return (
+                      <tr key={supplier.id}>
+                        <td><strong>{supplier.name}</strong></td>
+                        <td>{supplier.supplierType}</td>
+                        <td>{supplier.contacts.length ? `${supplier.contactPerson || supplier.contacts[0]?.fullName || 'Primary not set'} (+${supplier.contacts.length} contacts)` : supplier.contactPerson || supplier.phone || 'Not set'}</td>
+                        <td>{supplier.email || 'Not set'}</td>
+                        <td>
+                          {held.length === 0
+                            ? <span className="muted" style={{ fontSize: '0.78rem' }}>None</span>
+                            : (
+                              <button className="table-button" type="button" onClick={() => onViewToolingForSupplier?.(supplier)}>
+                                {held.length} tool{held.length === 1 ? '' : 's'}
+                                <div className="table-subtext">{dies} die · {stereos} stereo</div>
+                              </button>
+                            )}
+                        </td>
+                        <td>{supplier.active ? 'Active' : 'Inactive'}</td>
+                        <td><button className="table-button" aria-label={`Edit ${supplier.name}`} onClick={() => handleStartEdit(supplier)}>✎</button></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

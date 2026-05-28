@@ -18,6 +18,9 @@ interface ClientsPageProps {
   onCreateDeliveryNote: (client: Client) => void;
   onViewDeliveryNotes: (client: Client) => void;
   onOpenDeliveryNote?: (note: DeliveryNote) => void;
+  /** Phase 62.5 — Tooling (dies + stereos) owned by clients. */
+  tooling?: Array<{ id: string; code: string; name: string; toolType: 'die' | 'stereo'; clientId: string; status: string; active: boolean }>;
+  onViewToolingForClient?: (client: Client, toolType: 'die' | 'stereo') => void;
   clientForm: ClientFormState;
   setClientForm: (value: ClientFormState) => void;
   clientEditingId: string | null;
@@ -46,6 +49,8 @@ export function ClientsPage({
   onCreateDeliveryNote,
   onViewDeliveryNotes,
   onOpenDeliveryNote,
+  tooling = [],
+  onViewToolingForClient,
   clientForm,
   setClientForm,
   clientEditingId,
@@ -108,6 +113,21 @@ export function ClientsPage({
       }))
       .filter(({ overview }) => overview.invoices.length > 0 || overview.totalRemainingQuantity > 0);
   }, [filteredClients, invoices, deliveryNotes, dispatchRecords]);
+
+  // Phase 62.5 — tally tooling per client so the table + cards can
+  // show "this client owns X dies, Y stereos".
+  const toolingByClient = useMemo(() => {
+    const map = new Map<string, { dies: number; stereos: number }>();
+    for (const t of tooling) {
+      if (!t.active) continue;
+      if (!t.clientId) continue;
+      const tally = map.get(t.clientId) ?? { dies: 0, stereos: 0 };
+      if (t.toolType === 'die') tally.dies += 1;
+      if (t.toolType === 'stereo') tally.stereos += 1;
+      map.set(t.clientId, tally);
+    }
+    return map;
+  }, [tooling]);
 
   // Recent DN lookup per client — used by both the stock-holding cards and
   // the main client register so a user can see / open notes without leaving
@@ -541,7 +561,7 @@ export function ClientsPage({
           {filteredClients.length ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Tooling</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
                 <tbody>{filteredClients.map((client) => {
                   const clientDns = deliveryNotesByClient.get(client.id) || [];
                   return (
@@ -559,6 +579,22 @@ export function ClientsPage({
                             <button className="table-button" type="button" onClick={() => onViewDeliveryNotes(client)}>View</button>
                           ) : null}
                         </div>
+                      </td>
+                      <td>
+                        {(() => {
+                          const tally = toolingByClient.get(client.id) ?? { dies: 0, stereos: 0 };
+                          if (!tally.dies && !tally.stereos) return <span className="muted" style={{ fontSize: '0.78rem' }}>None</span>;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              {tally.dies > 0 && (
+                                <button className="table-button" type="button" onClick={() => onViewToolingForClient?.(client, 'die')}>{tally.dies} die{tally.dies === 1 ? '' : 's'}</button>
+                              )}
+                              {tally.stereos > 0 && (
+                                <button className="table-button" type="button" onClick={() => onViewToolingForClient?.(client, 'stereo')}>{tally.stereos} stereo{tally.stereos === 1 ? '' : 's'}</button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td>{client.portalEnabled ? 'Enabled' : 'Disabled'}<div className="table-subtext">{client.portalViewStock ? 'Stock visible' : 'Stock hidden'}</div></td>
                       <td>{client.creditAgreementSigned ? 'Credit signed' : 'Credit pending'}<div className="table-subtext">{client.stockHoldingAgreementSigned ? 'Stock signed' : 'Stock pending'}</div></td>
