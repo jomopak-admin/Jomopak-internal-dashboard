@@ -935,6 +935,7 @@ export function mapMaterialReceipt(row: any): MaterialReceipt {
     storageLocation: row.storage_location ?? '',
     inspectionNotes: row.inspection_notes ?? '',
     fscRelated: Boolean(row.fsc_related),
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
   };
 }
 
@@ -1490,6 +1491,7 @@ function mapChemicalRegisterEntry(row: any): any {
     requiredPPE: row.required_ppe ?? '',
     fireSuppressionType: row.fire_suppression_type ?? '',
     notes: row.notes ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
     archived: Boolean(row.archived),
   };
 }
@@ -3164,6 +3166,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       storage_location: receipt.storageLocation || null,
       inspection_notes: receipt.inspectionNotes || null,
       fsc_related: receipt.fscRelated,
+      photo_urls: receipt.photoUrls ?? null,
     }))),
     safeUpsert('production_logs', data.productionLogs.map((log) => ({
       id: log.id,
@@ -3455,6 +3458,7 @@ export async function syncAppData(data: AppData): Promise<void> {
       required_ppe: c.requiredPPE,
       fire_suppression_type: c.fireSuppressionType,
       notes: c.notes, archived: c.archived,
+      photo_urls: c.photoUrls ?? null,
     }))),
     safeUpsert('food_safe_materials', data.foodSafeMaterials.map((m) => ({
       id: m.id, material_number: m.materialNumber, created_at: m.createdAt,

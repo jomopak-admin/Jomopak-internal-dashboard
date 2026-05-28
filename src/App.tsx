@@ -5834,6 +5834,7 @@ function App() {
             storageLocation: materialForm.storageLocation,
             inspectionNotes: materialForm.inspectionNotes,
             fscRelated: materialForm.fscRelated,
+            photoUrls: materialForm.photoUrls ?? [],
           };
         }),
       }));
@@ -5863,6 +5864,7 @@ function App() {
         storageLocation: materialForm.storageLocation,
         inspectionNotes: materialForm.inspectionNotes,
         fscRelated: materialForm.fscRelated,
+        photoUrls: materialForm.photoUrls ?? [],
       };
       const movement = createInventoryMovement({
         movementDate: materialForm.receivedDate,
@@ -6542,6 +6544,7 @@ function App() {
       storageLocation: receipt.storageLocation,
       inspectionNotes: receipt.inspectionNotes,
       fscRelated: receipt.fscRelated,
+      photoUrls: receipt.photoUrls ?? [],
     });
     setView('materials');
   }
@@ -6569,6 +6572,7 @@ function App() {
       requiredPPE: entry.requiredPPE,
       fireSuppressionType: entry.fireSuppressionType,
       notes: entry.notes,
+      photoUrls: entry.photoUrls ?? [],
       archived: entry.archived,
     });
     setView('chemicalRegister');
@@ -6609,6 +6613,7 @@ function App() {
         requiredPPE: chemicalForm.requiredPPE,
         fireSuppressionType: chemicalForm.fireSuppressionType,
         notes: chemicalForm.notes,
+        photoUrls: chemicalForm.photoUrls ?? [],
         archived: chemicalForm.archived,
       };
       if (chemicalEditingId) {

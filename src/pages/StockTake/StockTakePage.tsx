@@ -66,6 +66,11 @@ interface CountItem {
   source: 'General Stock' | 'Chemicals' | 'Materials' | 'Finished Goods';
   /** Category from the source row (only set for General Stock items). */
   category?: string;
+  /** Phase 64 — first photo URL for inline thumb + printable sheet. */
+  photoUrl?: string;
+  /** Phase 64 — internal storage location, printed on the count sheet so
+   *  the counter knows where to look. */
+  location?: string;
 }
 
 interface StockTakePageProps {
@@ -107,6 +112,8 @@ export function StockTakePage({
     unit: p.unitOfMeasure || 'units',
     source: 'General Stock' as const,
     category: p.category || 'Other',
+    photoUrl: p.photoUrls?.[0],
+    location: p.storageLocation,
   })), [spareParts]);
 
   const chemicalItems = useMemo<CountItem[]>(() => chemicalRegisterEntries
@@ -118,6 +125,8 @@ export function StockTakePage({
       systemQty: c.currentOnSiteQuantity ?? 0,
       unit: c.quantityUnit || 'L',
       source: 'Chemicals' as const,
+      photoUrl: c.photoUrls?.[0],
+      location: c.storageLocation,
     })),
   [chemicalRegisterEntries]);
 
@@ -128,6 +137,8 @@ export function StockTakePage({
     systemQty: m.quantityAvailable ?? 0,
     unit: m.quantityUnit || '',
     source: 'Materials' as const,
+    photoUrl: m.photoUrls?.[0],
+    location: m.storageLocation,
   })), [materialReceipts]);
 
   const finishedItems = useMemo<CountItem[]>(() => finishedGoodsStock.map((s) => ({
@@ -137,6 +148,8 @@ export function StockTakePage({
     systemQty: s.quantityAvailable ?? 0,
     unit: s.quantityUnit || 'units',
     source: 'Finished Goods' as const,
+    photoUrl: s.photoUrls?.[0],
+    location: s.storageLocation,
   })), [finishedGoodsStock]);
 
   // Build the candidate item list for the current scope.
@@ -254,9 +267,19 @@ export function StockTakePage({
                         <input type="checkbox" checked={selected} onChange={() => toggleItem(item.id)} />
                       </td>
                       <td>
-                        <strong>{item.label}</strong>
-                        {' '}<span className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 6px', border: '1px solid #cbd5e1', borderRadius: 999 }}>{item.source}</span>
-                        <div className="muted" style={{ fontSize: '0.78rem' }}>{item.detail}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {item.photoUrl ? (
+                            <img src={item.photoUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, border: '1px solid #e5e7eb', flex: '0 0 36px' }} />
+                          ) : (
+                            <div style={{ width: 36, height: 36, borderRadius: 4, border: '1px dashed #cbd5e1', flex: '0 0 36px' }} aria-hidden="true" />
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <strong>{item.label}</strong>
+                            {' '}<span className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 6px', border: '1px solid #cbd5e1', borderRadius: 999 }}>{item.source}</span>
+                            <div className="muted" style={{ fontSize: '0.78rem' }}>{item.detail}</div>
+                            {item.location ? <div className="muted" style={{ fontSize: '0.72rem' }}>📍 {item.location}</div> : null}
+                          </div>
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>{formatNumber(item.systemQty)} {item.unit}</td>
                       <td style={{ textAlign: 'right' }}>
@@ -292,9 +315,37 @@ export function StockTakePage({
 
         {message ? <p className="muted" style={{ marginTop: '0.5rem' }}>{message}</p> : null}
 
-        <div className="stocktake-actions">
+        <div className="stocktake-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="primary-button" onClick={onSave} disabled={form.selectedItemIds.length === 0}>
             Save count ({form.selectedItemIds.length} item{form.selectedItemIds.length === 1 ? '' : 's'})
+          </button>
+          {/* Phase 64 — printable count sheet. If items are ticked, prints
+              just those; otherwise prints the filtered list. */}
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => {
+              const targets = form.selectedItemIds.length > 0
+                ? filteredItems.filter((i) => form.selectedItemIds.includes(i.id))
+                : filteredItems;
+              printCountSheet(targets, scope, categoryFilter, form.countedByName, form.notes, { showSystemQty: false });
+            }}
+            disabled={filteredItems.length === 0}
+          >
+            Print blank count sheet
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => {
+              const targets = form.selectedItemIds.length > 0
+                ? filteredItems.filter((i) => form.selectedItemIds.includes(i.id))
+                : filteredItems;
+              printCountSheet(targets, scope, categoryFilter, form.countedByName, form.notes, { showSystemQty: true });
+            }}
+            disabled={filteredItems.length === 0}
+          >
+            Print with system qty (reconcile aid)
           </button>
         </div>
       </section>
@@ -362,4 +413,95 @@ export function StockTakePage({
       </section>
     </div>
   );
+}
+
+/**
+ * Phase 64 — open a printable count sheet sized for an A4 clipboard.
+ * Default mode hides system qty so the counter is honest about what they
+ * actually see; toggle showSystemQty=true to print a reconcile aid for
+ * pre-prepared counts. Photos render as small inline thumbs so the
+ * counter can tell two similar-looking parts apart on the rack.
+ */
+function printCountSheet(
+  rows: CountItem[],
+  scope: Scope,
+  categoryFilter: string,
+  countedByName: string,
+  notes: string,
+  options: { showSystemQty: boolean },
+) {
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) return;
+  const showSys = options.showSystemQty;
+  const rowsHtml = rows.map((item) => `
+    <tr>
+      <td style="text-align:center;font-size:14px;width:28px">☐</td>
+      <td style="width:48px">
+        ${item.photoUrl
+          ? `<img src="${item.photoUrl}" alt="" style="width:40px;height:40px;object-fit:cover;border:1px solid #ddd;border-radius:4px" />`
+          : '<div style="width:40px;height:40px;border:1px dashed #cbd5e1;border-radius:4px"></div>'}
+      </td>
+      <td>
+        <strong>${escapeHtml(item.label)}</strong>
+        <div style="font-size:11px;color:#555">${escapeHtml(item.detail)} · ${escapeHtml(item.source)}</div>
+        ${item.location ? `<div style="font-size:11px;color:#555">📍 ${escapeHtml(item.location)}</div>` : ''}
+      </td>
+      ${showSys ? `<td style="text-align:right">${formatNumber(item.systemQty)} ${escapeHtml(item.unit)}</td>` : ''}
+      <td style="text-align:right;min-width:90px;border-bottom:1px solid #333">&nbsp;</td>
+      <td style="min-width:140px;border-bottom:1px dashed #aaa">&nbsp;</td>
+    </tr>`).join('');
+  const today = new Date().toLocaleDateString();
+  w.document.write(`<!DOCTYPE html><html><head><title>Stock count sheet — ${scope}</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; padding: 20px; color: #111; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .meta { font-size: 12px; color: #555; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { padding: 8px 8px; border-bottom: 1px solid #eee; text-align: left; font-size: 12px; vertical-align: middle; }
+      th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+      .footer { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 12px; }
+      .sig-line { margin-top: 30px; border-top: 1px solid #111; padding-top: 4px; }
+      @page { margin: 12mm; }
+    </style></head><body>
+    <h1>Stock count sheet — ${scope}</h1>
+    <div class="meta">
+      Date: ${today} · Counted by: ${escapeHtml(countedByName || '___________________')} ·
+      ${categoryFilter !== 'all' ? `Category: ${escapeHtml(categoryFilter)} · ` : ''}
+      ${rows.length} item(s) ${showSys ? '· (system qty shown — reconcile aid)' : '· (blank — count honestly)'}
+    </div>
+    ${notes ? `<p style="margin:0 0 8px;padding:6px 10px;background:#fef3c7;border-radius:6px;font-size:12px"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ''}
+    <table>
+      <thead>
+        <tr>
+          <th>☐</th>
+          <th>Photo</th>
+          <th>Item</th>
+          ${showSys ? '<th style="text-align:right">System</th>' : ''}
+          <th style="text-align:right">Counted</th>
+          <th>Notes / variance reason</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="footer">
+      <div>
+        <div class="sig-line">Counter — name + signature</div>
+        <div class="sig-line">Date / time finished</div>
+      </div>
+      <div>
+        <div class="sig-line">Reviewed by — name + signature</div>
+        <div class="sig-line">Reconciled into system on</div>
+      </div>
+    </div>
+    <script>window.print();</script>
+    </body></html>`);
+  w.document.close();
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
   ChemicalRegisterEntry,
@@ -251,6 +252,16 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
           <label><span>Fire suppression type</span><input value={form.fireSuppressionType} onChange={(e) => setForm({ ...form, fireSuppressionType: e.target.value })} placeholder="e.g. CO2 / Dry powder / Foam" /></label>
           <label className="full-span"><span>Emergency procedure / first aid</span><textarea rows={4} value={form.emergencyProcedure} onChange={(e) => setForm({ ...form, emergencyProcedure: e.target.value })} placeholder="Short steps for spillage, inhalation, skin contact, etc." /></label>
           <label className="full-span"><span>Notes</span><textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={form.photoUrls ?? []}
+              onChange={(urls) => setForm({ ...form, photoUrls: urls })}
+              recordType="chemicals"
+              recordId={editingId || `draft-${Date.now()}`}
+              label="Photos of drum / label / MSDS — labels are critical for stocktake reconciliation"
+              max={6}
+            />
+          </div>
         </div>
       ),
     },

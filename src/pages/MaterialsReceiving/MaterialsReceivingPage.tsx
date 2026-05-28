@@ -3,6 +3,7 @@ import { FlagBadge } from '../../components/Badge';
 import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
+import { PhotoUploader } from '../../components/PhotoUploader';
 import { SectionTitle } from '../../components/SectionTitle';
 import { InventoryMovement, InventoryScanFormState, JobCard, MaterialFilters, MaterialOrderRequest, MaterialReceipt, MaterialReceiptFormState, Supplier } from '../../types';
 import { FSC_CLAIM_TYPES, formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
@@ -294,13 +295,23 @@ export function MaterialsReceivingPage(props: MaterialsReceivingPageProps) {
     },
     {
       key: 'notes',
-      title: 'Inspection notes',
+      title: 'Inspection notes & photos',
       body: (
         <div className="form-grid">
           <label className="full-span">
             <span>Inspection notes</span>
             <textarea value={materialForm.inspectionNotes} onChange={(event) => setMaterialForm({ ...materialForm, inspectionNotes: event.target.value })} />
           </label>
+          <div className="full-span">
+            <PhotoUploader
+              urls={materialForm.photoUrls ?? []}
+              onChange={(urls) => setMaterialForm({ ...materialForm, photoUrls: urls })}
+              recordType="materials"
+              recordId={materialEditingId || `draft-${Date.now()}`}
+              label="Photos — roll wrapper / supplier label / drum (helps stock-take + dispute resolution)"
+              max={6}
+            />
+          </div>
         </div>
       ),
     },

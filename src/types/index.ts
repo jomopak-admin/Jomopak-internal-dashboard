@@ -1911,6 +1911,10 @@ export interface ChemicalRegisterEntry {
   fireSuppressionType: string;
   /** Internal notes (e.g. "always store away from bleach"). */
   notes: string;
+  /** Phase 64 — uploaded photos (drum, label, MSDS scan). Especially
+   *  the label, which carries batch number + supplier date codes that
+   *  staff need to confirm against the system during stock-take. */
+  photoUrls?: string[];
   /** Soft delete / archive flag. Disabled chemicals don't show on default list. */
   archived: boolean;
 }
@@ -1936,6 +1940,8 @@ export interface ChemicalRegisterFormState {
   requiredPPE: string;
   fireSuppressionType: string;
   notes: string;
+  /** Phase 64 — drum + label photos. */
+  photoUrls?: string[];
   archived: boolean;
 }
 
@@ -3808,6 +3814,10 @@ export interface MaterialReceipt {
   storageLocation: string;
   inspectionNotes: string;
   fscRelated: boolean;
+  /** Phase 64 — uploaded photos. For paper, this is often the supplier
+   *  label/wrapper showing roll code + GSM. For inks/glues/chemicals
+   *  routed through Materials Receiving it's the drum + label. */
+  photoUrls?: string[];
 }
 
 export interface ProductionLogEntry {
@@ -6382,6 +6392,8 @@ export interface MaterialReceiptFormState {
   storageLocation: string;
   inspectionNotes: string;
   fscRelated: boolean;
+  /** Phase 64 — roll wrapper / label / drum photos. */
+  photoUrls?: string[];
 }
 
 export interface InventoryScanFormState {
