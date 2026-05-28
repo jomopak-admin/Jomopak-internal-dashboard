@@ -60,6 +60,7 @@ import { ControlCentrePage } from './pages/ControlCentre/ControlCentrePage';
 import { CompaniesPage } from './pages/Companies/CompaniesPage';
 import { DispatchRunsPage } from './pages/DispatchRuns/DispatchRunsPage';
 import { ToolingPage } from './pages/Tooling/ToolingPage';
+import { LabelsPage } from './pages/Labels/LabelsPage';
 import { ContaminationControlPage } from './pages/ContaminationControl/ContaminationControlPage';
 import { WorkTicketPage, emptyWorkTicketForm } from './pages/WorkTicket/WorkTicketPage';
 import { WorkTicketPrint } from './pages/WorkTicket/WorkTicketPrint';
@@ -11245,6 +11246,17 @@ function App() {
           onDelete={handleDeleteCompany}
           onLinkClient={handleLinkCompanyToClient}
           onLinkSupplier={handleLinkCompanyToSupplier}
+        />
+      )}
+
+      {view === 'labels' && (
+        <LabelsPage
+          spareParts={data.spareParts}
+          chemicalRegisterEntries={data.chemicalRegisterEntries}
+          materialReceipts={data.materialReceipts}
+          finishedGoodsStock={data.finishedGoodsStock}
+          tooling={data.tooling ?? []}
+          brandName={data.appSettings.company.name || 'JomoPak'}
         />
       )}
 

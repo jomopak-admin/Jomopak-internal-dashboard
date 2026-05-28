@@ -90,7 +90,8 @@ export type View =
   | 'companies'
   | 'dispatchRuns'
   | 'dies'
-  | 'stereos';
+  | 'stereos'
+  | 'labels';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
 export type DashboardWidget =
   | 'stats'
@@ -202,6 +203,7 @@ export const VIEW_LABELS: Record<View, string> = {
   dispatchRuns: 'Dispatch Runs',
   dies: 'Dies',
   stereos: 'Stereos',
+  labels: 'Labels',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
@@ -264,6 +266,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dispatchRuns',
     'dies',
     'stereos',
+    'labels',
     'invoiceInbox',
     'production',
     'waste',
@@ -347,6 +350,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'dispatchRuns',
     'dies',
     'stereos',
+    'labels',
     'invoiceInbox',
     'production',
     'waste',
