@@ -798,7 +798,7 @@ export function mapFinishedGoodsStock(row: any): FinishedGoodsStock {
     stockStatus: row.stock_status ?? 'In Storage',
     brandingStatus: row.branding_status ?? '',
     notes: row.notes ?? '',
-    foodSafetyHoldStatus: row.food_safety_hold_status ?? 'In Production',
+    foodSafetyHoldStatus: row.food_safety_hold_status === 'In Production' ? 'In Stock' : (row.food_safety_hold_status ?? 'In Stock'),
     releasedByName: row.released_by_name ?? '',
     releasedAt: row.released_at ?? '',
     holdReason: row.hold_reason ?? '',
@@ -3067,7 +3067,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       branding_status: item.brandingStatus || null,
       notes: item.notes || null,
       // Food-safety hold/release (Phase 2)
-      food_safety_hold_status: item.foodSafetyHoldStatus ?? 'In Production',
+      // Legacy rows persisted 'In Production'; coerce to the new 'In Stock' label on write.
+      food_safety_hold_status: ((item.foodSafetyHoldStatus as string) === 'In Production' ? 'In Stock' : (item.foodSafetyHoldStatus ?? 'In Stock')),
       released_by_name: item.releasedByName ?? '',
       released_at: item.releasedAt || null,
       hold_reason: item.holdReason ?? '',

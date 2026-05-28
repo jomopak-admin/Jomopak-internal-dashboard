@@ -1689,7 +1689,7 @@ export interface FinishedGoodsStock {
   stockStatus: FinishedStockStatus;
   brandingStatus: string;
   notes: string;
-  /** Phase 2 food-safety hold/release state. Defaults to 'In Production'. */
+  /** Phase 2 food-safety hold/release state. Defaults to 'In Stock' (non-food) or 'Awaiting QC' (food-contact). */
   foodSafetyHoldStatus: FoodSafetyHoldStatus;
   /** Who released this batch (must hold a release-permitted role). */
   releasedByName: string;
@@ -2496,7 +2496,7 @@ export function isQcStagePassed(record: QcStageRecord): boolean {
 // ----- Finished-goods food-safety hold / release -----
 
 export type FoodSafetyHoldStatus =
-  | 'In Production'
+  | 'In Stock'
   | 'Awaiting QC'
   | 'On Hold'
   | 'Released'
@@ -2506,7 +2506,7 @@ export type FoodSafetyHoldStatus =
   | 'Recalled';
 
 export const FOOD_SAFETY_HOLD_STATUSES: FoodSafetyHoldStatus[] = [
-  'In Production',
+  'In Stock',
   'Awaiting QC',
   'On Hold',
   'Released',

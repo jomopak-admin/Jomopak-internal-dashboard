@@ -4649,9 +4649,9 @@ function App() {
       brandingStatus: stockForm.brandingStatus,
       notes: stockForm.notes,
       photoUrls: stockForm.photoUrls ?? [],
-      // Phase 2 food-safety fields. New batches default to "In Production"
-      // and pick up the food-contact level from the linked job (if any).
-      foodSafetyHoldStatus: (linkedJob && isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') ? 'Awaiting QC' : 'In Production') as FoodSafetyHoldStatus,
+      // Phase 2 food-safety fields. New batches default to "In Stock" for non-food
+      // items, or "Awaiting QC" if the linked job is food-contact packaging.
+      foodSafetyHoldStatus: (linkedJob && isFoodPackagingLevel(linkedJob.foodContactLevel ?? 'NonFood') ? 'Awaiting QC' : 'In Stock') as FoodSafetyHoldStatus,
       releasedByName: '',
       releasedAt: '',
       holdReason: '',

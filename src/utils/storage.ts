@@ -441,7 +441,7 @@ function normalizeFinishedGoodsStock(raw: any): FinishedGoodsStock {
     stockStatus: raw.stockStatus ?? 'In Storage',
     brandingStatus: raw.brandingStatus ?? '',
     notes: raw.notes ?? '',
-    foodSafetyHoldStatus: raw.foodSafetyHoldStatus ?? 'In Production',
+    foodSafetyHoldStatus: raw.foodSafetyHoldStatus === 'In Production' ? 'In Stock' : (raw.foodSafetyHoldStatus ?? 'In Stock'),
     releasedByName: raw.releasedByName ?? '',
     releasedAt: raw.releasedAt ?? '',
     holdReason: raw.holdReason ?? '',
