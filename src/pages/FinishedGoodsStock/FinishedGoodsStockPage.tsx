@@ -33,6 +33,10 @@ interface FinishedGoodsStockPageProps {
   paperLogs?: PaperLog[];
   materialReceipts?: MaterialReceipt[];
   chemicals?: ChemicalRegisterEntry[];
+  /** Phase 72 — preview of the next auto-generated stock number / barcode,
+   *  computed by App.tsx from the storedDate + full existing FGS code list.
+   *  Used to show "Auto: FGS-202605-007" on the new-batch form. */
+  nextStockNumberPreview?: string;
 }
 
 export function FinishedGoodsStockPage({
@@ -56,8 +60,12 @@ export function FinishedGoodsStockPage({
   paperLogs = [],
   materialReceipts = [],
   chemicals = [],
+  nextStockNumberPreview = '',
 }: FinishedGoodsStockPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
+  // Phase 72 — UX gate. By default the barcode auto-generates from the stock
+  // number; only the rare "scan a pre-printed label" case needs manual entry.
+  const [barcodeOverride, setBarcodeOverride] = useState<boolean>(false);
 
   useEffect(() => {
     if (stockEditingId) {
@@ -139,8 +147,48 @@ export function FinishedGoodsStockPage({
             />
           </label>
           <label>
-            <span>Barcode</span>
-            <input value={stockForm.barcode} onChange={(event) => setStockForm({ ...stockForm, barcode: event.target.value })} placeholder="Scan or enter barcode" />
+            <span>Stock number / Barcode</span>
+            {stockEditingId ? (
+              <input value={stockForm.barcode} readOnly title="Barcode is fixed once a label has been printed on the carton." />
+            ) : barcodeOverride ? (
+              <>
+                <input
+                  value={stockForm.barcode}
+                  onChange={(event) => setStockForm({ ...stockForm, barcode: event.target.value })}
+                  placeholder="Scan or type a custom barcode"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ marginTop: 4, alignSelf: 'flex-start', padding: '2px 8px', fontSize: 11 }}
+                  onClick={() => { setBarcodeOverride(false); setStockForm({ ...stockForm, barcode: '' }); }}
+                >
+                  Use auto-generated instead
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  value={nextStockNumberPreview}
+                  readOnly
+                  title="Auto-generated from the previous batch in the same month."
+                  style={{ background: 'var(--jp-paper-2, #faf8f4)', color: 'var(--jp-ink-2, #6f6657)' }}
+                />
+                <span className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Auto — increments from the previous FGS batch this month.
+                  {' '}
+                  <button
+                    type="button"
+                    className="link-button"
+                    style={{ padding: 0, background: 'none', border: 'none', color: 'var(--jp-accent, #2563eb)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}
+                    onClick={() => setBarcodeOverride(true)}
+                  >
+                    Override
+                  </button>
+                </span>
+              </>
+            )}
           </label>
         </div>
       ),

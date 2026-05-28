@@ -10164,6 +10164,11 @@ function App() {
           paperLogs={data.paperLogs}
           materialReceipts={data.materialReceipts}
           chemicals={data.chemicalRegisterEntries}
+          nextStockNumberPreview={generateCode(
+            'FGS',
+            data.finishedGoodsStock.map((s) => s.stockNumber),
+            stockForm.storedDate || new Date().toISOString().slice(0, 10),
+          )}
         />
       )}
 
