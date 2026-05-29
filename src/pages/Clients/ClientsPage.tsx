@@ -291,11 +291,28 @@ export function ClientsPage({
     {
       key: 'commercial',
       title: 'Commercial',
-      subtitle: 'Pricing tier, credit, payment terms, and tax. These drive how jobs are quoted and invoiced.',
+      subtitle: 'Credit, payment terms, and tax. These drive how jobs are quoted and invoiced.',
       body: (
         <div className="form-grid">
-          <label><span>Pricing tier</span><select value={clientForm.pricingTierId} onChange={(event) => setClientForm({ ...clientForm, pricingTierId: event.target.value })}><option value="">Select tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label>
-          <label><span>Default margin %</span><input type="number" min="0" value={clientForm.defaultMarginPercent} onChange={(event) => setClientForm({ ...clientForm, defaultMarginPercent: event.target.value })} /></label>
+          {/* Phase 89 — margin is set once, company-wide, not per client.
+              Every client gets the same standard. If a specific client
+              negotiates a discount, sales applies it explicitly per
+              quote / per line on the Calculator. That way the audit
+              trail shows the discount rather than burying it in a tier
+              setting nobody remembers. */}
+          <div className="full-span" style={{
+            fontSize: 12,
+            padding: '8px 12px',
+            background: 'var(--jp-paper-2, #faf8f4)',
+            border: '1px solid var(--jp-line, #e6e0d3)',
+            borderRadius: 8,
+            color: 'var(--jp-ink-2, #6f6657)',
+          }}>
+            <strong>Pricing margin is company-wide</strong> — every client
+            gets the same standard margin (set in Settings). Negotiated
+            discounts are explicit per-quote overrides on the Calculator,
+            not a setting buried on the client record.
+          </div>
           <label><span>Credit limit</span><input type="number" min="0" value={clientForm.creditLimit} onChange={(event) => setClientForm({ ...clientForm, creditLimit: event.target.value })} /></label>
           <label><span>Current balance</span><input type="number" value={clientForm.currentBalance} onChange={(event) => setClientForm({ ...clientForm, currentBalance: event.target.value })} /></label>
           <label><span>Payment terms</span><input value={clientForm.paymentTerms} onChange={(event) => setClientForm({ ...clientForm, paymentTerms: event.target.value })} placeholder="e.g. 30 days, COD" /></label>
@@ -627,13 +644,12 @@ export function ClientsPage({
           {filteredClients.length ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Client</th><th>Pricing tier</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Tooling</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Client</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Tooling</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
                 <tbody>{filteredClients.map((client) => {
                   const clientDns = deliveryNotesByClient.get(client.id) || [];
                   return (
                     <tr key={client.id}>
                       <td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td>
-                      <td>{client.pricingTierName || 'Not set'}</td>
                       <td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td>
                       <td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td>
                       <td>

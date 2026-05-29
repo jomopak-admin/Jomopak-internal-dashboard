@@ -221,9 +221,8 @@ export function CalculatorPage({
           }}>
             <strong style={{ fontSize: 13 }}>{selectedClient.name}</strong>
             {selectedClient.companyName ? <span className="muted">· {selectedClient.companyName}</span> : null}
-            {pricingTiers.find((t) => t.id === selectedClient.pricingTierId) ? (
-              <span className="badge">{pricingTiers.find((t) => t.id === selectedClient.pricingTierId)?.name} tier</span>
-            ) : null}
+            {/* Phase 89 — pricing-tier badge removed. Margin is company-wide;
+                negotiated discounts apply per-quote, not per client tier. */}
             {selectedClient.creditLimit > 0 ? (
               <span className="muted">
                 Credit: R{Math.round(selectedClient.currentBalance ?? 0)} / R{Math.round(selectedClient.creditLimit)}
