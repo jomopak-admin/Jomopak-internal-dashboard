@@ -4747,6 +4747,11 @@ export interface AppSettings {
   sarsConfig: AppSettingsSarsConfig;
   currencyConfig: AppSettingsCurrencyConfig;
   connectorConfig: AppSettingsConnectorConfig;
+  /** Phase 90 — Company-wide standard margin %. Drives every quote unless
+   *  an admin explicitly overrides on the line. Only the admin role can
+   *  edit this in Settings. Defaults to 35% so the engine has something
+   *  sensible to compute against on a fresh install. */
+  standardMarginPercent?: number;
   /** Last-write metadata, surfaced in the UI so admins can see who changed what. */
   updatedAt: string;
   updatedBy: string;
@@ -4813,6 +4818,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     contractVersion: 1,
     lastPublishedAt: '',
   },
+  standardMarginPercent: 35,
   updatedAt: '',
   updatedBy: '',
 };

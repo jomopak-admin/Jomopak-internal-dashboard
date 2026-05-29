@@ -10281,6 +10281,7 @@ function App() {
       {view === 'calculator' && (
         <CalculatorPage
           canViewInternalCosts={canViewInternalCalculatorCosts}
+          canEditPricing={profile?.role === 'admin'}
           clients={data.clients}
           products={data.products}
           pricingTiers={data.pricingTiers}

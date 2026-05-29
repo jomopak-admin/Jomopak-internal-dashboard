@@ -57,6 +57,10 @@ import { CalculatorQuotePrint } from './CalculatorQuotePrint';
 
 interface CalculatorPageProps {
   canViewInternalCosts: boolean;
+  /** Phase 90 — admin-only. Hides margin %, per-line margin override,
+   *  paper / profile override block, and the cost-master inputs from
+   *  non-admin users. Sales sees the price; only the CEO can move it. */
+  canEditPricing?: boolean;
   clients: Client[];
   products: Product[];
   pricingTiers: PricingTier[];
@@ -88,6 +92,7 @@ const COVERAGE_OPTIONS: PrintCoverageBand[] = ['None', 'Light', 'Medium', 'Heavy
 
 export function CalculatorPage({
   canViewInternalCosts,
+  canEditPricing = false,
   clients,
   products,
   pricingTiers,
@@ -279,18 +284,22 @@ export function CalculatorPage({
               ))}
             </select>
           </label>
-          <label>
-            <span>Quote-level margin %</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.1"
-              value={state.shared.customMarginPercent}
-              onChange={(e) => updateShared('customMarginPercent', e.target.value)}
-              placeholder="Blank = tier/profile default"
-            />
-          </label>
+          {/* Phase 90 — quote-level margin override is admin-only. Sales
+              sees the standard price; only the CEO can move the margin. */}
+          {canEditPricing ? (
+            <label>
+              <span>Quote-level margin %</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={state.shared.customMarginPercent}
+                onChange={(e) => updateShared('customMarginPercent', e.target.value)}
+                placeholder="Blank = company standard"
+              />
+            </label>
+          ) : null}
           <label>
             <span>Quote date</span>
             <input type="date" value={state.shared.quoteDate} onChange={(e) => updateShared('quoteDate', e.target.value)} />
@@ -333,6 +342,7 @@ export function CalculatorPage({
             paperRates={paperRates}
             costProfiles={costProfiles}
             canViewInternalCosts={canViewInternalCosts}
+            canEditPricing={canEditPricing}
             onChange={(patch) => updateLine(line.id, patch)}
             onDuplicate={() => duplicateLine(line.id)}
             onRemove={() => removeLine(line.id)}
@@ -424,6 +434,8 @@ interface LineCardProps {
   paperRates: PaperRate[];
   costProfiles: CostProfile[];
   canViewInternalCosts: boolean;
+  /** Phase 90 — admin-only. Gates the per-line overrides block. */
+  canEditPricing?: boolean;
   onChange: (patch: Partial<CalculatorLineItem>) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -437,6 +449,7 @@ function LineCard({
   paperRates,
   costProfiles,
   canViewInternalCosts,
+  canEditPricing = false,
   onChange,
   onDuplicate,
   onRemove,
@@ -604,13 +617,17 @@ function LineCard({
         </label>
       </div>
 
-      <button
-        type="button"
-        className="link-button calculator2-overrides-toggle"
-        onClick={() => setShowOverrides((v) => !v)}
-      >
-        {showOverrides ? 'Hide' : 'Show'} per-line paper / profile overrides
-      </button>
+      {/* Phase 90 — admin-only. Sales doesn't see paper / profile / margin
+          overrides; they take the company-standard price as-is. */}
+      {canEditPricing ? (
+        <button
+          type="button"
+          className="link-button calculator2-overrides-toggle"
+          onClick={() => setShowOverrides((v) => !v)}
+        >
+          {showOverrides ? 'Hide' : 'Show'} per-line paper / profile / margin overrides
+        </button>
+      ) : null}
       {showOverrides && (
         <div className="calculator2-line-grid">
           <label>
