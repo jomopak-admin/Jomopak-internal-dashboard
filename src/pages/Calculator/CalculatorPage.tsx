@@ -443,6 +443,10 @@ function LineCard({
   onRemove,
 }: LineCardProps) {
   const [showOverrides, setShowOverrides] = useState(false);
+  // Phase 87 — unlocks bag dimensions + handle when a product is picked
+  // (the rare "I want a custom variant" case). Hidden by default so the
+  // line just shows 'From product: 210×120×280' as a summary.
+  const [showSpecOverride, setShowSpecOverride] = useState(false);
 
   return (
     <div className="card calculator2-line-card">
@@ -461,9 +465,18 @@ function LineCard({
             value={line.productId}
             onChange={(e) => {
               const product = products.find((p) => p.id === e.target.value);
+              // Phase 87 — auto-fill the bag spec + handle from the Product
+              // record (paper, dimensions, handle now live on Product as of
+              // Phase 85). The operator never has to re-type what the product
+              // already knows. We DO overwrite the line values — picking a
+              // different product genuinely changes the spec.
               onChange({
                 productId: e.target.value,
                 productName: product?.name || line.productName,
+                bagWidthMm: product?.bagWidthMm ?? line.bagWidthMm,
+                bagHeightMm: product?.bagHeightMm ?? line.bagHeightMm,
+                gussetMm: product?.gussetMm ?? line.gussetMm,
+                handleType: (product?.handleType ?? line.handleType) as HandleType,
               });
             }}
           >
@@ -488,29 +501,59 @@ function LineCard({
           />
         </label>
 
-        <label>
-          <span>Bag width (mm)</span>
-          <input type="number" inputMode="decimal" min="0" value={line.bagWidthMm} onChange={(e) => onChange({ bagWidthMm: e.target.value })} />
-        </label>
-        <label>
-          <span>Bag height (mm)</span>
-          <input type="number" inputMode="decimal" min="0" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
-        </label>
-        <label>
-          <span>Gusset (mm)</span>
-          <input type="number" inputMode="decimal" min="0" value={line.gussetMm} onChange={(e) => onChange({ gussetMm: e.target.value })} />
-        </label>
+        {/* Phase 87 — when a product is picked the spec comes from there.
+            Show a one-line summary instead of three blank inputs the user
+            would otherwise have to re-type. The "Override spec" toggle
+            unlocks them for the rare case of a custom variant. */}
+        {line.productId ? (
+          <div className="calculator2-grid-span-2" style={{
+            fontSize: 12,
+            padding: '6px 10px',
+            background: 'var(--jp-paper-2, #faf8f4)',
+            border: '1px solid var(--jp-line, #e6e0d3)',
+            borderRadius: 8,
+            color: 'var(--jp-ink-2, #6f6657)',
+          }}>
+            <strong style={{ marginRight: 8 }}>From product:</strong>
+            {[line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join(' × ') || '— dimensions not on product yet —'}
+            {line.handleType && line.handleType !== 'None' ? ` · ${line.handleType}` : ''}
+            <button
+              type="button"
+              className="link-button"
+              style={{ marginLeft: 12, fontSize: 11 }}
+              onClick={() => setShowSpecOverride((v) => !v)}
+            >{showSpecOverride ? 'Hide override' : 'Override spec'}</button>
+          </div>
+        ) : null}
+
+        {(!line.productId || showSpecOverride) ? (
+          <>
+            <label>
+              <span>Bag width (mm)</span>
+              <input type="number" inputMode="decimal" min="0" value={line.bagWidthMm} onChange={(e) => onChange({ bagWidthMm: e.target.value })} />
+            </label>
+            <label>
+              <span>Bag height (mm)</span>
+              <input type="number" inputMode="decimal" min="0" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
+            </label>
+            <label>
+              <span>Gusset (mm)</span>
+              <input type="number" inputMode="decimal" min="0" value={line.gussetMm} onChange={(e) => onChange({ gussetMm: e.target.value })} />
+            </label>
+            <label>
+              <span>Handle</span>
+              <select value={line.handleType} onChange={(e) => onChange({ handleType: e.target.value as HandleType })}>
+                {HANDLE_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </label>
+          </>
+        ) : null}
+
         <label>
           <span>Quantity</span>
           <input type="number" inputMode="numeric" min="0" value={line.quantity} onChange={(e) => onChange({ quantity: e.target.value })} />
         </label>
 
-        <label>
-          <span>Handle</span>
-          <select value={line.handleType} onChange={(e) => onChange({ handleType: e.target.value as HandleType })}>
-            {HANDLE_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
-          </select>
-        </label>
         <label>
           <span>Print method</span>
           <select value={line.printMethod} onChange={(e) => onChange({ printMethod: e.target.value as PrintMethod })}>
@@ -536,18 +579,6 @@ function LineCard({
             value={line.printAreaCm2}
             onChange={(e) => onChange({ printAreaCm2: e.target.value })}
             placeholder="W × H of artwork"
-          />
-        </label>
-        <label>
-          <span>Per-line margin %</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.1"
-            value={line.customMarginPercent}
-            onChange={(e) => onChange({ customMarginPercent: e.target.value })}
-            placeholder="Inherit"
           />
         </label>
       </div>
@@ -578,6 +609,21 @@ function LineCard({
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+          </label>
+          {/* Phase 87 — per-line margin lives in the overrides block now.
+              By default the line uses the header margin (or client tier);
+              this is the escape hatch for unusual lines. */}
+          <label>
+            <span>Margin % (override)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={line.customMarginPercent}
+              onChange={(e) => onChange({ customMarginPercent: e.target.value })}
+              placeholder="Inherit from header / client tier"
+            />
           </label>
         </div>
       )}
