@@ -465,11 +465,16 @@ function LineCard({
             value={line.productId}
             onChange={(e) => {
               const product = products.find((p) => p.id === e.target.value);
-              // Phase 87 — auto-fill the bag spec + handle from the Product
-              // record (paper, dimensions, handle now live on Product as of
-              // Phase 85). The operator never has to re-type what the product
-              // already knows. We DO overwrite the line values — picking a
-              // different product genuinely changes the spec.
+              // Phase 87 + 88 — auto-fill bag spec + handle, AND inherit the
+              // product's base margin %. When a stock Product is picked the
+              // line is conceptually "branded version of stock product X" —
+              // base price + product margin come from the catalogue; the
+              // calculator only adds print cost on top. customMarginPercent
+              // gets the product margin so the engine has something to use
+              // until cost masters are wired in for real.
+              const inheritedMargin = product?.pricingSpec?.baseMarginPercent
+                ? String(product.pricingSpec.baseMarginPercent)
+                : line.customMarginPercent;
               onChange({
                 productId: e.target.value,
                 productName: product?.name || line.productName,
@@ -477,6 +482,7 @@ function LineCard({
                 bagHeightMm: product?.bagHeightMm ?? line.bagHeightMm,
                 gussetMm: product?.gussetMm ?? line.gussetMm,
                 handleType: (product?.handleType ?? line.handleType) as HandleType,
+                customMarginPercent: inheritedMargin,
               });
             }}
           >
@@ -501,28 +507,44 @@ function LineCard({
           />
         </label>
 
-        {/* Phase 87 — when a product is picked the spec comes from there.
-            Show a one-line summary instead of three blank inputs the user
-            would otherwise have to re-type. The "Override spec" toggle
-            unlocks them for the rare case of a custom variant. */}
+        {/* Phase 87 + 88 — when a stock Product is picked, the line is
+            'branded version of stock product X'. Base unit cost (paper +
+            bag-making + handle) and the product margin come from the
+            catalogue automatically. The calculator only computes what the
+            BRANDING adds on top — print method, colours, coverage, plates,
+            ink. The summary chip below makes that model explicit. */}
         {line.productId ? (
           <div className="calculator2-grid-span-2" style={{
             fontSize: 12,
-            padding: '6px 10px',
+            padding: '8px 12px',
             background: 'var(--jp-paper-2, #faf8f4)',
             border: '1px solid var(--jp-line, #e6e0d3)',
             borderRadius: 8,
             color: 'var(--jp-ink-2, #6f6657)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 10,
           }}>
-            <strong style={{ marginRight: 8 }}>From product:</strong>
-            {[line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join(' × ') || '— dimensions not on product yet —'}
-            {line.handleType && line.handleType !== 'None' ? ` · ${line.handleType}` : ''}
+            <span className="badge badge-success" style={{ fontSize: 10 }}>Stock product</span>
+            <span>
+              <strong>{[line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join(' × ') || '— dimensions not on product yet —'}</strong>
+              {line.handleType && line.handleType !== 'None' ? ` · ${line.handleType}` : ''}
+            </span>
+            {(() => {
+              const product = products.find((p) => p.id === line.productId);
+              const margin = product?.pricingSpec?.baseMarginPercent;
+              return margin ? <span className="muted">· margin {margin}% (inherited)</span> : null;
+            })()}
+            <span className="muted" style={{ flexBasis: '100%', fontSize: 11 }}>
+              Spec + margin pull from the product. The calculator only adds the cost of branding (plates / ink / coverage / colours) on top. For an unprinted-only quote, just save without filling the print fields.
+            </span>
             <button
               type="button"
               className="link-button"
-              style={{ marginLeft: 12, fontSize: 11 }}
+              style={{ fontSize: 11 }}
               onClick={() => setShowSpecOverride((v) => !v)}
-            >{showSpecOverride ? 'Hide override' : 'Override spec'}</button>
+            >{showSpecOverride ? 'Hide spec override' : 'Override spec'}</button>
           </div>
         ) : null}
 
