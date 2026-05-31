@@ -17,7 +17,7 @@
  * Admin-role-only. Sidebar role gate filters it out for everyone else.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
   AppData,
@@ -76,14 +76,177 @@ export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
     };
   }, [data, profile]);
 
+  /* ─── Section data ────────────────────────────────────────────────
+   *
+   * One entry per admin chore area. The two-pane layout reads from this
+   * array: left rail lists titles + a badge (red dot) when something is
+   * waiting, right pane shows the picked section's stats + actions.
+   *
+   * Badge logic: a section gets a badge when at least one of its stats
+   * is in 'warn' or 'alert' tone. That ensures the rail visually
+   * highlights what actually needs attention this morning.
+   * ─────────────────────────────────────────────────────────────────── */
+  type SectionStat = { label: string; value: number | string; tone?: 'warn' | 'alert' };
+  type SectionAction = { label: string; primary?: boolean; onClick: () => void };
+  interface AdminSection {
+    id: string;
+    title: string;
+    subtitle: string;
+    stats: SectionStat[];
+    actions: SectionAction[];
+  }
+
+  const sections: AdminSection[] = [
+    {
+      id: 'notices',
+      title: 'Notices & broadcast',
+      subtitle: 'Talk to the team. Notice goes to My Stuff for the targeted roles.',
+      stats: [
+        { label: 'On file', value: counts.notices },
+        { label: 'Pending acks', value: counts.noticesUnack, tone: counts.noticesUnack > 0 ? 'warn' : undefined },
+      ],
+      actions: [
+        { label: 'Post a notice', primary: true, onClick: () => goTo('notices') },
+        { label: 'See notice board', onClick: () => goTo('notices') },
+        { label: 'My Stuff (preview)', onClick: () => goTo('myPortal') },
+      ],
+    },
+    {
+      id: 'people',
+      title: 'People & permissions',
+      subtitle: 'Add a user, change a role, link an employee to their login.',
+      stats: [{ label: 'Active employees', value: counts.employees }],
+      actions: [
+        { label: 'Add / edit users', primary: true, onClick: () => goTo('permissions') },
+        { label: 'Permissions matrix', onClick: () => goTo('permissions') },
+        { label: 'Employee register', onClick: () => goTo('employees') },
+        { label: 'Visitor log', onClick: () => goTo('visitorLog') },
+      ],
+    },
+    {
+      id: 'hr',
+      title: 'HR queue',
+      subtitle: 'Approvals, warnings, leave, loans, claims — everything waiting on you.',
+      stats: [
+        { label: 'Open warnings', value: counts.warningsOpen, tone: counts.warningsOpen > 0 ? 'warn' : undefined },
+        { label: 'Leave pending', value: counts.leavePending, tone: counts.leavePending > 0 ? 'warn' : undefined },
+        { label: 'Claims pending', value: counts.expensePending, tone: counts.expensePending > 0 ? 'warn' : undefined },
+        { label: 'Active loans', value: counts.loansActive },
+      ],
+      actions: [
+        { label: 'Approve leave', primary: true, onClick: () => goTo('staffLeaveApprove') },
+        { label: 'Approve claims', onClick: () => goTo('expenseClaimsApprove') },
+        { label: 'Issue warning', onClick: () => goTo('staffWarnings') },
+        { label: 'Staff loans', onClick: () => goTo('staffLoans') },
+        { label: 'Run payroll', onClick: () => goTo('payroll') },
+        { label: 'IRP5 / EMP501', onClick: () => goTo('irp5Centre') },
+      ],
+    },
+    {
+      id: 'pricing',
+      title: 'Pricing & cost masters',
+      subtitle: 'Paper rates, cost profiles, pricing tiers, default margin — the dials behind every quote.',
+      stats: [
+        { label: 'Paper rates', value: counts.paperRates },
+        { label: 'Cost profiles', value: counts.costProfiles },
+        { label: 'Pricing tiers', value: counts.pricingTiers },
+        { label: 'Std margin', value: `${counts.standardMargin}%` },
+      ],
+      actions: [
+        { label: 'Paper rates', primary: true, onClick: () => goTo('costMasters') },
+        { label: 'Cost profiles', onClick: () => goTo('costMasters') },
+        { label: 'Cost inputs', onClick: () => goTo('costInputs') },
+        { label: 'Pricing tiers', onClick: () => goTo('pricing') },
+        { label: 'Standard margin (Settings)', onClick: () => goTo('settings') },
+        { label: 'Price list (public)', onClick: () => goTo('priceList') },
+      ],
+    },
+    {
+      id: 'compliance',
+      title: 'Compliance attention',
+      subtitle: 'NCRs, SARS, SHE meeting cadence, drills, training — keep audits clean.',
+      stats: [
+        { label: 'Open NCRs', value: counts.ncrsOpen, tone: counts.ncrsOverdue > 0 ? 'alert' : counts.ncrsOpen > 0 ? 'warn' : undefined },
+        { label: 'NCRs overdue', value: counts.ncrsOverdue, tone: counts.ncrsOverdue > 0 ? 'alert' : undefined },
+        { label: 'Last SHE meeting', value: counts.sheLastDate ? counts.sheLastDate : '—' },
+        { label: 'Last fire drill', value: counts.drillLastDate ? counts.drillLastDate : '—' },
+      ],
+      actions: [
+        { label: 'NCR register', primary: true, onClick: () => goTo('nonConformance') },
+        { label: 'SHE Committee', onClick: () => goTo('sheCommittee') },
+        { label: 'Drill register', onClick: () => goTo('drillRegister') },
+        { label: 'Incident register', onClick: () => goTo('incidentRegister') },
+        { label: 'Toolbox talks', onClick: () => goTo('toolboxTalks') },
+        { label: 'First aid register', onClick: () => goTo('firstAidRegister') },
+        { label: 'Training records', onClick: () => goTo('staffTraining') },
+        { label: 'SARS Centre', onClick: () => goTo('sarsCentre') },
+        { label: 'Doc Vault', onClick: () => goTo('documentVault') },
+      ],
+    },
+    {
+      id: 'settings',
+      title: 'Settings & branding',
+      subtitle: 'Company info, document templates, retention defaults, FX rates.',
+      stats: [{ label: 'SARS registered', value: counts.sarsConfigured ? 'Yes' : 'No' }],
+      actions: [
+        { label: 'Open Settings', primary: true, onClick: () => goTo('settings') },
+        { label: 'Currencies & FX', onClick: () => goTo('currencies') },
+        { label: 'Chart of accounts', onClick: () => goTo('chartOfAccounts') },
+        { label: 'Doc Vault', onClick: () => goTo('documentVault') },
+      ],
+    },
+    {
+      id: 'ops',
+      title: 'Operations oversight',
+      subtitle: "Production schedule, materials forecast, finished stock — what's the floor doing.",
+      stats: [],
+      actions: [
+        { label: 'Production schedule', primary: true, onClick: () => goTo('productionSchedule') },
+        { label: 'Material requirements', onClick: () => goTo('materialRequirements') },
+        { label: 'Finished stock', onClick: () => goTo('finishedStock') },
+        { label: 'Stock movements', onClick: () => goTo('stockMovements') },
+        { label: 'Stock take', onClick: () => goTo('stockTake') },
+        { label: 'Maintenance', onClick: () => goTo('maintenance') },
+      ],
+    },
+    {
+      id: 'finance',
+      title: 'Finance shortcuts',
+      subtitle: 'The numbers — quick path into the books.',
+      stats: [],
+      actions: [
+        { label: 'Aged debtors', primary: true, onClick: () => goTo('agedDebtors') },
+        { label: 'Customer statements', onClick: () => goTo('customerStatements') },
+        { label: 'Finance summary', onClick: () => goTo('financeSummary') },
+        { label: 'Bank reconciliation', onClick: () => goTo('bankRec') },
+        { label: 'Accounts payable', onClick: () => goTo('accountsPayable') },
+        { label: 'General ledger', onClick: () => goTo('generalLedger') },
+        { label: 'Cash flow forecast', onClick: () => goTo('cashFlow') },
+      ],
+    },
+  ];
+
+  // Default to the first section with attention if any have warn/alert
+  // tones, else the first section. Memoised so we don't re-pick on every
+  // render — the picker is user-driven once mounted.
+  const defaultSectionId = useMemo(() => {
+    const attentionFirst = sections.find((s) =>
+      s.stats.some((stat) => stat.tone === 'warn' || stat.tone === 'alert'),
+    );
+    return attentionFirst?.id ?? sections[0]?.id ?? '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [activeId, setActiveId] = useState<string>(defaultSectionId);
+  const active = sections.find((s) => s.id === activeId) ?? sections[0];
+
   return (
     <>
       <SectionTitle
         title="Admin Hub"
-        subtitle="One place for the admin chores — post notices, grant access, change pricing, run compliance. Quick links + live counts so you don't have to hunt."
+        subtitle="One place for the admin chores — post notices, grant access, change pricing, run compliance. Pick a section on the left to see what's waiting."
       />
 
-      {/* ═══ Headline stats ════════════════════════════════════════════ */}
+      {/* ═══ Headline stats — kept on top so you can scan the day at a glance ═══ */}
       <div
         style={{
           display: 'grid',
@@ -100,154 +263,163 @@ export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
         <Stat label="Standard margin" value={`${formatNumber(counts.standardMargin, 0)}%`} />
       </div>
 
-      {/* ═══ Section cards ════════════════════════════════════════════ */}
+      {/* ═══ Two-pane: left rail of sections, right pane of details ═══
+          Grid collapses to a single column on narrow screens so mobile
+          still shows the rail above the detail pane stacked. */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))',
-          gap: 14,
+          gridTemplateColumns: 'minmax(220px, 280px) 1fr',
+          gap: 16,
+          alignItems: 'start',
         }}
+        className="admin-hub-two-pane"
       >
-        {/* ── 1. Notices & broadcast ─────────────────────────────── */}
-        <SectionCard
-          title="Notices & broadcast"
-          subtitle="Talk to the team. Notice goes to My Stuff for the targeted roles."
-          stats={[
-            { label: 'On file', value: counts.notices },
-            { label: 'Pending acks', value: counts.noticesUnack, tone: counts.noticesUnack > 0 ? 'warn' : undefined },
-          ]}
-          actions={[
-            { label: 'Post a notice', primary: true, onClick: () => goTo('notices') },
-            { label: 'See notice board', onClick: () => goTo('notices') },
-            { label: 'My Stuff (preview)', onClick: () => goTo('myPortal') },
-          ]}
-        />
+        {/* ── Left rail ──────────────────────────────────────────── */}
+        <aside
+          style={{
+            background: 'var(--jp-paper, #fff)',
+            border: '1px solid var(--jp-border, #e5e2dc)',
+            borderRadius: 12,
+            padding: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            position: 'sticky',
+            top: 12,
+          }}
+        >
+          {sections.map((s) => {
+            const needsAttention = s.stats.some((stat) => stat.tone === 'warn' || stat.tone === 'alert');
+            const isAlert = s.stats.some((stat) => stat.tone === 'alert');
+            const isActive = s.id === activeId;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setActiveId(s.id)}
+                style={{
+                  appearance: 'none',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  border: '1px solid transparent',
+                  borderRadius: 8,
+                  background: isActive ? 'var(--jp-paper-2, #faf8f4)' : 'transparent',
+                  borderColor: isActive ? 'var(--jp-border, #e5e2dc)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 500,
+                  color: 'var(--jp-ink, #222)',
+                  transition: 'background 120ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--jp-paper-2, #faf8f4)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <span style={{ flex: 1 }}>{s.title}</span>
+                {needsAttention ? (
+                  <span
+                    aria-label={isAlert ? 'Attention overdue' : 'Attention needed'}
+                    title={isAlert ? 'Something overdue' : 'Needs attention'}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      background: isAlert ? '#b22b2b' : '#b8860b',
+                      flex: '0 0 auto',
+                    }}
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </aside>
 
-        {/* ── 2. People & permissions ────────────────────────────── */}
-        <SectionCard
-          title="People & permissions"
-          subtitle="Add a user, change a role, link an employee to their login."
-          stats={[
-            { label: 'Active employees', value: counts.employees },
-          ]}
-          actions={[
-            { label: 'Add / edit users', primary: true, onClick: () => goTo('permissions') },
-            { label: 'Permissions matrix', onClick: () => goTo('permissions') },
-            { label: 'Employee register', onClick: () => goTo('employees') },
-            { label: 'Visitor log', onClick: () => goTo('visitorLog') },
-          ]}
-        />
+        {/* ── Right pane: selected section detail ────────────────── */}
+        <section
+          style={{
+            background: 'var(--jp-paper, #fff)',
+            border: '1px solid var(--jp-border, #e5e2dc)',
+            borderRadius: 12,
+            padding: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            minHeight: 280,
+          }}
+        >
+          <header>
+            <strong style={{ fontSize: 18 }}>{active.title}</strong>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{active.subtitle}</p>
+          </header>
 
-        {/* ── 3. HR queue ──────────────────────────────────────────── */}
-        <SectionCard
-          title="HR queue"
-          subtitle="Approvals, warnings, leave, loans, claims — everything waiting on you."
-          stats={[
-            { label: 'Open warnings', value: counts.warningsOpen, tone: counts.warningsOpen > 0 ? 'warn' : undefined },
-            { label: 'Leave pending', value: counts.leavePending, tone: counts.leavePending > 0 ? 'warn' : undefined },
-            { label: 'Claims pending', value: counts.expensePending, tone: counts.expensePending > 0 ? 'warn' : undefined },
-            { label: 'Active loans', value: counts.loansActive },
-          ]}
-          actions={[
-            { label: 'Approve leave', onClick: () => goTo('staffLeaveApprove') },
-            { label: 'Approve claims', onClick: () => goTo('expenseClaimsApprove') },
-            { label: 'Issue warning', onClick: () => goTo('staffWarnings') },
-            { label: 'Staff loans', onClick: () => goTo('staffLoans') },
-            { label: 'Run payroll', onClick: () => goTo('payroll') },
-            { label: 'IRP5 / EMP501', onClick: () => goTo('irp5Centre') },
-          ]}
-        />
+          {active.stats.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {active.stats.map((s) => {
+                const colour =
+                  s.tone === 'alert' ? '#b22b2b'
+                  : s.tone === 'warn' ? '#8a6510'
+                  : 'var(--jp-ink, #222)';
+                const bg =
+                  s.tone === 'alert' ? 'rgba(178,43,43,0.06)'
+                  : s.tone === 'warn' ? 'rgba(184,134,11,0.06)'
+                  : 'var(--jp-paper-2, #faf8f4)';
+                return (
+                  <span
+                    key={s.label}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--jp-border, #e5e2dc)',
+                      background: bg,
+                      fontSize: 13,
+                      color: colour,
+                    }}
+                  >
+                    <span className="muted" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', color: 'var(--jp-ink-3, #64748b)' }}>
+                      {s.label}
+                    </span>
+                    <strong style={{ fontSize: 16, fontFeatureSettings: '"tnum"' }}>{s.value}</strong>
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
 
-        {/* ── 4. Pricing & cost masters ──────────────────────────── */}
-        <SectionCard
-          title="Pricing & cost masters"
-          subtitle="Paper rates, cost profiles, pricing tiers, default margin — the dials behind every quote."
-          stats={[
-            { label: 'Paper rates', value: counts.paperRates },
-            { label: 'Cost profiles', value: counts.costProfiles },
-            { label: 'Pricing tiers', value: counts.pricingTiers },
-            { label: 'Std margin', value: `${counts.standardMargin}%` },
-          ]}
-          actions={[
-            { label: 'Paper rates', primary: true, onClick: () => goTo('costMasters') },
-            { label: 'Cost profiles', onClick: () => goTo('costMasters') },
-            { label: 'Cost inputs', onClick: () => goTo('costInputs') },
-            { label: 'Pricing tiers', onClick: () => goTo('pricing') },
-            { label: 'Standard margin (Settings)', onClick: () => goTo('settings') },
-            { label: 'Price list (public)', onClick: () => goTo('priceList') },
-          ]}
-        />
-
-        {/* ── 5. Compliance attention ─────────────────────────────── */}
-        <SectionCard
-          title="Compliance attention"
-          subtitle="NCRs, SARS, SHE meeting cadence, drills, training — keep audits clean."
-          stats={[
-            { label: 'Open NCRs', value: counts.ncrsOpen, tone: counts.ncrsOverdue > 0 ? 'alert' : counts.ncrsOpen > 0 ? 'warn' : undefined },
-            { label: 'NCRs overdue', value: counts.ncrsOverdue, tone: counts.ncrsOverdue > 0 ? 'alert' : undefined },
-            { label: 'Last SHE meeting', value: counts.sheLastDate ? counts.sheLastDate : '—' },
-            { label: 'Last fire drill', value: counts.drillLastDate ? counts.drillLastDate : '—' },
-          ]}
-          actions={[
-            { label: 'NCR register', onClick: () => goTo('nonConformance') },
-            { label: 'SHE Committee', onClick: () => goTo('sheCommittee') },
-            { label: 'Drill register', onClick: () => goTo('drillRegister') },
-            { label: 'Incident register', onClick: () => goTo('incidentRegister') },
-            { label: 'Toolbox talks', onClick: () => goTo('toolboxTalks') },
-            { label: 'First aid register', onClick: () => goTo('firstAidRegister') },
-            { label: 'Training records', onClick: () => goTo('staffTraining') },
-            { label: 'SARS Centre', onClick: () => goTo('sarsCentre') },
-            { label: 'Doc Vault', onClick: () => goTo('documentVault') },
-          ]}
-        />
-
-        {/* ── 6. Settings & branding ──────────────────────────────── */}
-        <SectionCard
-          title="Settings & branding"
-          subtitle="Company info, document templates, retention defaults, FX rates."
-          stats={[
-            { label: 'SARS registered', value: counts.sarsConfigured ? 'Yes' : 'No' },
-          ]}
-          actions={[
-            { label: 'Open Settings', primary: true, onClick: () => goTo('settings') },
-            { label: 'Currencies & FX', onClick: () => goTo('currencies') },
-            { label: 'Chart of accounts', onClick: () => goTo('chartOfAccounts') },
-            { label: 'Doc Vault', onClick: () => goTo('documentVault') },
-            // Phase 103.7 — API Access is reached via Settings → API access tab.
-          ]}
-        />
-
-        {/* ── 7. Operations shortcuts (admin oversight) ──────────── */}
-        <SectionCard
-          title="Operations oversight"
-          subtitle="Production schedule, materials forecast, finished stock — what's the floor doing."
-          stats={[]}
-          actions={[
-            { label: 'Production schedule', onClick: () => goTo('productionSchedule') },
-            { label: 'Material requirements', onClick: () => goTo('materialRequirements') },
-            { label: 'Finished stock', onClick: () => goTo('finishedStock') },
-            { label: 'Stock movements', onClick: () => goTo('stockMovements') },
-            { label: 'Stock take', onClick: () => goTo('stockTake') },
-            { label: 'Maintenance', onClick: () => goTo('maintenance') },
-          ]}
-        />
-
-        {/* ── 8. Finance shortcuts ─────────────────────────────────── */}
-        <SectionCard
-          title="Finance shortcuts"
-          subtitle="The numbers — quick path into the books."
-          stats={[]}
-          actions={[
-            { label: 'Aged debtors', onClick: () => goTo('agedDebtors') },
-            { label: 'Customer statements', onClick: () => goTo('customerStatements') },
-            { label: 'Finance summary', onClick: () => goTo('financeSummary') },
-            { label: 'Bank reconciliation', onClick: () => goTo('bankRec') },
-            { label: 'Accounts payable', onClick: () => goTo('accountsPayable') },
-            { label: 'General ledger', onClick: () => goTo('generalLedger') },
-            { label: 'Cash flow forecast', onClick: () => goTo('cashFlow') },
-          ]}
-        />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {active.actions.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                className={a.primary ? 'primary-button' : 'ghost-button'}
+                style={{ fontSize: 13, padding: '8px 14px' }}
+                onClick={a.onClick}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
+
+      {/* Mobile: collapse the two-pane to a single column so the rail
+          sits above the detail pane. Matches Settings page behaviour. */}
+      <style>{`
+        @media (max-width: 720px) {
+          .admin-hub-two-pane {
+            grid-template-columns: 1fr !important;
+          }
+          .admin-hub-two-pane > aside {
+            position: static !important;
+          }
+        }
+      `}</style>
     </>
   );
 }
@@ -275,75 +447,6 @@ function Stat(props: { label: string; value: string; tone?: 'quiet' | 'warn' | '
   );
 }
 
-interface SectionCardProps {
-  title: string;
-  subtitle: string;
-  stats: Array<{ label: string; value: number | string; tone?: 'warn' | 'alert' }>;
-  actions: Array<{ label: string; primary?: boolean; onClick: () => void }>;
-}
-
-function SectionCard({ title, subtitle, stats, actions }: SectionCardProps) {
-  return (
-    <section
-      style={{
-        background: 'var(--jp-paper, #fff)',
-        border: '1px solid var(--jp-border, #e5e2dc)',
-        borderRadius: 12,
-        padding: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
-    >
-      <div>
-        <strong style={{ fontSize: 15 }}>{title}</strong>
-        <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{subtitle}</p>
-      </div>
-
-      {stats.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {stats.map((s) => {
-            const colour =
-              s.tone === 'alert' ? '#b22b2b'
-              : s.tone === 'warn' ? '#8a6510'
-              : 'var(--jp-ink, #222)';
-            const bg =
-              s.tone === 'alert' ? 'rgba(178,43,43,0.06)'
-              : s.tone === 'warn' ? 'rgba(184,134,11,0.06)'
-              : 'var(--jp-paper-2, #faf8f4)';
-            return (
-              <span
-                key={s.label}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  border: '1px solid var(--jp-border, #e5e2dc)',
-                  background: bg,
-                  fontSize: 12,
-                  color: colour,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.label}: <strong>{s.value}</strong>
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'auto' }}>
-        {actions.map((a) => (
-          <button
-            key={a.label}
-            type="button"
-            className={a.primary ? 'primary-button' : 'ghost-button'}
-            style={{ fontSize: 12, padding: '6px 12px' }}
-            onClick={a.onClick}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
+/* SectionCard removed in Phase 107.4 — the two-pane layout renders
+ * stats + actions inline in the right pane, so the old grid-card
+ * component is no longer needed. */
