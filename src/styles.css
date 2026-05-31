@@ -5346,3 +5346,99 @@ tr.row-muted { opacity: 0.55; }
   .control-centre-summary { padding: 12px 14px; }
   .control-centre-list { padding: 0 14px 12px; }
 }
+
+/* ─── Phase 94: Job Pipeline tracker. ─────────────────────────────────── */
+.job-pipeline {
+  border: 1px solid var(--jp-border, #e5e2dc);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--jp-paper, #fff);
+}
+.job-pipeline-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 12px;
+}
+.job-pipeline-progress {
+  position: relative;
+  min-width: 140px; height: 22px;
+  border-radius: 999px;
+  background: var(--jp-paper-2, #faf8f4);
+  border: 1px solid var(--jp-border, #e5e2dc);
+  overflow: hidden;
+}
+.job-pipeline-progress > span {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--jp-ink, #444);
+  z-index: 2;
+}
+.job-pipeline-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #d9efd9, #88c293);
+  transition: width 0.3s ease;
+  z-index: 1;
+}
+.job-pipeline-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.job-pipeline-stage {
+  border: 1px solid var(--jp-border, #e5e2dc);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--jp-paper-2, #faf8f4);
+}
+.job-pipeline-stage--done    { border-color: #88c293; background: #f3faf4; }
+.job-pipeline-stage--blocked { border-color: #d68b8b; background: #fbf3f3; }
+.job-pipeline-stage--in-progress { border-color: var(--jp-accent, #2563eb); }
+.job-pipeline-stage-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.job-pipeline-items { list-style: none; padding: 0; margin: 0; }
+.job-pipeline-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 0;
+  border-top: 1px dashed var(--jp-border-soft, #eee);
+}
+.job-pipeline-item:first-child { border-top: 0; }
+.job-pipeline-tick {
+  flex: 0 0 22px; width: 22px; height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--jp-border, #e5e2dc);
+  background: #fff;
+  font-weight: 700; font-size: 13px; line-height: 1;
+  cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.job-pipeline-tick:hover { border-color: var(--jp-accent, #2563eb); }
+.job-pipeline-tick:disabled { cursor: default; opacity: 0.7; }
+.job-pipeline-item--done .job-pipeline-tick {
+  background: #2e6f3e; color: #fff; border-color: #2e6f3e;
+}
+.job-pipeline-item--blocked .job-pipeline-tick {
+  background: #b22b2b; color: #fff; border-color: #b22b2b;
+}
+.job-pipeline-item-body { flex: 1; min-width: 0; }
+.job-pipeline-item-label { font-size: 13px; }
+.job-pipeline-item--done .job-pipeline-item-label {
+  text-decoration: line-through; color: #5a6e60;
+}
+.job-pipeline-blocker-input {
+  width: 100%; margin-top: 4px;
+  font-size: 12px; padding: 4px 6px;
+  border: 1px solid #d68b8b; border-radius: 4px;
+  background: #fff;
+}
+
+/* ─── Phase 100: Dashboard Attention strip ─────────────────────── */
+.attention-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 720px) {
+  .attention-strip { grid-template-columns: repeat(2, 1fr); }
+}

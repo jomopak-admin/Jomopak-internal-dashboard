@@ -70,6 +70,7 @@ function blankForm(): VisitorLogFormState {
     timeOut: '',
     hygieneAcknowledged: false,
     ppeIssued: '',
+    ppeIssuedItems: [],
     enteredFoodContactArea: false,
     notes: '',
     phoneNumber: '',

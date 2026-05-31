@@ -47,6 +47,72 @@ export function CalculatorQuotePrint({ lines, results, rollup, client, company, 
     </>
   );
 
+  /* ─── Phase 118 — Email & PDF helpers ─────────────────────────────
+   *
+   * mailto: builds a pre-populated email to the client's contactEmail
+   * with the quote summary in the body. The PDF itself is not attached
+   * (mailto can't attach files) but the prompt tells the user to attach
+   * the PDF they just saved via the print dialog. Most mail clients
+   * (Mac Mail, Outlook, Gmail) handle this seamlessly.
+   *
+   * downloadPdf wraps window.print(): the browser's "Save as PDF"
+   * destination produces a real PDF file without any heavyweight lib.
+   * The toast on click reminds the user to choose "Save as PDF" if
+   * they're not on a print-to-PDF default.
+   */
+  const quoteNumber = `EST-${today.replace(/-/g, '').slice(2)}`;
+  const customerEmail = client?.contactEmail || '';
+  const customerLabel = client?.companyName || client?.name || 'Customer';
+  const greetingName = client?.contactName || customerLabel;
+  const formatRand = (n: number) => `R ${formatNumber(n, 2)}`;
+
+  function buildEmailBody(): string {
+    const lineSummary = lines
+      .map((line, idx) => {
+        const r = results[idx];
+        if (!r) return '';
+        return `  • ${lineDescription(line)} — ${formatNumber(Number(line.quantity) || 0)} units @ ${formatRand(r.quotedUnitPrice)} = ${formatRand(r.lineTotal)}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+    const plateLine = plateFees > 0 ? `\n  • Plates / origination (once-off): ${formatRand(plateFees)}` : '';
+    return [
+      `Hi ${greetingName},`,
+      '',
+      `Thank you for your enquiry. Please find our quotation ${quoteNumber} below:`,
+      '',
+      lineSummary + plateLine,
+      '',
+      `Subtotal (excl VAT): ${formatRand(subtotalExcl)}`,
+      `VAT @ 15%:           ${formatRand(vat)}`,
+      `Total (incl VAT):    ${formatRand(totalIncl)}`,
+      '',
+      'Quote valid for 30 days from issue date. Please find the PDF attached.',
+      '',
+      `Kind regards,`,
+      `${preparedBy || (company?.name || 'JomoPak')}`,
+      company?.email ? `${company.email}` : '',
+      company?.phone ? `${company.phone}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  function openMailClient() {
+    const subject = `Quote ${quoteNumber} — ${customerLabel}`;
+    const body = buildEmailBody();
+    const href = `mailto:${encodeURIComponent(customerEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = href;
+  }
+
+  function downloadPdf() {
+    // Suggest a filename in the print dialog. Browsers use document.title
+    // as the default Save-as-PDF filename, so we patch it briefly.
+    const originalTitle = document.title;
+    document.title = `${quoteNumber} - ${customerLabel.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+    window.print();
+    // Restore the title after the print dialog returns control.
+    window.setTimeout(() => { document.title = originalTitle; }, 1000);
+  }
+
   function lineDescription(line: CalculatorLineItem): string {
     const name = line.productName || line.description || 'Paper bag';
     const dims = [line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join(' × ');
@@ -66,6 +132,17 @@ export function CalculatorQuotePrint({ lines, results, rollup, client, company, 
       toolbar={
         <>
           <button type="button" className="ghost-button" onClick={onClose}>Close</button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={openMailClient}
+            title={customerEmail ? `Email ${customerEmail}` : 'No email on this client — opens blank composer'}
+          >
+            Email to {customerLabel.length > 22 ? customerLabel.slice(0, 22) + '…' : customerLabel}
+          </button>
+          <button type="button" className="ghost-button" onClick={downloadPdf} title="Opens the print dialog — choose 'Save as PDF' to download">
+            Save as PDF
+          </button>
           <button type="button" className="primary-button" onClick={() => window.print()}>Print</button>
         </>
       }

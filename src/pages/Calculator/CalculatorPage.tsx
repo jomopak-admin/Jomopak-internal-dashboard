@@ -66,6 +66,9 @@ interface CalculatorPageProps {
   pricingTiers: PricingTier[];
   paperRates: PaperRate[];
   costProfiles: CostProfile[];
+  /** Phase 92 — company-wide standard margin %. Falls back below any
+   *  per-line / shared / tier / profile margin already set on the state. */
+  standardMarginPercent?: number;
   leads?: Lead[];
   state: CalculatorState;
   setState: (next: CalculatorState) => void;
@@ -74,6 +77,19 @@ interface CalculatorPageProps {
    *  records and persisting them. Should return the new quote number(s)
    *  so we can show a confirmation. */
   onSaveAsQuote?: (state: CalculatorState) => Promise<{ quoteNumbers: string[] }> | { quoteNumbers: string[] };
+  /** Phase 118.2 — append the current calculator lines to an existing
+   *  calculator-sourced quote batch. */
+  onAppendToQuote?: (state: CalculatorState, targetBatchId: string) => Promise<{ quoteNumbers: string[] }> | { quoteNumbers: string[] };
+  /** Phase 118.2 — calculator batches the user can append to, filtered
+   *  to the picker scope (typically same-client + recent + not invoiced). */
+  existingQuoteBatches?: Array<{
+    batchId: string;
+    baseNumber: string;
+    clientId: string;
+    clientName: string;
+    createdAt: string;
+    lineCount: number;
+  }>;
   /** Phase 86 — translate the current calculator state into a pre-filled
    *  Invoice form and navigate the user to the Invoice page so accounts
    *  can confirm + post. Skipped quote step entirely for direct-bill
@@ -98,10 +114,13 @@ export function CalculatorPage({
   pricingTiers,
   paperRates,
   costProfiles,
+  standardMarginPercent,
   leads = [],
   state,
   setState,
   onSaveAsQuote,
+  onAppendToQuote,
+  existingQuoteBatches,
   onSaveAsInvoice,
   company,
   defaultFooterLines,
@@ -114,8 +133,8 @@ export function CalculatorPage({
 
   // Live computation runs on every render. Pure function — no perf cost.
   const computation = useMemo(
-    () => computeQuote(state, { clients, pricingTiers, paperRates, costProfiles }),
-    [state, clients, pricingTiers, paperRates, costProfiles],
+    () => computeQuote(state, { clients, pricingTiers, paperRates, costProfiles, standardMarginPercent }),
+    [state, clients, pricingTiers, paperRates, costProfiles, standardMarginPercent],
   );
 
   const selectedClient = clients.find((c) => c.id === state.shared.clientId);
@@ -158,6 +177,15 @@ export function CalculatorPage({
     setSavedMessage('');
   }
 
+  /* Phase 118.2 — append picker state. The dropdown surfaces existing
+   * batches for the currently-selected client so the salesperson can
+   * route the new lines into an open quote instead of creating a new
+   * QTE-####. Empty string = "Save as new quote" (default). */
+  const [appendTargetBatch, setAppendTargetBatch] = useState('');
+  const batchesForClient = (existingQuoteBatches ?? []).filter(
+    (b) => b.clientId === state.shared.clientId,
+  );
+
   async function handleSaveAsQuote() {
     if (!onSaveAsQuote) return;
     if (!state.shared.clientId) {
@@ -171,8 +199,16 @@ export function CalculatorPage({
     setSaving(true);
     setSavedMessage('Saving…');
     try {
-      const result = await onSaveAsQuote(state);
-      setSavedMessage(`Saved quote${result.quoteNumbers.length > 1 ? 's' : ''}: ${result.quoteNumbers.join(', ')}`);
+      // Phase 118.2 — route to the append handler when the user picked
+      // an existing batch from the dropdown. Otherwise default to the
+      // standard new-quote save.
+      const result = (appendTargetBatch && onAppendToQuote)
+        ? await onAppendToQuote(state, appendTargetBatch)
+        : await onSaveAsQuote(state);
+      const verb = appendTargetBatch ? 'Added to quote' : 'Saved quote';
+      setSavedMessage(`${verb}${result.quoteNumbers.length > 1 ? 's' : ''}: ${result.quoteNumbers.join(', ')}`);
+      // Reset the picker so the next save defaults to "new quote".
+      setAppendTargetBatch('');
     } catch (e: any) {
       setSavedMessage(`Save failed: ${e?.message || 'unknown error'}`);
     } finally {
@@ -381,6 +417,32 @@ export function CalculatorPage({
           <p className={savedMessage.startsWith('Save failed') ? 'callout error' : 'muted'}>{savedMessage}</p>
         )}
 
+        {/* Phase 118.2 — "Add to existing quote" picker. Only renders when
+            the calculator's selected client has at least one calculator-
+            sourced quote batch open. Picking a target changes the Save
+            button below from "Save as new quote" → "Add to QTE-#####".
+            This avoids creating noisy new QTE numbers when the customer
+            just asked for "one more thing" on an existing quote. */}
+        {batchesForClient.length > 0 && onAppendToQuote ? (
+          <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 13, color: 'var(--jp-ink-2, #475569)' }}>
+              Save target:
+            </label>
+            <select
+              value={appendTargetBatch}
+              onChange={(e) => setAppendTargetBatch(e.target.value)}
+              style={{ padding: '6px 8px', fontSize: 13 }}
+            >
+              <option value="">— New quote —</option>
+              {batchesForClient.map((b) => (
+                <option key={b.batchId} value={b.batchId}>
+                  Add to {b.baseNumber} ({b.lineCount} line{b.lineCount === 1 ? '' : 's'})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div className="calculator2-actions">
           <button type="button" className="ghost-button" onClick={reset} disabled={saving}>Reset</button>
           <button
@@ -395,9 +457,11 @@ export function CalculatorPage({
             type="button"
             className="secondary-button"
             onClick={handleSaveAsQuote}
-            disabled={saving || blockingIssues.length > 0 || !onSaveAsQuote}
+            disabled={saving || blockingIssues.length > 0 || !onSaveAsQuote || (!!appendTargetBatch && !onAppendToQuote)}
           >
-            {saving ? 'Saving…' : 'Save as Quote'}
+            {saving ? 'Saving…' : (appendTargetBatch
+              ? `Add to ${batchesForClient.find((b) => b.batchId === appendTargetBatch)?.baseNumber ?? 'quote'}`
+              : 'Save as Quote')}
           </button>
           {/* Phase 86 — direct-to-invoice for clients who skip the quote step
               (already approved, accounts can post straight away). */}
@@ -459,6 +523,11 @@ function LineCard({
   // (the rare "I want a custom variant" case). Hidden by default so the
   // line just shows 'From product: 210×120×280' as a summary.
   const [showSpecOverride, setShowSpecOverride] = useState(false);
+  // Phase 91 — admin's discount what-if input. Pure UI state, never
+  // persisted. Shows the resulting margin if the line were quoted at
+  // this price, so the CEO can sanity-check a discount before applying
+  // it via the margin override above.
+  const [whatIfPrice, setWhatIfPrice] = useState('');
 
   return (
     <div className="card calculator2-line-card">
@@ -663,6 +732,16 @@ function LineCard({
               placeholder="Inherit from header / client tier"
             />
           </label>
+          {/* Phase 91 — discount reason captured next to the margin override
+              so the audit trail says why this client got a special price. */}
+          <label className="calculator2-grid-span-2">
+            <span>Discount reason (saved on the quote)</span>
+            <input
+              value={line.discountReason ?? ''}
+              onChange={(e) => onChange({ discountReason: e.target.value })}
+              placeholder="e.g. Repeat customer — match competitor R0.52 / Bulk order — 50k unit commitment"
+            />
+          </label>
         </div>
       )}
 
@@ -692,6 +771,70 @@ function LineCard({
         </div>
         <div className="calculator2-line-price"><span>Line total</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
       </div>
+
+      {/* Phase 91 — CEO discount mode. Admin-only widget for sanity-
+          checking a discount before applying it. Shows cost, current
+          margin, and a what-if calculator: 'if I quote at R0.42, my
+          margin drops to 12.5%'. Nothing here is persisted — once the
+          CEO is happy with a number they apply it via the margin
+          override above. */}
+      {canEditPricing && result.unitCost > 0 ? (
+        <div style={{
+          marginTop: 12,
+          padding: '10px 12px',
+          background: 'var(--jp-paper-2, #faf8f4)',
+          border: '1px dashed var(--jp-accent, #2563eb)',
+          borderRadius: 8,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 14,
+          fontSize: 12,
+        }}>
+          <strong style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            CEO discount mode
+          </strong>
+          <span className="muted">
+            Cost <strong>R {formatNumber(result.unitCost, 4)}</strong>
+          </span>
+          <span className="muted">
+            Standard <strong>R {formatNumber(result.quotedUnitPrice, 4)}</strong>
+            {' '}@ <strong>{formatNumber(result.marginPercent, 1)}%</strong>
+          </span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--jp-ink-3, #6f6657)' }}>
+              What if quoted at R
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.0001"
+              value={whatIfPrice}
+              onChange={(e) => setWhatIfPrice(e.target.value)}
+              placeholder={result.quotedUnitPrice.toFixed(4)}
+              style={{ width: 80, padding: '2px 6px', fontSize: 12 }}
+            />
+            <span>/ bag</span>
+          </label>
+          {(() => {
+            const target = Number(whatIfPrice);
+            if (!whatIfPrice || !Number.isFinite(target) || target <= 0) return null;
+            const margin = ((target - result.unitCost) / result.unitCost) * 100;
+            const lineRevenue = target * (Number(line.quantity) || 0);
+            const isLoss = margin < 0;
+            const isThin = margin >= 0 && margin < 10;
+            const colour = isLoss ? '#b22b2b' : isThin ? '#b8860b' : '#2e6f3e';
+            return (
+              <span style={{ color: colour }}>
+                → margin <strong>{formatNumber(margin, 1)}%</strong>
+                {' '}· line total <strong>R {formatNumber(lineRevenue, 2)}</strong>
+                {isLoss ? ' (below cost!)' : isThin ? ' (thin)' : ''}
+              </span>
+            );
+          })()}
+        </div>
+      ) : null}
     </div>
   );
 }

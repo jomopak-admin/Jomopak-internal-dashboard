@@ -7,6 +7,7 @@ import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { Client, ClientFilters, ClientFormState, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
 import { formatNumber } from '../../utils/calculations';
+import { describePipelinePosition, summarisePipeline } from '../../utils/jobPipeline';
 import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
 
 interface ClientsPageProps {
@@ -42,6 +43,11 @@ interface ClientsPageProps {
   companies?: { id: string; name: string; roles?: string[] }[];
   /** Spin up a new Company pre-filled with this client's shared fields. */
   onConvertToCompany?: (clientId: string) => void;
+  /** Phase 94 — Live job pipeline widget. Pass the full job list so the
+   *  client profile can show every open job for this client with its
+   *  current production stage + any blockers. */
+  jobs?: Array<{ id: string; jobNumber: string; clientId: string; productName: string; pipelineStages?: import('../../types').PipelineStage[] }>;
+  onOpenJob?: (jobId: string) => void;
 }
 
 export function ClientsPage({
@@ -71,6 +77,8 @@ export function ClientsPage({
   currentUser,
   companies = [],
   onConvertToCompany,
+  jobs = [],
+  onOpenJob,
 }: ClientsPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -470,6 +478,15 @@ export function ClientsPage({
               currentUser={currentUser}
             />
           )}
+          {/* Phase 94 — Live production pipeline for this client. Only shows
+              when we're editing an existing client (we need the id to filter
+              their jobs) and the client has open work in flight. */}
+          {clientEditingId ? (
+            <ClientLivePipelineStrip
+              jobs={jobs.filter((j) => j.clientId === clientEditingId)}
+              onOpenJob={onOpenJob}
+            />
+          ) : null}
           <FormWizard
             title={clientEditingId ? 'Edit client' : 'New client'}
             subtitle="Required fields are marked. Save unlocks once each active section is complete."
@@ -691,5 +708,65 @@ export function ClientsPage({
         </>
       )}
     </>
+  );
+}
+
+/* ─── Phase 94: Live production pipeline strip for the Client profile. ──
+ * Shows every open job for this client with its current production stage
+ * and any active blocker. This is the "client phones and asks where their
+ * order is" view — one glance gives a status across all jobs.
+ *
+ * Renders nothing when there are no open jobs so the profile stays clean
+ * for new clients / fully-shipped accounts. */
+function ClientLivePipelineStrip(props: {
+  jobs: Array<{ id: string; jobNumber: string; productName: string; pipelineStages?: import('../../types').PipelineStage[] }>;
+  onOpenJob?: (jobId: string) => void;
+}) {
+  const { jobs, onOpenJob } = props;
+  const open = jobs
+    .map((job) => ({ job, summary: summarisePipeline(job.pipelineStages) }))
+    .filter(({ summary }) => summary.currentStage !== null);
+  if (open.length === 0) return null;
+  return (
+    <section className="card" style={{ marginBottom: 12 }}>
+      <SectionTitle
+        title="Live pipeline"
+        subtitle={`${open.length} job${open.length === 1 ? '' : 's'} in flight · click a row to open the job`}
+      />
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Job #</th>
+              <th>Product</th>
+              <th>Current stage</th>
+              <th>Progress</th>
+              <th>Blockers</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {open.map(({ job, summary }) => (
+              <tr key={job.id}>
+                <td><strong>{job.jobNumber}</strong></td>
+                <td>{job.productName || '—'}</td>
+                <td>{describePipelinePosition(summary)}</td>
+                <td>{summary.doneItems}/{summary.totalItems} · {summary.percent}%</td>
+                <td style={{ color: summary.blockedItems > 0 ? '#b22b2b' : undefined }}>
+                  {summary.blockedItems > 0
+                    ? summary.blockers.map((b: { item: { blockerNote?: string; label: string } }) => b.item.blockerNote || b.item.label).join(' · ')
+                    : '—'}
+                </td>
+                <td>
+                  {onOpenJob ? (
+                    <button type="button" className="ghost-button" onClick={() => onOpenJob(job.id)}>Open</button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

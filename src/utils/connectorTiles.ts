@@ -8,6 +8,7 @@
  */
 
 import { AppData, ConnectorTile } from '../types';
+import { produceAllEvents } from './inbox';
 
 function round2(n: number): number { return Math.round((Number(n) || 0) * 100) / 100; }
 
@@ -74,6 +75,43 @@ export function computeConnectorTiles(data: AppData, today: string): ConnectorTi
   tiles.push({ key: 'jomopak.compliance.open_ncrs', category: 'Compliance', label: 'Open NCRs', value: openNcrs, unit: 'count', detail: '' });
   tiles.push({ key: 'jomopak.compliance.open_complaints', category: 'Compliance', label: 'Open complaints', value: openComplaints, unit: 'count', detail: '' });
   tiles.push({ key: 'jomopak.compliance.docs_expiring', category: 'Compliance', label: 'Documents expiring (30d)', value: expiringDocs, unit: 'count', detail: '' });
+
+  /* ─── Phase 103.5 — Aman OS Connector publishes Inbox health.
+   *
+   * One aggregate tile per inbox category, plus a headline "all events".
+   * The Aman OS doesn't get individual events (privacy + volume) — it gets
+   * the count by category and tone so it can surface "Aman, JomoPak has 7
+   * urgent safety items waiting on you" without leaking row-level data.
+   * ───────────────────────────────────────────────────────────────────── */
+  try {
+    const events = produceAllEvents(data);
+    const totalAlerts = events.filter((e) => e.tone === 'alert').length;
+    const totalWarn = events.filter((e) => e.tone === 'warning').length;
+    tiles.push({
+      key: 'jomopak.inbox.total',
+      category: 'Compliance',
+      label: 'Inbox items waiting',
+      value: events.length,
+      unit: 'count',
+      detail: `${totalAlerts} urgent · ${totalWarn} warning`,
+    });
+    // Per-category roll-up. Skips empty categories so Aman OS doesn't render
+    // dead tiles.
+    const byCategory = new Map<string, number>();
+    events.forEach((e) => byCategory.set(e.category, (byCategory.get(e.category) || 0) + 1));
+    byCategory.forEach((count, category) => {
+      tiles.push({
+        key: `jomopak.inbox.${category.toLowerCase()}`,
+        category: 'Compliance',
+        label: `Inbox · ${category}`,
+        value: count,
+        unit: 'count',
+        detail: '',
+      });
+    });
+  } catch {
+    // Don't let inbox computation break the rest of the publish.
+  }
 
   return tiles;
 }

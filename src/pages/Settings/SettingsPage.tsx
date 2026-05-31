@@ -1,7 +1,19 @@
-import { ChangeEvent, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
-import { AppSettings, AppSettingsCompany, AppSettingsFormState } from '../../types';
+import {
+  AppData,
+  AppSettings,
+  AppSettingsCompany,
+  AppSettingsConnectorConfig,
+  AppSettingsFormState,
+  AreaSafety,
+  DEFAULT_AREA_SAFETY,
+  FACTORY_AREAS,
+  FactoryArea,
+  getAreaSafety,
+} from '../../types';
 import { supabase } from '../../utils/supabase';
+import { OsConnectorPage } from '../OsConnector/OsConnectorPage';
 
 /**
  * Admin-only Settings page. Tabs:
@@ -32,15 +44,18 @@ function formatSavedAt(iso: string): string {
   });
 }
 
-type SettingsTab = 'account' | 'branding' | 'templates' | 'stockHolding' | 'permissions' | 'access';
+type SettingsTab = 'account' | 'branding' | 'templates' | 'pricing' | 'stockHolding' | 'permissions' | 'visitorAccess' | 'apiAccess' | 'access';
 
 const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
   { key: 'account', label: 'Account', subtitle: 'Your signed-in account and sign out.' },
   { key: 'branding', label: 'Branding', subtitle: 'Letterhead, logo, address, VAT — applied to every printed doc.' },
   { key: 'templates', label: 'Templates', subtitle: 'Default footer copy and payment terms for invoices, delivery notes, and specs.' },
+  { key: 'pricing', label: 'Pricing', subtitle: 'Company-wide standard margin used by the calculator when no override is set.' },
   { key: 'stockHolding', label: 'Stock-holding', subtitle: 'Default storage days, review cadence, and agreement wording.' },
   { key: 'permissions', label: 'Permissions', subtitle: 'Per-user view-level access. Replaces the old standalone Permissions page.' },
-  { key: 'access', label: 'Access', subtitle: 'Which roles can open this Settings page at all.' },
+  { key: 'visitorAccess', label: 'Visitor access', subtitle: 'Which areas reception can grant without host approval, and how long until an unanswered request escalates.' },
+  { key: 'apiAccess', label: 'API access', subtitle: 'Secure read-only API for connecting JomoPak to other systems (Aman OS, dashboards, website). You control what’s shared.' },
+  { key: 'access', label: 'Page access', subtitle: 'Which roles can open this Settings page at all.' },
 ];
 
 interface SettingsPageProps {
@@ -54,11 +69,48 @@ interface SettingsPageProps {
   accountEmail: string;
   accountRole: string;
   onSignOut: () => void;
+  /** Phase 103.7 — API Access tab. The full OsConnectorPage is mounted
+   *  inside the Settings panel; passing through gives it the same data,
+   *  connector config, and publish handlers it has when standalone. */
+  apiAccessData: AppData;
+  apiAccessConnectorConfig: AppSettingsConnectorConfig;
+  apiAccessToday: string;
+  onApiAccessSaveConfig: (config: AppSettingsConnectorConfig) => void;
+  onApiAccessPublishNow: () => Promise<void> | void;
+  /** Phase 107.1 — Visitor Access tab handlers. Flips an area between
+   *  safe and restricted in appSettings.visitorAreaPolicy; sets the
+   *  auto-escalation timer. Both write straight back to AppSettings. */
+  onSetAreaSafety?: (area: FactoryArea, safety: AreaSafety) => void;
+  onSetEscalationMinutes?: (minutes: number) => void;
+  /** Phase 103.7.1 — when the page is opened from the account-menu
+   *  "API access" entry, this seeds the active tab. Tabs are still
+   *  clickable normally; this just changes the initial selection. */
+  initialTab?: 'account' | 'branding' | 'templates' | 'pricing' | 'stockHolding' | 'permissions' | 'visitorAccess' | 'apiAccess' | 'access';
+  /** Phase 103.7.1 — caller clears the requested initial tab after we
+   *  honour it so subsequent navigations to Settings reset to 'account'. */
+  onInitialTabHandled?: () => void;
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  const { settings, settingsForm, setSettingsForm, onSave, onReset, saveMessage, accountName, accountEmail, accountRole, onSignOut } = props;
-  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
+  const {
+    settings, settingsForm, setSettingsForm, onSave, onReset, saveMessage,
+    accountName, accountEmail, accountRole, onSignOut,
+    apiAccessData, apiAccessConnectorConfig, apiAccessToday, onApiAccessSaveConfig, onApiAccessPublishNow,
+    onSetAreaSafety, onSetEscalationMinutes,
+    initialTab, onInitialTabHandled,
+  } = props;
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? 'account');
+  // Phase 103.7.1 — honour a freshly-set initialTab (e.g. user clicked
+  // "API access" in the account menu while already on the Settings page).
+  // We only react when initialTab changes; the parent clears its
+  // "requested tab" state via onInitialTabHandled so the next visit
+  // resets cleanly to 'account'.
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+      onInitialTabHandled?.();
+    }
+  }, [initialTab, onInitialTabHandled]);
   const tab = TABS.find((entry) => entry.key === activeTab) ?? TABS[0];
 
   // Helpers used by both Branding and Templates tabs ----------------------------------
@@ -73,7 +125,15 @@ export function SettingsPage(props: SettingsPageProps) {
     setSettingsForm({ ...settingsForm, stockHolding: { ...settingsForm.stockHolding, ...patch } });
   }
 
-  const showSaveBar = activeTab === 'branding' || activeTab === 'templates' || activeTab === 'stockHolding';
+  function patchStandardMargin(value: string) {
+    setSettingsForm({ ...settingsForm, standardMarginPercent: value });
+  }
+
+  const showSaveBar =
+    activeTab === 'branding'
+    || activeTab === 'templates'
+    || activeTab === 'pricing'
+    || activeTab === 'stockHolding';
 
   return (
     <>
@@ -111,10 +171,30 @@ export function SettingsPage(props: SettingsPageProps) {
           />
         ) : activeTab === 'templates' ? (
           <TemplatesTab templates={settingsForm.templates} patchTemplates={patchTemplates} />
+        ) : activeTab === 'pricing' ? (
+          <PricingTab
+            standardMarginPercent={settingsForm.standardMarginPercent}
+            patchStandardMargin={patchStandardMargin}
+          />
         ) : activeTab === 'stockHolding' ? (
           <StockHoldingTab stockHolding={settingsForm.stockHolding} patchStockHolding={patchStockHolding} />
         ) : activeTab === 'permissions' ? (
           <PermissionsTab />
+        ) : activeTab === 'apiAccess' ? (
+          <OsConnectorPage
+            data={apiAccessData}
+            connectorConfig={apiAccessConnectorConfig}
+            today={apiAccessToday}
+            onSaveConfig={onApiAccessSaveConfig}
+            onPublishNow={onApiAccessPublishNow}
+          />
+        ) : activeTab === 'visitorAccess' ? (
+          <VisitorAccessTab
+            policy={settings.visitorAreaPolicy}
+            escalationMinutes={settings.visitorApprovalEscalationMinutes ?? 5}
+            onSetAreaSafety={onSetAreaSafety}
+            onSetEscalationMinutes={onSetEscalationMinutes}
+          />
         ) : (
           <AccessTab />
         )}
@@ -443,6 +523,49 @@ function TemplatesTab({ templates, patchTemplates }: TemplatesTabProps) {
   );
 }
 
+/* ----- Phase 92: Company-wide pricing tab. ----- */
+
+function PricingTab({
+  standardMarginPercent,
+  patchStandardMargin,
+}: {
+  standardMarginPercent: string;
+  patchStandardMargin: (value: string) => void;
+}) {
+  const parsed = Number(standardMarginPercent);
+  const preview = Number.isFinite(parsed) && parsed > 0
+    ? `R 100 cost → R ${(100 * (1 + parsed / 100)).toFixed(2)} sell`
+    : 'Set a percentage to see a worked example.';
+  return (
+    <div className="form-grid">
+      <label>
+        <span>Standard margin (%)</span>
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="500"
+          value={standardMarginPercent}
+          onChange={(e) => patchStandardMargin(e.target.value)}
+          placeholder="35"
+        />
+      </label>
+      <div className="full-span">
+        <p className="form-hint" style={{ marginBottom: 6 }}>
+          The calculator uses this whenever a line doesn&apos;t have its own margin,
+          and no per-quote or cost-profile margin is set. It&apos;s the company-wide
+          floor — what sales sees by default. Only admins (or users with the
+          &quot;Can edit pricing&quot; flag) can override it on a per-line basis from
+          the CEO discount mode.
+        </p>
+        <p className="form-hint" style={{ fontStyle: 'italic' }}>
+          Worked example at the current value: <strong>{preview}</strong>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ----- Stage 3: editable stock-holding tab. ----- */
 
 function StockHoldingTab({
@@ -507,6 +630,134 @@ function PermissionsTab() {
           quotes, invoices. Floor operators only see job cards and their own check-out / consumable
           history. Roles can be tightened per-user from Permissions.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------- Visitor Access tab ------------------------------ */
+
+/**
+ * Phase 107.1 — Admin UI for the Phase 106 visitor approval system.
+ *
+ * Two controls:
+ *   1. Per-area safety override — flip any FactoryArea between 'safe'
+ *      (reception can approve solo) and 'restricted' (needs host
+ *      approval). The defaults are conservative (front-of-house = safe,
+ *      everything else = restricted); admin overrides land on
+ *      appSettings.visitorAreaPolicy.
+ *   2. Escalation timer — minutes until an unanswered approval auto-
+ *      routes to the host's backup. Lives on
+ *      appSettings.visitorApprovalEscalationMinutes (default 5).
+ */
+interface VisitorAccessTabProps {
+  policy?: Partial<Record<FactoryArea, AreaSafety>>;
+  escalationMinutes: number;
+  onSetAreaSafety?: (area: FactoryArea, safety: AreaSafety) => void;
+  onSetEscalationMinutes?: (minutes: number) => void;
+}
+
+function VisitorAccessTab({ policy, escalationMinutes, onSetAreaSafety, onSetEscalationMinutes }: VisitorAccessTabProps) {
+  const grouped = useMemo(() => {
+    const safe: FactoryArea[] = [];
+    const restricted: FactoryArea[] = [];
+    FACTORY_AREAS.forEach((a) => {
+      if (getAreaSafety(a, policy) === 'safe') safe.push(a);
+      else restricted.push(a);
+    });
+    return { safe, restricted };
+  }, [policy]);
+
+  function rowFor(area: FactoryArea, current: AreaSafety) {
+    const defaultSafety = DEFAULT_AREA_SAFETY[area];
+    const isOverride = policy && policy[area] !== undefined && policy[area] !== defaultSafety;
+    return (
+      <div
+        key={area}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          borderRadius: 6,
+          background: current === 'safe' ? 'rgba(46,111,62,0.04)' : 'rgba(178,43,43,0.04)',
+          border: '1px solid var(--jp-divider, #cbd5e1)',
+          marginBottom: 6,
+          gap: 8,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <strong>{area}</strong>
+          {isOverride ? <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>(override — default: {defaultSafety})</span> : null}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['safe', 'restricted'] as AreaSafety[]).map((s) => {
+            const active = current === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onSetAreaSafety && onSetAreaSafety(area, s)}
+                disabled={!onSetAreaSafety}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  border: `1px solid ${active ? 'var(--jp-ink-2, #475569)' : 'var(--jp-divider, #cbd5e1)'}`,
+                  background: active ? (s === 'safe' ? 'var(--jp-success, #2e6f3e)' : '#b22b2b') : 'transparent',
+                  color: active ? 'var(--jp-paper, #fff)' : 'var(--jp-ink-2, #475569)',
+                  cursor: onSetAreaSafety ? 'pointer' : 'default',
+                  fontSize: 12,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-preview-list" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="settings-preview-block">
+        <p className="eyebrow">Auto-escalation timer</p>
+        <p style={{ marginBottom: 12 }}>
+          When a host doesn't respond to a visitor approval request in this many minutes, the request
+          auto-routes to their backup approver. Critical-priority notifications fire at the same moment.
+        </p>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <input
+            type="number"
+            min={1}
+            max={120}
+            value={escalationMinutes}
+            onChange={(e) => onSetEscalationMinutes && onSetEscalationMinutes(Math.max(1, Number(e.target.value) || 5))}
+            disabled={!onSetEscalationMinutes}
+            style={{ width: 80, padding: '6px 8px' }}
+          />
+          <span className="muted">minutes (default 5)</span>
+        </label>
+      </div>
+
+      <div className="settings-preview-block">
+        <p className="eyebrow">Safe areas — reception can approve on their own</p>
+        <p style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)', marginBottom: 8 }}>
+          Verified visitors can enter these without phoning a host. Defaults: Reception, Waiting Area,
+          Meeting Rooms, Boardroom, Client Meeting Room.
+        </p>
+        {grouped.safe.map((a) => rowFor(a, 'safe'))}
+      </div>
+
+      <div className="settings-preview-block">
+        <p className="eyebrow">Restricted areas — host approval required</p>
+        <p style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)', marginBottom: 8 }}>
+          Reception cannot let a visitor into these on their own — the host (or their backup, on
+          escalation) has to approve in their Inbox. Defaults: all production, warehouse, office,
+          finance, and admin areas.
+        </p>
+        {grouped.restricted.map((a) => rowFor(a, 'restricted'))}
       </div>
     </div>
   );

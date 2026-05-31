@@ -1,16 +1,16 @@
 /**
- * Morning Digest.
+ * Morning Digest — Phase 100 redesign.
  *
- * Single printable page summarising today's required actions across the
- * factory. Hit Print at 6am, the foreman / shift leader picks up the
- * printout and walks the floor. No need to log in to read it.
+ * Dual-purpose page:
+ *  - On screen: a proper dashboard. Hero with date + "good morning" greeting
+ *    + headline stats. Color-coded section cards arranged in a responsive
+ *    2-column grid. Better empty states.
+ *  - On print: cleanly degrades to a single paper-like brief. The CSS
+ *    `@media print` rules hide chrome (print button, status chips) and
+ *    collapse the grid to one column.
  *
- * Sections:
- *  - Top of mind (overdue items, recalls, critical NCRs)
- *  - Production today (jobs scheduled, machines)
- *  - Quality & cleaning (cleaning due, QC pending)
- *  - Sales (leads to follow up, quotes awaiting decision)
- *  - Finance (invoices overdue, jobs blocked on credit)
+ * Hit Print at 6am, the foreman picks up the printout and walks the floor.
+ * The on-screen experience is now actually pleasant to read at 6am too.
  */
 
 import { useMemo } from 'react';
@@ -42,8 +42,17 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function greeting(now: Date): string {
+  const h = now.getHours();
+  if (h < 5) return 'Late night';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
   const today = todayISO();
+  const now = new Date();
 
   // ----- Leads to follow up -----
   const leadsToFollow = useMemo<Lead[]>(() => {
@@ -136,7 +145,11 @@ export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
     ).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
   }, [data.invoices, today]);
 
-  // ----- SARS deadlines due soon / overdue -----
+  const totalOverdueAmount = useMemo(() =>
+    invoicesOverdue.reduce((s, i) => s + (Number(i.amountOutstanding) || 0), 0),
+    [invoicesOverdue]);
+
+  // ----- SARS deadlines -----
   const sarsDue = useMemo(() => {
     const cfg = data.appSettings?.sarsConfig;
     if (!cfg) return [];
@@ -149,6 +162,8 @@ export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
       })
       .slice(0, 8);
   }, [data.appSettings, data.sarsFilings, today]);
+
+  const sarsOverdueCount = sarsDue.filter((s) => daysUntil(s.dueDate, today) < 0).length;
 
   // ----- Pest control overdue -----
   const pestOverdue = useMemo(() => {
@@ -165,179 +180,408 @@ export function MorningDigestPage({ data, company }: MorningDigestPageProps) {
     });
   }, [data.staffTrainingRecords, today]);
 
+  // Stats for the hero strip.
+  const totalAttention = activeRecalls.length + ncrsOverdue.length
+    + machinesNotCleaned.length + fgOnHold.length;
+  const hasUrgent = totalAttention > 0;
+  const hasAnything = hasUrgent || jobsToday.length > 0 || jobsReadyDispatch.length > 0
+    || leadsToFollow.length > 0 || invoicesOverdue.length > 0 || sarsDue.length > 0
+    || qcPending.length > 0 || openComplaints.length > 0 || pestOverdue.length > 0
+    || trainingOverdue.length > 0;
+
   return (
     <>
-      <SectionTitle action={<button className="primary-button" onClick={() => window.print()}>Print briefing</button>} />
-      <article className="card" style={{ maxWidth: 900, margin: '0 auto' }}>
-        <header style={{ borderBottom: '0.5px solid var(--jp-line)', paddingBottom: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>{company?.name || 'Jomopak'} — Morning Briefing</h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>{new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      {/* Print-only CSS — hide chrome, collapse to single column. */}
+      <style>{`
+        @media print {
+          .md-print-hide { display: none !important; }
+          .md-grid { grid-template-columns: 1fr !important; }
+          .md-hero { background: #fff !important; border: 0 !important; padding: 0 0 12px 0 !important; }
+          .md-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
+        }
+        .md-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+          gap: 14px;
+        }
+        .md-card {
+          background: var(--jp-paper, #fff);
+          border: 1px solid var(--jp-border, #e5e2dc);
+          border-radius: 12px;
+          padding: 16px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+        .md-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+        .md-card-head strong { font-size: 14px; }
+        .md-card-head .md-count {
+          font-size: 11px; padding: 2px 10px; border-radius: 999px;
+          background: var(--jp-paper-2, #faf8f4); border: 1px solid var(--jp-border, #e5e2dc);
+        }
+        .md-card .md-row {
+          display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+          padding: 8px 0; border-top: 1px dashed var(--jp-border-soft, #eee);
+          font-size: 13px;
+        }
+        .md-card .md-row:first-of-type { border-top: 0; padding-top: 0; }
+        .md-empty { font-size: 13px; color: #5a6e60; display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+        .md-empty-tick {
+          width: 18px; height: 18px; border-radius: 50%;
+          background: #d9efd9; color: #2e6f3e; display: inline-flex; align-items: center; justify-content: center;
+          font-size: 12px; font-weight: 700;
+        }
+        .md-stat {
+          padding: 10px 14px; border-radius: 10px;
+          border: 1px solid var(--jp-border, #e5e2dc); background: var(--jp-paper, #fff);
+          min-width: 0;
+        }
+        .md-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--jp-ink-3, #64748b); }
+        .md-stat-value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+        .md-stat-tone-warn { border-color: rgba(184,134,11,0.45); background: rgba(184,134,11,0.06); }
+        .md-stat-tone-alert { border-color: rgba(178,43,43,0.5); background: rgba(178,43,43,0.05); }
+        .md-stat-tone-quiet { color: #2e6f3e; }
+      `}</style>
+
+      <SectionTitle action={
+        <button className="primary-button md-print-hide" onClick={() => window.print()}>Print briefing</button>
+      } />
+
+      <article style={{ maxWidth: 1180, margin: '0 auto' }}>
+        {/* ═══ Hero ═════════════════════════════════════════════════════ */}
+        <header
+          className="md-hero"
+          style={{
+            padding: '20px 24px',
+            borderRadius: 14,
+            background: 'linear-gradient(180deg, var(--jp-paper, #fff), var(--jp-paper-2, #faf8f4))',
+            border: '1px solid var(--jp-border, #e5e2dc)',
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {greeting(now)}
+              </div>
+              <h1 style={{ margin: '4px 0 2px', fontSize: 26, lineHeight: 1.1 }}>
+                {company?.name || 'Jomopak'} · {new Date().toLocaleDateString('en-ZA', { weekday: 'long' })}
+              </h1>
+              <p style={{ margin: 0, color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>
+                {new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {' · '}<span className="md-print-hide">Pick up at 6am · walk the floor by 7</span>
+              </p>
+            </div>
           </div>
-          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>
-            <div>Pick up at 6am · walk the floor by 7</div>
+
+          {/* Headline stats strip. Each tile takes you straight to the relevant page on screen. */}
+          <div
+            style={{
+              marginTop: 14,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 10,
+            }}
+          >
+            <div className={`md-stat ${totalAttention > 0 ? 'md-stat-tone-alert' : ''}`}>
+              <div className="md-stat-label">Top of mind</div>
+              <div className={`md-stat-value ${totalAttention === 0 ? 'md-stat-tone-quiet' : ''}`}>
+                {totalAttention === 0 ? '—' : totalAttention}
+              </div>
+            </div>
+            <div className="md-stat">
+              <div className="md-stat-label">Jobs today</div>
+              <div className="md-stat-value">{jobsToday.length}</div>
+            </div>
+            <div className="md-stat">
+              <div className="md-stat-label">Ready to dispatch</div>
+              <div className="md-stat-value">{jobsReadyDispatch.length}</div>
+            </div>
+            <div className={`md-stat ${leadsToFollow.length > 0 ? 'md-stat-tone-warn' : ''}`}>
+              <div className="md-stat-label">Leads to chase</div>
+              <div className="md-stat-value">{leadsToFollow.length}</div>
+            </div>
+            <div className={`md-stat ${invoicesOverdue.length > 0 ? 'md-stat-tone-alert' : ''}`}>
+              <div className="md-stat-label">Overdue R</div>
+              <div className="md-stat-value">R&nbsp;{formatNumber(totalOverdueAmount, 0)}</div>
+            </div>
+            <div className={`md-stat ${sarsOverdueCount > 0 ? 'md-stat-tone-alert' : sarsDue.length > 0 ? 'md-stat-tone-warn' : ''}`}>
+              <div className="md-stat-label">SARS (30d)</div>
+              <div className="md-stat-value">{sarsDue.length}{sarsOverdueCount > 0 ? <span style={{ fontSize: 12, marginLeft: 4 }}>· {sarsOverdueCount} overdue</span> : null}</div>
+            </div>
           </div>
         </header>
 
-        {/* ===== Urgent — anything that should be looked at first ===== */}
-        {(activeRecalls.length > 0 || ncrsOverdue.length > 0 || machinesNotCleaned.length > 0 || fgOnHold.length > 0) && (
-          <section style={{ marginBottom: 20, padding: 14, background: 'rgba(231, 89, 89, 0.06)', border: '1px solid rgba(231, 89, 89, 0.4)', borderRadius: 10 }}>
-            <h2 style={{ margin: '0 0 8px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b22b2b' }}>Top of mind today</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
+        {/* ═══ Urgent — only when there's something ════════════════════ */}
+        {hasUrgent && (
+          <section
+            className="md-card"
+            style={{
+              marginBottom: 16,
+              borderColor: 'rgba(178,43,43,0.5)',
+              background: 'rgba(178,43,43,0.04)',
+            }}
+          >
+            <div className="md-card-head">
+              <strong style={{ color: '#b22b2b' }}>Top of mind today</strong>
+              <span className="md-count">{totalAttention}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {activeRecalls.length > 0 && (
-                <li><strong>{activeRecalls.length} active recall(s)</strong> — review status. {activeRecalls.slice(0, 3).map((c) => c.complaintNumber).join(', ')}{activeRecalls.length > 3 ? '…' : ''}</li>
+                <div className="md-row">
+                  <span><strong>{activeRecalls.length}</strong> active recall{activeRecalls.length === 1 ? '' : 's'}</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{activeRecalls.slice(0, 3).map((c) => c.complaintNumber).join(', ')}{activeRecalls.length > 3 ? '…' : ''}</span>
+                </div>
               )}
               {ncrsOverdue.length > 0 && (
-                <li><strong>{ncrsOverdue.length} NCR(s)</strong> with overdue corrective action. Oldest: {ncrsOverdue[0]?.ncrNumber} due {formatDate(ncrsOverdue[0]?.dueDate)}.</li>
+                <div className="md-row">
+                  <span><strong>{ncrsOverdue.length}</strong> NCR{ncrsOverdue.length === 1 ? '' : 's'} with overdue CAPA</span>
+                  <span className="muted" style={{ fontSize: 12 }}>oldest: {ncrsOverdue[0]?.ncrNumber}</span>
+                </div>
               )}
               {machinesNotCleaned.length > 0 && (
-                <li><strong>{machinesNotCleaned.length} machine(s)</strong> have food-packaging jobs but no recent passing clean — log cleaning before production starts.</li>
+                <div className="md-row">
+                  <span><strong>{machinesNotCleaned.length}</strong> machine{machinesNotCleaned.length === 1 ? '' : 's'} need cleaning before food jobs</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{machinesNotCleaned.slice(0, 2).map((m) => m.machineName).join(', ')}</span>
+                </div>
               )}
               {fgOnHold.length > 0 && (
-                <li><strong>{fgOnHold.length} finished-goods batch(es)</strong> on hold — investigate.</li>
+                <div className="md-row">
+                  <span><strong>{fgOnHold.length}</strong> FG batch{fgOnHold.length === 1 ? '' : 'es'} on hold</span>
+                  <span className="muted" style={{ fontSize: 12 }}>investigate before release</span>
+                </div>
               )}
-            </ul>
+            </div>
           </section>
         )}
 
-        {/* ===== Production today ===== */}
-        <section style={{ marginBottom: 20 }}>
-          <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Production today</h2>
-          {jobsToday.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13 }}>No jobs scheduled for today.</p>
-          ) : (
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '0.5px solid var(--jp-line)' }}>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Job</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Customer</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Product</th>
-                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Qty</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Machine</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+        {/* ═══ All-quiet hero state ════════════════════════════════════ */}
+        {!hasAnything && (
+          <section className="md-card" style={{ marginBottom: 16, textAlign: 'center', padding: 32 }}>
+            <h3 style={{ margin: '0 0 4px' }}>All quiet</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              No urgent items, no jobs scheduled, no overdue invoices, no SARS deadlines in the next 30 days.
+              Enjoy the morning.
+            </p>
+          </section>
+        )}
+
+        {/* ═══ 2-column grid of section cards ══════════════════════════ */}
+        <div className="md-grid">
+          {/* ── Production today ─────────────────────────────────────── */}
+          <section className="md-card" style={{ borderLeft: '3px solid var(--jp-accent, #2563eb)' }}>
+            <div className="md-card-head">
+              <strong>Production today</strong>
+              <span className="md-count">{jobsToday.length}</span>
+            </div>
+            {jobsToday.length === 0 ? (
+              <div className="md-empty">No jobs scheduled for today.</div>
+            ) : (
+              <div>
                 {jobsToday.map((j) => {
                   const machine = data.machines.find((m) => m.id === j.assignedMachineId);
                   return (
-                    <tr key={j.id} style={{ borderBottom: '0.5px solid var(--jp-line)' }}>
-                      <td style={{ padding: '4px 8px' }}><strong>{j.jobNumber}</strong></td>
-                      <td style={{ padding: '4px 8px' }}>{j.customerName}</td>
-                      <td style={{ padding: '4px 8px' }}>{j.productName}</td>
-                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{formatNumber(j.quantityPlanned)}</td>
-                      <td style={{ padding: '4px 8px' }}>{machine?.name || (j.assignedMachineId ? 'Unknown' : '—')}</td>
-                      <td style={{ padding: '4px 8px' }}>{j.status}</td>
-                    </tr>
+                    <div key={j.id} className="md-row">
+                      <span><strong>{j.jobNumber}</strong> · {j.customerName}</span>
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {formatNumber(j.quantityPlanned)} · {machine?.name || '—'} · {j.status}
+                      </span>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
+          </section>
+
+          {/* ── Ready for dispatch ───────────────────────────────────── */}
+          <section className="md-card" style={{ borderLeft: '3px solid #2e6f3e' }}>
+            <div className="md-card-head">
+              <strong>Ready for dispatch</strong>
+              <span className="md-count">{jobsReadyDispatch.length}</span>
+            </div>
+            {jobsReadyDispatch.length === 0 ? (
+              <div className="md-empty">Nothing waiting to go out.</div>
+            ) : (
+              <div>
+                {jobsReadyDispatch.slice(0, 6).map((j) => (
+                  <div key={j.id} className="md-row">
+                    <span><strong>{j.jobNumber}</strong> · {j.customerName}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {formatNumber(j.quantityCompleted)} / {formatNumber(j.quantityPlanned)} {j.paperQuantityUnit}
+                    </span>
+                  </div>
+                ))}
+                {jobsReadyDispatch.length > 6 ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>… +{jobsReadyDispatch.length - 6} more</div> : null}
+              </div>
+            )}
+          </section>
+
+          {/* ── Sales — leads to follow ──────────────────────────────── */}
+          <section className="md-card" style={{ borderLeft: '3px solid #8c4cb6' }}>
+            <div className="md-card-head">
+              <strong>Leads to chase</strong>
+              <span className="md-count">{leadsToFollow.length}</span>
+            </div>
+            {leadsToFollow.length === 0 ? (
+              <div className="md-empty">No follow-ups due today.</div>
+            ) : (
+              <div>
+                {leadsToFollow.slice(0, 8).map((l) => (
+                  <div key={l.id} className="md-row">
+                    <span><strong>{l.leadNumber}</strong> · {l.contactName || l.companyName}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {l.source}{l.phone ? ` · ${l.phone}` : ''} · {l.status}
+                    </span>
+                  </div>
+                ))}
+                {leadsToFollow.length > 8 ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>… +{leadsToFollow.length - 8} more</div> : null}
+              </div>
+            )}
+          </section>
+
+          {/* ── Finance — overdue invoices ───────────────────────────── */}
+          <section className="md-card" style={{ borderLeft: '3px solid ' + (invoicesOverdue.length > 0 ? '#b22b2b' : '#b8860b') }}>
+            <div className="md-card-head">
+              <strong>Overdue invoices</strong>
+              <span className="md-count">
+                {invoicesOverdue.length}{invoicesOverdue.length > 0 ? ` · R ${formatNumber(totalOverdueAmount, 0)}` : ''}
+              </span>
+            </div>
+            {invoicesOverdue.length === 0 ? (
+              <div className="md-empty">Nothing overdue.</div>
+            ) : (
+              <div>
+                {invoicesOverdue.slice(0, 6).map((inv) => {
+                  const daysLate = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / DAY_MS);
+                  return (
+                    <div key={inv.id} className="md-row">
+                      <span><strong>{inv.invoiceNumber}</strong> · {inv.clientName}</span>
+                      <span style={{ fontSize: 12 }}>
+                        R {formatNumber(inv.amountOutstanding, 2)} · <span style={{ color: '#b22b2b' }}>{daysLate}d</span>
+                      </span>
+                    </div>
+                  );
+                })}
+                {invoicesOverdue.length > 6 ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>… +{invoicesOverdue.length - 6} more</div> : null}
+              </div>
+            )}
+          </section>
+
+          {/* ── SARS deadlines (next 30 days) ────────────────────────── */}
+          {sarsDue.length > 0 && (
+            <section className="md-card" style={{ borderLeft: '3px solid ' + (sarsOverdueCount > 0 ? '#b22b2b' : '#b8860b'), gridColumn: 'span 2', minWidth: 0 }}>
+              <div className="md-card-head">
+                <strong>SARS deadlines · next 30 days</strong>
+                <span className="md-count">{sarsDue.length}{sarsOverdueCount > 0 ? ` · ${sarsOverdueCount} overdue` : ''}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                {sarsDue.map((slot) => {
+                  const until = daysUntil(slot.dueDate, today);
+                  const overdue = until < 0;
+                  const dueToday = until === 0;
+                  const tone = overdue ? '#b22b2b' : dueToday ? '#b22b2b' : until <= 7 ? '#b8860b' : 'var(--jp-ink-3, #64748b)';
+                  return (
+                    <div
+                      key={slot.periodKey}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        background: overdue ? 'rgba(178,43,43,0.05)' : 'var(--jp-paper-2, #faf8f4)',
+                        border: `1px solid ${overdue ? 'rgba(178,43,43,0.3)' : 'var(--jp-border, #e5e2dc)'}`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <strong style={{ fontSize: 13 }}>{SARS_OBLIGATION_SHORT[slot.obligationType]}</strong>
+                        <span style={{ fontSize: 11, color: tone, fontWeight: 600 }}>
+                          {overdue ? `${-until}d overdue` : dueToday ? 'TODAY' : `${until}d`}
+                        </span>
+                      </div>
+                      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                        {slot.periodLabel} · due {formatDate(slot.dueDate)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
-        </section>
 
-        {/* ===== Ready for dispatch ===== */}
-        {jobsReadyDispatch.length > 0 && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Ready for dispatch — {jobsReadyDispatch.length}</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {jobsReadyDispatch.slice(0, 8).map((j) => (
-                <li key={j.id}><strong>{j.jobNumber}</strong> — {j.customerName} — {formatNumber(j.quantityCompleted)} / {formatNumber(j.quantityPlanned)} {j.paperQuantityUnit}</li>
-              ))}
-              {jobsReadyDispatch.length > 8 ? <li><em>… and {jobsReadyDispatch.length - 8} more</em></li> : null}
-            </ul>
-          </section>
-        )}
-
-        {/* ===== QC sign-offs pending ===== */}
-        {qcPending.length > 0 && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Food-packaging QC pending — {qcPending.length}</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {qcPending.slice(0, 6).map((j) => (
-                <li key={j.id}><strong>{j.jobNumber}</strong> — {j.customerName} — needs first-off or final QC sign-off</li>
-              ))}
-              {qcPending.length > 6 ? <li><em>… and {qcPending.length - 6} more</em></li> : null}
-            </ul>
-          </section>
-        )}
-
-        {/* ===== Sales — leads to follow ===== */}
-        <section style={{ marginBottom: 20 }}>
-          <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Sales — leads to follow today ({leadsToFollow.length})</h2>
-          {leadsToFollow.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13 }}>No follow-ups scheduled today.</p>
-          ) : (
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {leadsToFollow.slice(0, 10).map((l) => (
-                <li key={l.id}><strong>{l.leadNumber}</strong> — {l.contactName || l.companyName} — {l.source}{l.phone ? ` · ${l.phone}` : ''} — {l.status}</li>
-              ))}
-              {leadsToFollow.length > 10 ? <li><em>… and {leadsToFollow.length - 10} more</em></li> : null}
-            </ul>
+          {/* ── Food-safety QC pending ───────────────────────────────── */}
+          {qcPending.length > 0 && (
+            <section className="md-card" style={{ borderLeft: '3px solid #b8860b' }}>
+              <div className="md-card-head">
+                <strong>Food-packaging QC pending</strong>
+                <span className="md-count">{qcPending.length}</span>
+              </div>
+              <div>
+                {qcPending.slice(0, 5).map((j) => (
+                  <div key={j.id} className="md-row">
+                    <span><strong>{j.jobNumber}</strong> · {j.customerName}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>first-off or final QC needed</span>
+                  </div>
+                ))}
+                {qcPending.length > 5 ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>… +{qcPending.length - 5} more</div> : null}
+              </div>
+            </section>
           )}
-        </section>
 
-        {/* ===== Finance — invoices overdue ===== */}
-        {invoicesOverdue.length > 0 && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Finance — overdue invoices ({invoicesOverdue.length})</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {invoicesOverdue.slice(0, 8).map((inv) => {
-                const daysLate = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / DAY_MS);
-                return (
-                  <li key={inv.id}><strong>{inv.invoiceNumber}</strong> — {inv.clientName} — R {formatNumber(inv.amountOutstanding, 2)} — <span style={{ color: '#b22b2b' }}>{daysLate}d overdue</span></li>
-                );
-              })}
-              {invoicesOverdue.length > 8 ? <li><em>… and {invoicesOverdue.length - 8} more</em></li> : null}
-            </ul>
-          </section>
-        )}
+          {/* ── Open complaints ──────────────────────────────────────── */}
+          {openComplaints.length > 0 && (
+            <section className="md-card" style={{ borderLeft: '3px solid #b8860b' }}>
+              <div className="md-card-head">
+                <strong>Open complaints</strong>
+                <span className="md-count">{openComplaints.length}</span>
+              </div>
+              <div>
+                {openComplaints.slice(0, 5).map((c) => (
+                  <div key={c.id} className="md-row">
+                    <span><strong>{c.complaintNumber}</strong> · {c.clientName}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>{c.complaintType} · {c.severity}</span>
+                  </div>
+                ))}
+                {openComplaints.length > 5 ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>… +{openComplaints.length - 5} more</div> : null}
+              </div>
+            </section>
+          )}
 
-        {/* ===== SARS — deadlines due soon ===== */}
-        {sarsDue.length > 0 && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>SARS deadlines (next 30 days)</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {sarsDue.map((slot) => {
-                const until = daysUntil(slot.dueDate, today);
-                return (
-                  <li key={slot.periodKey}>
-                    <strong>{SARS_OBLIGATION_SHORT[slot.obligationType]}</strong> — {slot.periodLabel} — due {formatDate(slot.dueDate)}{' '}
-                    {until < 0 ? <span style={{ color: '#b22b2b' }}>({-until}d overdue)</span> : until === 0 ? <span style={{ color: '#b22b2b' }}>(due today)</span> : `(${until}d)`}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+          {/* ── Compliance roll-up ───────────────────────────────────── */}
+          {(pestOverdue.length > 0 || trainingOverdue.length > 0) && (
+            <section className="md-card" style={{ borderLeft: '3px solid #b8860b' }}>
+              <div className="md-card-head">
+                <strong>Compliance</strong>
+                <span className="md-count">{pestOverdue.length + trainingOverdue.length}</span>
+              </div>
+              <div>
+                {pestOverdue.length > 0 && (
+                  <div className="md-row">
+                    <span>Pest control services overdue</span>
+                    <strong>{pestOverdue.length}</strong>
+                  </div>
+                )}
+                {trainingOverdue.length > 0 && (
+                  <div className="md-row">
+                    <span>Staff training refreshers overdue</span>
+                    <strong>{trainingOverdue.length}</strong>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
 
-        {/* ===== Compliance — pest + training ===== */}
-        {(pestOverdue.length > 0 || trainingOverdue.length > 0) && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Compliance</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {pestOverdue.length > 0 && <li><strong>{pestOverdue.length} pest control service(s) overdue</strong></li>}
-              {trainingOverdue.length > 0 && <li><strong>{trainingOverdue.length} staff training refresher(s) overdue</strong></li>}
-            </ul>
-          </section>
-        )}
-
-        {/* ===== Open complaints summary ===== */}
-        {openComplaints.length > 0 && (
-          <section style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>Open complaints — {openComplaints.length}</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              {openComplaints.slice(0, 5).map((c) => (
-                <li key={c.id}><strong>{c.complaintNumber}</strong> — {c.clientName} — {c.complaintType} — {c.severity}</li>
-              ))}
-              {openComplaints.length > 5 ? <li><em>… and {openComplaints.length - 5} more</em></li> : null}
-            </ul>
-          </section>
-        )}
-
-        <footer style={{ marginTop: 24, paddingTop: 12, borderTop: '0.5px solid var(--jp-line)', fontSize: 11, color: 'var(--jp-ink-3, #64748b)', display: 'flex', justifyContent: 'space-between' }}>
-          <span>Generated {new Date().toLocaleString('en-ZA')}</span>
-          <span>Print and walk the floor.</span>
+        <footer
+          style={{
+            marginTop: 18,
+            padding: '12px 16px',
+            borderTop: '1px solid var(--jp-border, #e5e2dc)',
+            fontSize: 11,
+            color: 'var(--jp-ink-3, #64748b)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 6,
+          }}
+        >
+          <span>Generated {now.toLocaleString('en-ZA')}</span>
+          <span className="md-print-hide">Tap a section to drill in · or print and walk the floor.</span>
         </footer>
       </article>
     </>

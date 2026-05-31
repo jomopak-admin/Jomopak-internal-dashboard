@@ -11,11 +11,15 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  ALL_VISITOR_PPE_ITEMS,
+  AreaSafety,
   FACTORY_AREAS,
   FactoryArea,
+  getAreaSafety,
   VisitorLogEntry,
   VisitorLogFilters,
   VisitorLogFormState,
+  VisitorPpeItem,
   VisitorType,
 } from '../../types';
 import { formatDate } from '../../utils/calculations';
@@ -33,12 +37,20 @@ interface VisitorLogPageProps {
   onEdit: (r: VisitorLogEntry) => void;
   /** Phase 38 — reception confirms a kiosk check-in and assigns PPE + areas. */
   onVerify?: (id: string, payload: { ppeIssued: string; areasVisited: FactoryArea[] }) => void;
+  /** Phase 106 — admin's per-area safety override (from appSettings.visitorAreaPolicy).
+   *  When undefined the page uses DEFAULT_AREA_SAFETY. */
+  areaPolicy?: Partial<Record<FactoryArea, AreaSafety>>;
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const VISITOR_TYPES: VisitorType[] = ['Customer', 'Supplier', 'Contractor', 'Auditor', 'Maintenance', 'Pest Control', 'Other'];
 
-export function VisitorLogPage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit, onVerify }: VisitorLogPageProps) {
+export function VisitorLogPage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit, onVerify, areaPolicy }: VisitorLogPageProps) {
+  // Phase 106.1 — partition the area list into Safe (one-click) vs
+  // Restricted (needs host approval). The split is driven by the admin's
+  // per-area policy override, falling back to DEFAULT_AREA_SAFETY.
+  const safeAreas = FACTORY_AREAS.filter((a) => getAreaSafety(a, areaPolicy) === 'safe');
+  const restrictedAreas = FACTORY_AREAS.filter((a) => getAreaSafety(a, areaPolicy) === 'restricted');
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [verifyDrafts, setVerifyDrafts] = useState<Record<string, { ppeIssued: string; areasVisited: FactoryArea[] }>>({});
 
@@ -122,7 +134,32 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
         <div className="form-grid">
           <label className="checkbox-row full-span"><input type="checkbox" checked={form.hygieneAcknowledged} onChange={(e) => setForm({ ...form, hygieneAcknowledged: e.target.checked })} />Hygiene protocol acknowledged</label>
           <label className="checkbox-row full-span"><input type="checkbox" checked={form.enteredFoodContactArea} onChange={(e) => setForm({ ...form, enteredFoodContactArea: e.target.checked })} />Entered food-contact area</label>
-          <label className="full-span"><span>PPE issued</span><input value={form.ppeIssued} onChange={(e) => setForm({ ...form, ppeIssued: e.target.value })} placeholder="Hairnet, coat, shoe covers..." /></label>
+          {/* Phase 105 — PPE multi-select. Tick everything that was handed
+              to the visitor at check-in. Keeps audit data clean and lets
+              us count PPE consumption per item. The flat ppeIssued string
+              is also kept in sync (joined with ", ") for legacy reports. */}
+          <div className="full-span">
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', display: 'block', marginBottom: 8 }}>PPE issued</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ALL_VISITOR_PPE_ITEMS.map((item) => {
+                const active = (form.ppeIssuedItems ?? []).includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      const current = form.ppeIssuedItems ?? [];
+                      const next: VisitorPpeItem[] = active ? current.filter((p) => p !== item) : [...current, item];
+                      setForm({ ...form, ppeIssuedItems: next, ppeIssued: next.join(', ') });
+                    }}
+                    className={`chem-pictogram-pill${active ? ' chem-pictogram-pill-on' : ''}`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="full-span">
             <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', display: 'block', marginBottom: 8 }}>Areas visited</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -190,15 +227,64 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
                       <span className="badge badge-warning">Pending</span>
                     </div>
                     <div className="form-grid" style={{ marginTop: '0.6rem' }}>
-                      <label className="full-span">
-                        <span>PPE issued</span>
-                        <input value={d.ppeIssued} onChange={(e) => setDraft(r.id, { ppeIssued: e.target.value })} placeholder="Hairnet, hi-vis, ear plugs…" />
-                      </label>
+                      {/* Phase 105 — PPE multi-select on the verify panel.
+                          Same widget as the main form so reception always
+                          ticks from a controlled list, not free-text. */}
                       <div className="full-span">
-                        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>Areas they're allowed in</span>
+                        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>PPE issued</span>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {FACTORY_AREAS.map((a) => (
+                          {ALL_VISITOR_PPE_ITEMS.map((item) => {
+                            const picked = (d.ppeIssued || '').split(/\s*,\s*/).filter(Boolean);
+                            const on = picked.includes(item);
+                            return (
+                              <label key={item} className={`kiosk-chip ${on ? 'is-active' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={on}
+                                  onChange={() => {
+                                    const next = on ? picked.filter((p) => p !== item) : [...picked, item];
+                                    setDraft(r.id, { ppeIssued: next.join(', ') });
+                                  }}
+                                />
+                                {item}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {/* Phase 106.1 — Areas are split into Safe (reception
+                          can approve on its own) and Restricted (needs host
+                          approval before the visitor leaves reception).
+                          Phase 106.2 will fire an approval request when a
+                          restricted area is ticked; for now reception can
+                          still tick them so the data model + UI ship first. */}
+                      <div className="full-span">
+                        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>
+                          Safe areas <span className="muted" style={{ fontWeight: 400, fontSize: '0.75rem' }}>· reception can approve</span>
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                          {safeAreas.map((a) => (
                             <label key={a} className={`kiosk-chip ${d.areasVisited.includes(a) ? 'is-active' : ''}`}>
+                              <input type="checkbox" checked={d.areasVisited.includes(a)} onChange={() => toggleVerifyArea(r, a)} />
+                              <span>{a}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6, color: 'var(--alert, #b22b2b)' }}>
+                          Restricted areas <span className="muted" style={{ fontWeight: 400, fontSize: '0.75rem' }}>· needs host approval</span>
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {restrictedAreas.map((a) => (
+                            <label
+                              key={a}
+                              className={`kiosk-chip ${d.areasVisited.includes(a) ? 'is-active' : ''}`}
+                              style={{
+                                borderColor: d.areasVisited.includes(a) ? 'var(--alert, #b22b2b)' : undefined,
+                                borderStyle: 'dashed',
+                              }}
+                              title="Restricted area — host must approve before visitor enters"
+                            >
                               <input type="checkbox" checked={d.areasVisited.includes(a)} onChange={() => toggleVerifyArea(r, a)} />
                               <span>{a}</span>
                             </label>

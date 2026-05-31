@@ -187,6 +187,9 @@ function computeLine(
   state: CalculatorState,
   line: CalculatorLineItem,
   ctx: ComputeContext,
+  /** Phase 92 — company-wide fallback margin from AppSettings.
+   *  Used only when no per-line / shared / tier / profile margin is set. */
+  standardMarginPercent?: number,
 ): LineResult {
   const { pricingTier, paperRate, costProfile } = ctx;
 
@@ -248,7 +251,9 @@ function computeLine(
   const tierMargin = pricingTier?.defaultMarginPercent ?? 0;
   const profileMargin = costProfile?.defaultMarginPercent ?? 0;
   const lineMargin = num(line.customMarginPercent);
-  const marginPercent = lineMargin || sharedMargin || tierMargin || profileMargin || 0;
+  const standardMargin = num(standardMarginPercent);
+  const marginPercent =
+    lineMargin || sharedMargin || tierMargin || profileMargin || standardMargin || 0;
 
   // Per-bag sell = marked-up production cost + flat print charge + (if the
   // client doesn't want an upfront plate cost) the amortized plate share.
@@ -289,9 +294,13 @@ export function computeQuote(
     pricingTiers: PricingTier[];
     paperRates: PaperRate[];
     costProfiles: CostProfile[];
+    /** Phase 92 — company-wide standard margin from AppSettings. */
+    standardMarginPercent?: number;
   },
 ): QuoteComputation {
-  const lines = state.lines.map((line) => computeLine(state, line, resolveContext(state, line, refs)));
+  const lines = state.lines.map((line) =>
+    computeLine(state, line, resolveContext(state, line, refs), refs.standardMarginPercent),
+  );
 
   let totalQuantity = 0;
   let totalCost = 0;

@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { UserProfile, View } from '../../types';
+import { ToastContainer } from '../Toast';
 
 interface AppLayoutProps {
   view: View;
@@ -13,6 +14,10 @@ interface AppLayoutProps {
   /** Opens the global search / command palette. Rendered next to the menu
    *  toggle on the left of the topbar for easy access. */
   onOpenSearch?: () => void;
+  /** Phase 103.7.1 — Account-menu hook that jumps to Settings AND sets
+   *  the active tab to 'apiAccess'. App.tsx wires this so the picker
+   *  doesn't live in the sidebar but is still one click away. */
+  onOpenApiAccess?: () => void;
   /** Phase 60 — when true, the layout hides the sidebar, hamburger, search,
    *  and chrome to give a single-purpose PWA feel (used for drivers). The
    *  account menu still renders so they can sign out. */
@@ -21,6 +26,10 @@ interface AppLayoutProps {
 }
 
 const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
+  // Pinned top-level landings. Each is its own one-item group so it renders
+  // as a single high-visibility row, not buried inside a collapsible group.
+  { title: 'Inbox', views: ['inbox'] },
+  { title: 'Admin Hub', views: ['adminHub'] },
   { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
@@ -31,9 +40,20 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'stockMovements', 'labels', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
-  { title: 'Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLoans', 'expenseClaims', 'irp5Centre', 'staffWarnings'] },
-  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'firstAidRegister', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'foreignObjectControl', 'pestControl', 'toolBladeControl', 'visitorLog'] },
-  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'notices', 'permissions', 'settings'] },
+  // HR sits as its own group — leave, loans, claims, warnings, payroll are
+  // all HR-ish concerns the admin (currently Aman) does daily.
+  { title: 'HR & Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLeaveApprove', 'staffLoans', 'expenseClaims', 'expenseClaimsApprove', 'irp5Centre', 'staffWarnings', 'notices'] },
+  // Compliance now includes SMETA registers + Audit Programmes alongside the
+  // food-safety set so all auditor-facing surfaces live together.
+  { title: 'Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'firstAidRegister', 'incidentRegister', 'drillRegister', 'toolboxTalks', 'sheCommittee', 'auditProgrammes', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'foreignObjectControl', 'pestControl', 'toolBladeControl'] },
+  // Reception / front office — visitor + contractor management lives here,
+  // owned by the admin / receptionist (not Compliance). The Kiosk is the
+  // tablet at the front desk; the Log is the full searchable register;
+  // Approvals is the audit + admin-override view.
+  { title: 'Reception', views: ['visitorKiosk', 'visitorLog', 'visitorApprovals'] },
+  // Phase 103.7 — osConnector ('API access') moved into Settings → API access
+  // tab and is no longer in the sidebar.
+  { title: 'Admin', views: ['documentVault', 'tradedGoods', 'permissions', 'settings'] },
 ];
 
 const NAV_OPEN_STORAGE_KEY = 'jomopak.nav.openGroups';
@@ -51,7 +71,7 @@ function readStoredOpenGroups(): Set<string> | null {
   }
 }
 
-export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, onChangePassword, topbarAction, topbarSummary, onOpenSearch, kioskMode, children }: AppLayoutProps) {
+export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, onChangePassword, topbarAction, topbarSummary, onOpenSearch, onOpenApiAccess, kioskMode, children }: AppLayoutProps) {
   const accountName = profile?.fullName || profile?.email || 'Signed in';
   const accountEmail = profile?.email || 'No email stored';
   const accountRole = profile?.role || 'ops';
@@ -69,14 +89,27 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
     setDrawerOpen(false);
     setAccountOpen(false);
   }, [view]);
+  /* Phase 103.7 — Hard blacklist of views that must NEVER appear in the
+   * sidebar regardless of what permissions / NAV_GROUPS say. Currently:
+   *   - 'osConnector' (API access) → lives in Settings → API access tab
+   *      and is reachable from the avatar menu. Keeping it out of the
+   *      sidebar means there's exactly one path.
+   *
+   * This belt-and-braces filter exists because the same setting got
+   * filtered at 5 different layers historically and one always slipped
+   * through. The blacklist here is the last word — if a view is in it,
+   * it physically cannot render in the sidebar. */
+  const SIDEBAR_HIDDEN: ReadonlyArray<View> = ['osConnector'];
   const groupedNav = useMemo(
     () =>
       NAV_GROUPS
         .map((group) => ({
           title: group.title,
           items: group.views
+            .filter((groupView) => !SIDEBAR_HIDDEN.includes(groupView))
             .map((groupView) => navItems.find((item) => item.key === groupView))
-            .filter((item): item is { key: View; label: string } => Boolean(item)),
+            .filter((item): item is { key: View; label: string } => Boolean(item))
+            .filter((item) => !SIDEBAR_HIDDEN.includes(item.key)),
         }))
         .filter((group) => group.items.length > 0),
     [navItems],
@@ -132,6 +165,12 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
       drawerOpen ? 'app-shell drawer-open' : 'app-shell',
       kioskMode ? 'kiosk-mode' : '',
     ].filter(Boolean).join(' ')}>
+      {/* Phase 104 — Global toast notifications.
+          Mounted once at the layout root so any code anywhere in the app
+          can call toast.success(...) / toast.error(...) and the message
+          surfaces top-right above all pages, including in kiosk mode. */}
+      <ToastContainer />
+
       {/* Mobile overlay — tapping it closes the drawer. Always rendered so
           the slide animation can play; CSS hides it on desktop. */}
       {!kioskMode && (
@@ -251,6 +290,12 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
                     </div>
                     {canOpenSettings ? (
                       <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onViewChange('settings'); }}>Account &amp; settings</button>
+                    ) : null}
+                    {/* Phase 103.7.1 — API access lives inside Settings. The
+                        sidebar doesn't expose it; the account menu provides
+                        a one-click jump that opens Settings on the right tab. */}
+                    {canOpenSettings && onOpenApiAccess ? (
+                      <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onOpenApiAccess(); }}>API access</button>
                     ) : null}
                     {canOpenPermissions ? (
                       <button type="button" role="menuitem" className="account-menu-item" onClick={() => { setAccountOpen(false); onViewChange('permissions'); }}>Permissions</button>

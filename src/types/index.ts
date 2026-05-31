@@ -93,8 +93,44 @@ export type View =
   | 'dies'
   | 'stereos'
   | 'labels'
-  | 'stockMovements';
+  | 'stockMovements'
+  | 'tradedGoods'
+  | 'incidentRegister'
+  | 'drillRegister'
+  | 'toolboxTalks'
+  | 'sheCommittee'
+  | 'auditProgrammes'
+  | 'visitorApprovals'
+  | 'adminHub'
+  | 'inbox';
 export type UserRole = 'admin' | 'ops' | 'production' | 'sales' | 'artwork' | 'accounts' | 'driver';
+
+/** Phase 103 — Inbox categories.
+ *  Mirrors the InboxCategory in utils/inbox.ts. Re-declared here so
+ *  UserProfile can reference it without the type file importing utils. */
+export type InboxCategory = 'HR' | 'Sales' | 'Production' | 'Safety' | 'Finance' | 'Operations';
+export const ALL_INBOX_CATEGORIES: InboxCategory[] = ['HR', 'Sales', 'Production', 'Safety', 'Finance', 'Operations'];
+
+/** Phase 103 — Partner scopes for external_partner accounts.
+ *  Each scope gates a slice of the app:
+ *   - hr         — leave, claims, warnings, employees, IRP5 docs
+ *   - legal      — NCRs, contracts, legal correspondence
+ *   - accounting — invoices, supplier bills, bank rec, GL, can post invoices
+ *   - marketing  — leads, sales pipeline, customer data, can post notices
+ *   - audit      — audit programmes, SHE, NCRs, compliance docs
+ *  Combine scopes for firms that do multiple jobs ('hr' + 'accounting'). */
+export type PartnerScope = 'hr' | 'legal' | 'accounting' | 'marketing' | 'audit';
+export const ALL_PARTNER_SCOPES: PartnerScope[] = ['hr', 'legal', 'accounting', 'marketing', 'audit'];
+
+/** Phase 103 — which inbox categories each partner scope should see by
+ *  default. Sensible starting point; admin can override per user. */
+export const PARTNER_SCOPE_INBOX_DEFAULTS: Record<PartnerScope, InboxCategory[]> = {
+  hr:         ['HR'],
+  legal:      ['Safety'],                          // NCRs, contracts surface as Safety
+  accounting: ['Finance'],
+  marketing:  ['Sales'],
+  audit:      ['Safety', 'Operations'],
+};
 export type DashboardWidget =
   | 'stats'
   | 'monthSummary'
@@ -208,11 +244,22 @@ export const VIEW_LABELS: Record<View, string> = {
   stereos: 'Stereos',
   labels: 'Labels',
   stockMovements: 'Stock Movements',
+  tradedGoods: 'Traded Goods',
+  incidentRegister: 'Incident Register',
+  drillRegister: 'Drill Register',
+  toolboxTalks: 'Toolbox Talks',
+  sheCommittee: 'SHE Committee',
+  auditProgrammes: 'Audit Programmes',
+  visitorApprovals: 'Visitor Approvals',
+  adminHub: 'Admin Hub',
+  inbox: 'Inbox',
 };
 
 export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
   admin: [
+    'inbox',
     'dashboard',
+    'adminHub',
     'salesDesk',
     'calculator',
     'workTicket',
@@ -221,7 +268,11 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'leads',
     'permissions',
     'settings',
-    'osConnector',
+    // Phase 103.7 — API access lives inside Settings → API access tab now.
+    // It is intentionally NOT in the admin's default permissions list so
+    // it never appears in the sidebar. The Settings tab uses its own
+    // direct render path so route-level access still works for admins
+    // even though the standalone view permission was dropped.
     'suppliers',
     'quotes',
     'artwork',
@@ -237,6 +288,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'pricing',
     'priceList',
     'finishedStock',
+    'tradedGoods',
     'stockTake',
     'spares',
     'materials',
@@ -254,8 +306,14 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'foreignObjectControl',
     'toolBladeControl',
     'firstAidRegister',
+    'incidentRegister',
+    'drillRegister',
+    'toolboxTalks',
+    'sheCommittee',
+    'auditProgrammes',
     'visitorLog',
     'visitorKiosk',
+    'visitorApprovals',
     'traceability',
     'complaints',
     'agedDebtors',
@@ -325,6 +383,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'products',
     'priceList',
     'finishedStock',
+    'tradedGoods',
     'stockTake',
     'spares',
     'materials',
@@ -342,6 +401,10 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'foreignObjectControl',
     'toolBladeControl',
     'firstAidRegister',
+    'incidentRegister',
+    'drillRegister',
+    'toolboxTalks',
+    'sheCommittee',
     'visitorLog',
     'traceability',
     'complaints',
@@ -416,6 +479,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'jobs',
     'products',
     'priceList',
+    'tradedGoods',
     'stockStatements',
     'foodSafetyControlCentre',
     'haccpRegister',
@@ -427,6 +491,10 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'foreignObjectControl',
     'toolBladeControl',
     'firstAidRegister',
+    'incidentRegister',
+    'drillRegister',
+    'toolboxTalks',
+    'sheCommittee',
     'visitorLog',
     'traceability',
     'complaints',
@@ -488,6 +556,10 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'foreignObjectControl',
     'toolBladeControl',
     'firstAidRegister',
+    'incidentRegister',
+    'drillRegister',
+    'toolboxTalks',
+    'sheCommittee',
     'visitorLog',
     'traceability',
     'complaints',
@@ -510,7 +582,14 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
   const source = Array.isArray(permissions) && permissions.length
     ? permissions
     : ROLE_DEFAULT_VIEWS[role];
-  const valid = source.filter((permission): permission is View => permission in VIEW_LABELS);
+  // Phase 103.7 hardening — strip 'osConnector' on read so legacy admin
+  // rows that still have it stored no longer ever land in the user's
+  // resolved permission list. API Access lives inside Settings → API
+  // access tab now. The sidebar already filters this view, but stripping
+  // here closes the loop at the data layer too.
+  const valid: View[] = source.filter(
+    (permission): permission is View => permission in VIEW_LABELS && permission !== 'osConnector',
+  );
   // Drivers get the tightest possible scope: just driverPod + myPortal so
   // they can still see their own warnings/payslips. No dashboard, no
   // sidebar tabs. They are expected to use the PWA on their phone.
@@ -526,6 +605,16 @@ export function normalizeProfilePermissions(role: UserRole, permissions?: string
     required.add('permissions');
     required.add('settings');
     required.add('notices');
+    // Phase 101 / 102 / 103 — added after the initial admin profiles were
+    // saved. Force them in so existing admin rows in Supabase pick them up
+    // without anyone re-saving permissions manually.
+    required.add('inbox');
+    required.add('adminHub');
+    required.add('auditProgrammes');
+    // Front-office surfaces that also need force-adding for existing admins.
+    required.add('visitorLog');
+    required.add('visitorKiosk');
+    required.add('visitorApprovals');
   }
   required.forEach((permission) => {
     if (!valid.includes(permission)) {
@@ -757,6 +846,17 @@ export interface FirstAidEntry {
   /** Employee signature confirming treatment was administered + accepted. */
   signatureDataUrl?: string;
   notes: string;
+  /** Phase 98 — what came out of the first aid box. SMETA auditors and
+   *  the SHE rep both want to see this so the box can be restocked and
+   *  consumption patterns reviewed. */
+  dressingsUsed?: FirstAidDressing[];
+}
+
+/** Phase 98 — one item taken from the first aid box per incident. */
+export interface FirstAidDressing {
+  item: string;        // 'Plaster', 'Crepe bandage 75mm', 'Wound dressing #3', etc.
+  quantity: number;
+  notes?: string;
 }
 
 export interface FirstAidEntryFormState {
@@ -784,6 +884,8 @@ export interface FirstAidEntryFormState {
   photoUrls?: string[];
   signatureDataUrl?: string;
   notes: string;
+  /** Phase 98 — dressings used from the first aid box. */
+  dressingsUsed: FirstAidDressing[];
 }
 
 export interface FirstAidFilters {
@@ -804,6 +906,311 @@ export interface DesignatedFirstAiderFormState {
   active: boolean;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 95 — SMETA Safety Registers.
+ *
+ * Five live registers that SMETA audits expect. Each is a per-event log
+ * (rather than reference docs which live in Doc Vault).
+ *
+ *   - IncidentRegister     = injury / property / IOD / near-miss
+ *   - DrillRegister        = fire & evacuation drills
+ *   - ToolboxTalkRegister  = safety talks with attendee signatures
+ *   - SheCommitteeMeeting  = SHE committee minutes + action items
+ *   - HiraRegister         = per-process hazard ID + risk assessment (later)
+ *
+ * Shared shape: id, code, date, narrative, photos, who logged it,
+ * sign-off. Action items on incidents and SHE meetings tie into the
+ * existing NCR/CAPA system so corrective actions don't get orphaned.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type IncidentType = 'Near miss' | 'First aid case' | 'Medical treatment' | 'Lost time injury' | 'Property damage' | 'IOD' | 'Environmental';
+export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
+
+export interface IncidentEntry {
+  id: string;
+  incidentNumber: string;
+  createdAt: string;
+  incidentDate: string;
+  incidentTime: string;
+  incidentType: IncidentType;
+  severity: IncidentSeverity;
+  /** Injured person — links to Employee where possible, otherwise free text
+   *  (visitor, contractor, etc.). */
+  personEmployeeId?: string;
+  personName: string;
+  personRole: string;
+  isContractor: boolean;
+  bodyPartAffected: string;
+  location: string;
+  description: string;
+  immediateAction: string;
+  treatmentGiven: string;
+  treatedByName: string;
+  /** First-aider on duty if applicable. */
+  firstAiderEmployeeId?: string;
+  witnessName: string;
+  rootCause: string;
+  /** Corrective action plan free-text + optional link to NCR record. */
+  correctiveAction: string;
+  linkedNcrId?: string;
+  /** WCl.2 (COIDA) submission tracking. */
+  iodSubmitted: boolean;
+  iodReference: string;
+  /** Returned to work date — drives the LTI day count. */
+  daysLost: number;
+  returnToWorkDate: string;
+  /** Closure. */
+  closedAt: string;
+  closedByName: string;
+  /** Sign-off + evidence. */
+  reporterName: string;
+  reporterSignatureUrl: string;
+  photoUrls: string[];
+  notes: string;
+}
+
+export interface IncidentFormState {
+  incidentNumber: string;
+  incidentDate: string;
+  incidentTime: string;
+  incidentType: IncidentType;
+  severity: IncidentSeverity;
+  personEmployeeId: string;
+  personName: string;
+  personRole: string;
+  isContractor: boolean;
+  bodyPartAffected: string;
+  location: string;
+  description: string;
+  immediateAction: string;
+  treatmentGiven: string;
+  treatedByName: string;
+  firstAiderEmployeeId: string;
+  witnessName: string;
+  rootCause: string;
+  correctiveAction: string;
+  linkedNcrId: string;
+  iodSubmitted: boolean;
+  iodReference: string;
+  daysLost: string;
+  returnToWorkDate: string;
+  closedAt: string;
+  closedByName: string;
+  reporterName: string;
+  reporterSignatureUrl: string;
+  photoUrls: string[];
+  notes: string;
+}
+
+/* ─── Fire / Evacuation Drill register ───────────────────────────────── */
+export type DrillType = 'Fire' | 'Evacuation' | 'Bomb threat' | 'Chemical spill' | 'Other';
+export type DrillOutcome = 'Successful' | 'Concerns' | 'Failed';
+
+export interface DrillEntry {
+  id: string;
+  drillNumber: string;
+  createdAt: string;
+  drillDate: string;
+  drillType: DrillType;
+  scenario: string;
+  /** Times in HH:MM. */
+  alarmRaisedTime: string;
+  evacuationCompleteTime: string;
+  /** Total time in minutes — computed but persisted. */
+  totalMinutes: number;
+  headcountExpected: number;
+  headcountAtMuster: number;
+  missingPersons: string;
+  /** Who facilitated. */
+  fireMarshalName: string;
+  fireMarshalSignatureUrl: string;
+  observations: string;
+  lessonsLearned: string;
+  outcome: DrillOutcome;
+  photoUrls: string[];
+  notes: string;
+}
+
+export interface DrillFormState {
+  drillNumber: string;
+  drillDate: string;
+  drillType: DrillType;
+  scenario: string;
+  alarmRaisedTime: string;
+  evacuationCompleteTime: string;
+  headcountExpected: string;
+  headcountAtMuster: string;
+  missingPersons: string;
+  fireMarshalName: string;
+  fireMarshalSignatureUrl: string;
+  observations: string;
+  lessonsLearned: string;
+  outcome: DrillOutcome;
+  photoUrls: string[];
+  notes: string;
+}
+
+/* ─── Toolbox Talks register ─────────────────────────────────────────── */
+export interface ToolboxTalkAttendee {
+  /** Optional link to Employee record. */
+  employeeId?: string;
+  name: string;
+  signatureUrl: string;
+}
+
+export interface ToolboxTalkEntry {
+  id: string;
+  talkNumber: string;
+  createdAt: string;
+  talkDate: string;
+  topic: string;
+  /** Free-text key points covered. */
+  keyPoints: string;
+  /** Q&A / discussion that came up. */
+  discussion: string;
+  facilitatorName: string;
+  facilitatorSignatureUrl: string;
+  durationMinutes: number;
+  attendees: ToolboxTalkAttendee[];
+  photoUrls: string[];
+  notes: string;
+}
+
+export interface ToolboxTalkFormState {
+  talkNumber: string;
+  talkDate: string;
+  topic: string;
+  keyPoints: string;
+  discussion: string;
+  facilitatorName: string;
+  facilitatorSignatureUrl: string;
+  durationMinutes: string;
+  attendees: ToolboxTalkAttendee[];
+  photoUrls: string[];
+  notes: string;
+}
+
+/* ─── SHE Committee meeting register ─────────────────────────────────── */
+export type SheActionStatus = 'Open' | 'In progress' | 'Done' | 'Cancelled';
+
+export interface SheActionItem {
+  id: string;
+  description: string;
+  ownerName: string;
+  dueDate: string;
+  status: SheActionStatus;
+  closedDate: string;
+  closeoutNote: string;
+}
+
+export interface SheMeetingAttendee {
+  employeeId?: string;
+  name: string;
+  role: string;
+  signatureUrl: string;
+}
+
+export interface SheMeetingEntry {
+  id: string;
+  meetingNumber: string;
+  createdAt: string;
+  meetingDate: string;
+  meetingTime: string;
+  chairpersonName: string;
+  scribeName: string;
+  attendees: SheMeetingAttendee[];
+  agenda: string;
+  minutes: string;
+  actionItems: SheActionItem[];
+  nextMeetingDate: string;
+  photoUrls: string[];
+  notes: string;
+}
+
+export interface SheMeetingFormState {
+  meetingNumber: string;
+  meetingDate: string;
+  meetingTime: string;
+  chairpersonName: string;
+  scribeName: string;
+  attendees: SheMeetingAttendee[];
+  agenda: string;
+  minutes: string;
+  actionItems: SheActionItem[];
+  nextMeetingDate: string;
+  photoUrls: string[];
+  notes: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 103.2 — Audit Programme register.
+ *
+ * One row per audit programme JomoPak runs against: SMETA, FSC Chain of
+ * Custody, FSSC 22000, ISO 9001, SARS PAYE inspection, etc. Each row
+ * tracks who audits us, when we were last audited, how often it recurs,
+ * and when the next one is due. The inbox producer reads this list and
+ * emits "Audit due in 30 days" events as the date approaches.
+ *
+ * Simpler than the SARS calendar — audits aren't on a fixed gov't
+ * schedule. They're "we got audited last June, next one's around then."
+ * Cadence in months is the dial; nextDueDate is computed from
+ * lastAuditedDate + cadenceMonths but can be overridden manually.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type AuditProgrammeStatus = 'Active' | 'Paused' | 'Lapsed';
+
+export interface AuditProgramme {
+  id: string;
+  /** Short code, e.g. 'SMETA', 'FSC-COC', 'FSSC', 'ISO9001'. */
+  code: string;
+  /** Display name. */
+  name: string;
+  /** Which body audits us — Sedex, SGS, BSI, FSC South Africa, etc. */
+  auditingBody: string;
+  /** Optional contact email for the audit body — drives reminder emails later. */
+  contactEmail: string;
+  /** ISO date of the last completed audit. */
+  lastAuditedDate: string;
+  /** How often the audit recurs. SMETA + FSC + FSSC = 12, ISO surveillance
+   *  = 12, ISO recertification = 36. Drives the auto-computed nextDueDate. */
+  cadenceMonths: number;
+  /** Optional manual override — when set, takes precedence over the
+   *  auto-computed (lastAuditedDate + cadenceMonths). Useful when the
+   *  auditor schedules a specific date. */
+  nextDueDateOverride?: string;
+  /** Notes — scope, prep checklist, certificate number. */
+  notes: string;
+  /** Active / paused / lapsed. Paused programmes don't emit inbox events. */
+  status: AuditProgrammeStatus;
+  /** Optional URL to the latest audit report / certificate. */
+  certificateUrl: string;
+  certificateExpiryDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditProgrammeFormState {
+  code: string;
+  name: string;
+  auditingBody: string;
+  contactEmail: string;
+  lastAuditedDate: string;
+  cadenceMonths: string;
+  nextDueDateOverride: string;
+  notes: string;
+  status: AuditProgrammeStatus;
+  certificateUrl: string;
+  certificateExpiryDate: string;
+}
+
+/** Compute the next-due date from cadence, respecting the manual override. */
+export function computeAuditNextDue(a: AuditProgramme): string {
+  if (a.nextDueDateOverride) return a.nextDueDateOverride;
+  if (!a.lastAuditedDate) return '';
+  const d = new Date(a.lastAuditedDate);
+  d.setMonth(d.getMonth() + (a.cadenceMonths || 12));
+  return d.toISOString().slice(0, 10);
+}
+
 
 /** Tri-state food-safe flag used on materials, chemicals, and derived FG batches.
  *  Defaults to 'unknown' so receivers/operators must explicitly pick. */
@@ -822,10 +1229,57 @@ export type ArtworkPreparationStatus = 'Print Ready' | 'Ready but Not Print Read
 export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
 export type LeadStatus = 'New' | 'Qualified' | 'Awaiting Info' | 'Quoted' | 'Won' | 'Lost';
-export type LeadSource = 'WhatsApp' | 'Phone' | 'Email' | 'Referral' | 'Walk-in' | 'Existing Customer' | 'Website' | 'Social Media' | 'Other';
+/** Phase 99 — Niched lead sources.
+ *  Lets us answer "which channel converts best?" instead of lumping
+ *  everything into 'Social Media'. Legacy 'Social Media' rows still
+ *  display (forward-compatible) but new selections pick a specific platform.
+ *
+ *  Add new sources here as you spin up new channels (LinkedIn, Trade Show, etc.). */
+export type LeadSource =
+  // Digital — paid + organic
+  | 'TikTok'
+  | 'Instagram'
+  | 'Facebook'
+  | 'LinkedIn'
+  | 'Google'
+  | 'Website'
+  // Direct contact
+  | 'WhatsApp'
+  | 'Phone'
+  | 'Email'
+  | 'SMS'
+  | 'Cold Call'
+  // In-person
+  | 'Walk-in'
+  | 'Trade Show'
+  | 'Networking Event'
+  // Relationship
+  | 'Word of Mouth'
+  | 'Referral'
+  | 'Existing Customer'
+  // Catch-all + legacy
+  | 'Social Media'   // kept for back-compat with rows tagged generically
+  | 'Other';
 
 export const LEAD_SOURCES: LeadSource[] = [
-  'WhatsApp', 'Phone', 'Email', 'Referral', 'Walk-in', 'Existing Customer', 'Website', 'Social Media', 'Other',
+  // Order = display order in the dropdown. Most-used at the top.
+  'WhatsApp', 'Phone', 'Email', 'Walk-in',
+  'Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Google', 'Website',
+  'Cold Call', 'SMS',
+  'Trade Show', 'Networking Event',
+  'Word of Mouth', 'Referral', 'Existing Customer',
+  'Social Media', 'Other',
+];
+
+/** Phase 99 — grouped sources for the form picker so the segmented control
+ *  doesn't drown in 19 options. Each group renders as a header + buttons. */
+export const LEAD_SOURCE_GROUPS: Array<{ label: string; sources: LeadSource[] }> = [
+  { label: 'Direct', sources: ['WhatsApp', 'Phone', 'Email', 'SMS', 'Walk-in', 'Cold Call'] },
+  { label: 'Social', sources: ['Instagram', 'Facebook', 'TikTok', 'LinkedIn'] },
+  { label: 'Search & web', sources: ['Google', 'Website'] },
+  { label: 'In-person', sources: ['Trade Show', 'Networking Event'] },
+  { label: 'Relationship', sources: ['Word of Mouth', 'Referral', 'Existing Customer'] },
+  { label: 'Other', sources: ['Social Media', 'Other'] },
 ];
 
 export type LeadActivityType = 'Note' | 'Call' | 'Email' | 'WhatsApp' | 'Meeting' | 'Quote Sent' | 'Sample Sent' | 'Follow-up' | 'Other';
@@ -1008,6 +1462,41 @@ export interface QuoteEstimate {
   notes: string;
   /** Phase 34 — customer-facing note printed on the quote. */
   customerNote?: string;
+  /** Phase 118.1 — when this quote was created from the Calculator,
+   *  every row from that single save shares the same batchId. Lets the
+   *  Quotes page re-stitch a multi-line quote for re-print / re-email.
+   *  Single-line quotes (saved from the old form) leave this undefined. */
+  calculatorBatchId?: string;
+  /** Phase 118.1 — frozen calculator state at save-time, scoped to
+   *  THIS row's line(s). Keeping it per-row makes deletes safe (drop
+   *  one row → others still re-stitch) and search/list pages don't
+   *  need to know about batching. The re-print stitcher reads every
+   *  sibling row with the same batchId and concatenates their snapshot
+   *  .lines arrays in quoteNumber order (-A, -B, -C, ...) to rebuild
+   *  the original CalculatorState. The 'shared' header is identical
+   *  on every sibling row (same client / date / cost profile / etc.). */
+  calculatorSnapshot?: CalculatorState;
+}
+
+/** Phase 99 — One line in a lead's enquiry.
+ *  Clients often ask for multiple things in one quote ("can you do 5000
+ *  brown paper bags + 2000 printed boxes + a roll stock?"). One row per
+ *  item, each with its own product, qty, spec note. The legacy single
+ *  productId / requestedQuantity on Lead are still populated from the
+ *  first item so existing reports keep working. */
+export interface LeadItem {
+  id: string;
+  productId: string;
+  productName: string;
+  /** Free text — for new items that don't exist in Products yet. */
+  description: string;
+  requestedQuantity: number;
+  unit: string;       // 'units' / 'kg' / 'rolls' etc.
+  /** Optional per-item spec the client mentioned ("white kraft, 80gsm, flat
+   *  handle"). The actual production spec gets pinned down on the Job. */
+  specNote: string;
+  /** Per-item estimated value — feeds the lead's total estimated value. */
+  estimatedValue: number;
 }
 
 export interface Lead {
@@ -1022,7 +1511,12 @@ export interface Lead {
   phone: string;
   email: string;
   source: LeadSource;
+  /** Phase 99 — when source is 'Referral' / 'Word of Mouth' / 'Existing
+   *  Customer', who pointed them at us. Helps thank referrers. */
+  sourceDetail?: string;
   assignedTo: string;
+  /** Legacy single-product fields — first LeadItem populates these on save
+   *  so existing pipeline + reports keep working. */
   productId: string;
   productName: string;
   requestedQuantity: number;
@@ -1040,6 +1534,15 @@ export interface Lead {
   lostReason?: LostReason | '';
   /** Estimated value of the opportunity — used in pipeline rollup. */
   estimatedValue?: number;
+  /** Phase 99 — multi-item enquiry. Empty/undefined for legacy single-item
+   *  rows. New leads always populate this. */
+  items?: LeadItem[];
+  /** Phase 99 — has the client returned the New Client Detail Form? Sales
+   *  tick this when the PDF comes back; the bell can chase it after N days. */
+  onboardingFormReceived?: boolean;
+  onboardingFormReceivedDate?: string;
+  /** Phase 99 — admin/sales note when the form was sent but not yet returned. */
+  onboardingFormNote?: string;
 }
 
 export interface ArtworkRecord {
@@ -1343,10 +1846,33 @@ export interface UserProfile {
   username: string;
   phoneNumber: string;
   clientId: string;
-  accountType: 'internal' | 'client';
+  /** Phase 103 — accountType expanded.
+   *  - internal       = staff with a login
+   *  - client         = customer portal user (sees their orders / stock-holding)
+   *  - external_partner = outsourced firm (HR / Legal / Accounting / Marketing /
+   *    Audit) given scoped access. See `partnerScope`. */
+  accountType: 'internal' | 'client' | 'external_partner';
+  /** Phase 103 — when accountType = 'external_partner', defines which
+   *  business functions they can see. Multi-select so a firm doing both
+   *  HR + Payroll gets ['hr', 'accounting']. */
+  partnerScope?: PartnerScope[];
+  /** Phase 103 — per-user inbox category gate. When set, the Inbox only
+   *  shows events from these categories. Empty/undefined = the user's role
+   *  default (admin gets all; others get nothing until granted). */
+  inboxCategories?: InboxCategory[];
+  /** Phase 103.4 — explicit grant for an external_partner with the
+   *  'accounting' scope to upload supplier invoices into the OCR / Invoice
+   *  Inbox. Defaults false. Internal accounts staff don't need this — they
+   *  always can. */
+  canPostInvoices?: boolean;
   publicDisplayName: string;
   publicDisplayRole: string;
   role: UserRole;
+  /** Phase 91 — explicit grant for the pricing / discount tools on the
+   *  Calculator. Admin always has it. The CEO can grant this to specific
+   *  staff (e.g. a senior sales lead) so they can see costs, set margin,
+   *  and quote discounts. Defaults false. */
+  pricingEditor?: boolean;
   permissions: View[];
   dashboardWidgets: DashboardWidget[];
   /** Phase 40 — staff portal. Links this login to an Employee row so the
@@ -1849,6 +2375,57 @@ export interface JobCard {
   changeoverChecklist: ChangeoverChecklistItem[];
   /** Phase 2 QC plan (4 fixed stages × 13 check items per stage). */
   qcPlan: QcStageRecord[];
+  /** Phase 94 — production-stage tracker. Defaults to the standard pipeline
+   *  for new jobs; promote handlers also seed it. Optional so legacy jobs
+   *  load cleanly. */
+  pipelineStages?: PipelineStage[];
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 94 — Job Pipeline.
+ *
+ * A per-job stage tracker — the single thing the user can scan to answer
+ * "where is this job?" Built so a client can phone and ask, and the office
+ * can answer in one click: artwork → plates → ink → paper → production →
+ * finishing → packing → dispatch.
+ *
+ * Each stage has named items with three possible statuses:
+ *   - pending  = not yet ticked
+ *   - blocked  = something stopping it (Sun Chemicals out of stock, etc.)
+ *   - done     = ticked complete (stamps doneAt + doneByName)
+ *
+ * Blockers carry a free-text note + blockedAt date so the bell/notifications
+ * (Phase 96) can age them and warn when a blocker is stale > N days.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type PipelineItemStatus = 'pending' | 'blocked' | 'done';
+
+export interface PipelineItem {
+  /** Stable key, e.g. 'plates_ordered'. Drives lookups + persistence. */
+  key: string;
+  /** Human label rendered in the UI. */
+  label: string;
+  status: PipelineItemStatus;
+  doneAt?: string;
+  doneByName?: string;
+  blockerNote?: string;
+  blockedAt?: string;
+}
+
+export type PipelineStageKey =
+  | 'artwork'
+  | 'plates'
+  | 'ink'
+  | 'paper'
+  | 'production'
+  | 'finishing'
+  | 'packing'
+  | 'dispatch';
+
+export interface PipelineStage {
+  key: PipelineStageKey;
+  label: string;
+  items: PipelineItem[];
 }
 
 export interface FinishedGoodsStock {
@@ -2422,6 +2999,16 @@ export function validateJobFoodSafety(
 // released the batch before it shipped."
 
 export type FactoryArea =
+  // Front-of-house — safe by default. Reception can let verified visitors
+  // straight in without host approval.
+  | 'Reception'
+  | 'Waiting Area'
+  | 'Meeting Room 1'
+  | 'Meeting Room 2'
+  | 'Boardroom'
+  | 'Client Meeting Room'
+  // Production / restricted areas — visitors need host approval before
+  // entry. Reception cannot self-grant these.
   | 'Flexo Printer'
   | 'Bag Machine'
   | 'Slitting Machine'
@@ -2430,9 +3017,20 @@ export type FactoryArea =
   | 'Raw Material Storage'
   | 'Finished Goods Storage'
   | 'Dispatch Area'
+  | 'Warehouse'
+  | 'Production Floor'
+  | 'Offices'
+  | 'Finance Office'
+  | 'Server / Admin Area'
   | 'Other';
 
 export const FACTORY_AREAS: FactoryArea[] = [
+  'Reception',
+  'Waiting Area',
+  'Meeting Room 1',
+  'Meeting Room 2',
+  'Boardroom',
+  'Client Meeting Room',
   'Flexo Printer',
   'Bag Machine',
   'Slitting Machine',
@@ -2441,8 +3039,66 @@ export const FACTORY_AREAS: FactoryArea[] = [
   'Raw Material Storage',
   'Finished Goods Storage',
   'Dispatch Area',
+  'Warehouse',
+  'Production Floor',
+  'Offices',
+  'Finance Office',
+  'Server / Admin Area',
   'Other',
 ];
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 106 — Visitor Area Approval taxonomy.
+ *
+ * Every FactoryArea has a default safety classification:
+ *   - 'safe'       → Reception can grant a verified visitor entry without
+ *                    any host involvement (Reception, Waiting Area, Meeting
+ *                    Rooms, Boardroom, Client Meeting Room).
+ *   - 'restricted' → Reception CANNOT grant entry on their own. The visitor
+ *                    sits in reception while the host (or escalation
+ *                    backup) approves via their Inbox. Used for any area
+ *                    where a stranger could see stock, IP, money, or be
+ *                    near machinery — every production / warehouse /
+ *                    office area is restricted by default.
+ *
+ * Admins can override these defaults at runtime via Settings (the override
+ * lives on appSettings.visitorAreaPolicy, which wins over this default
+ * map). The seed defaults here are deliberately conservative.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type AreaSafety = 'safe' | 'restricted';
+
+export const DEFAULT_AREA_SAFETY: Record<FactoryArea, AreaSafety> = {
+  // Safe — front-of-house, no production exposure.
+  'Reception':           'safe',
+  'Waiting Area':        'safe',
+  'Meeting Room 1':      'safe',
+  'Meeting Room 2':      'safe',
+  'Boardroom':           'safe',
+  'Client Meeting Room': 'safe',
+  // Restricted — production floor, warehouses, offices, finance.
+  'Flexo Printer':           'restricted',
+  'Bag Machine':             'restricted',
+  'Slitting Machine':        'restricted',
+  'Rope Machine':            'restricted',
+  'Packing Tables':          'restricted',
+  'Raw Material Storage':    'restricted',
+  'Finished Goods Storage':  'restricted',
+  'Dispatch Area':           'restricted',
+  'Warehouse':               'restricted',
+  'Production Floor':        'restricted',
+  'Offices':                 'restricted',
+  'Finance Office':          'restricted',
+  'Server / Admin Area':     'restricted',
+  // Generic 'Other' defaults to restricted — fail safe. Admin can flip it
+  // in Settings if they're using 'Other' for, say, an outdoor smoking area.
+  'Other':                   'restricted',
+};
+
+/** Effective safety class for an area, given the admin's per-area override
+ *  map. Falls back to DEFAULT_AREA_SAFETY when no override is set. */
+export function getAreaSafety(area: FactoryArea, override?: Partial<Record<FactoryArea, AreaSafety>>): AreaSafety {
+  return override?.[area] ?? DEFAULT_AREA_SAFETY[area] ?? 'restricted';
+}
 
 export type CleaningType =
   | 'Pre-Shift'
@@ -3477,6 +4133,17 @@ export const PPE_ITEM_TYPES: PpeItemType[] = [
 
 export type PpeIssueStatus = 'Issued' | 'Returned' | 'Damaged' | 'Lost';
 
+/** Phase 98 — PPE transaction type.
+ *  Lets one table cover the full PPE lifecycle:
+ *    - Request       = employee asked for PPE, awaiting issue
+ *    - Issue         = handed over + acknowledged with signature
+ *    - Return        = handed back (separation, role change, replacement)
+ *    - Disposal      = scrapped due to damage / expiry
+ *  Old records without this field default to 'Issue' so back-compat holds.
+ */
+export type PpeTransactionType = 'Request' | 'Issue' | 'Return' | 'Disposal';
+export const PPE_TRANSACTION_TYPES: PpeTransactionType[] = ['Request', 'Issue', 'Return', 'Disposal'];
+
 /**
  * Phase 39 — one line per PPE item in a multi-item issue. Lets a single
  * record cover everything handed to a staff member at the same time
@@ -3510,6 +4177,13 @@ export interface PpeIssueRecord {
   items?: PpeIssueLineItem[];
   /** Phase 39 — employee's on-screen signature acknowledging receipt. */
   employeeSignatureDataUrl?: string;
+  /** Phase 98 — which lifecycle step this row represents.
+   *  Default 'Issue' for legacy rows (no SQL migration needed). */
+  transactionType?: PpeTransactionType;
+  /** Phase 98 — for Request rows, when the worker needs it by. */
+  requiredByDate?: string;
+  /** Phase 98 — for Return rows, condition of the returned item. */
+  returnCondition?: 'Good' | 'Damaged' | 'Expired';
 }
 
 export interface PpeIssueFormState {
@@ -3526,6 +4200,10 @@ export interface PpeIssueFormState {
   notes: string;
   items: PpeIssueLineItem[];
   employeeSignatureDataUrl: string;
+  /** Phase 98 — lifecycle step (Request / Issue / Return / Disposal). */
+  transactionType: PpeTransactionType;
+  requiredByDate: string;
+  returnCondition: 'Good' | 'Damaged' | 'Expired';
 }
 
 export interface PpeIssueFilters {
@@ -3729,8 +4407,12 @@ export interface VisitorLogEntry {
   timeOut: string;
   /** Hygiene acknowledgement signed. */
   hygieneAcknowledged: boolean;
-  /** PPE issued for the visit (free text list). */
+  /** PPE issued for the visit.
+   *  Phase 105 — now multi-select. Stored as a comma-joined string on the
+   *  legacy `ppeIssued` column for back-compat; new code reads/writes
+   *  `ppeIssuedItems` for the typed list. The serialiser writes both. */
   ppeIssued: string;
+  ppeIssuedItems?: VisitorPpeItem[];
   /** Whether they entered any food-contact area. */
   enteredFoodContactArea: boolean;
   notes: string;
@@ -3759,7 +4441,10 @@ export interface VisitorLogFormState {
   timeIn: string;
   timeOut: string;
   hygieneAcknowledged: boolean;
+  /** Phase 105 — kept for read-back of legacy rows; the form widget binds to
+   *  ppeIssuedItems and the save handler serialises both. */
   ppeIssued: string;
+  ppeIssuedItems: VisitorPpeItem[];
   enteredFoodContactArea: boolean;
   notes: string;
   phoneNumber: string;
@@ -3767,10 +4452,226 @@ export interface VisitorLogFormState {
   signatureDataUrl: string;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 105 — Multi-select PPE catalog for visitor / contractor check-in.
+ *
+ * Reception ticks every PPE item handed to the visitor at check-in instead
+ * of typing it free-form. Keeps the data clean for SMETA + BRCGS audits
+ * and lets us count consumption per item later. Extend the list as new
+ * PPE is added to stock; the form just renders ALL_VISITOR_PPE_ITEMS as
+ * checkboxes.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type VisitorPpeItem =
+  | 'Hairnet'
+  | 'Beard cover'
+  | 'Safety boots'
+  | 'Hi-viz vest'
+  | 'Hard hat'
+  | 'Lab coat'
+  | 'Ear plugs'
+  | 'Safety glasses'
+  | 'Disposable gloves'
+  | 'Cut-resistant gloves'
+  | 'Dust mask'
+  | 'Apron';
+
+export const ALL_VISITOR_PPE_ITEMS: VisitorPpeItem[] = [
+  'Hairnet', 'Beard cover', 'Safety boots', 'Hi-viz vest', 'Hard hat',
+  'Lab coat', 'Ear plugs', 'Safety glasses', 'Disposable gloves',
+  'Cut-resistant gloves', 'Dust mask', 'Apron',
+];
+
 export interface VisitorLogFilters {
   search: string;
   visitorType: string;
   dateWindow: 'today' | '7d' | '30d' | 'all';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 106.2 — Visitor area approval requests.
+ *
+ * Created when reception verifies a visitor and ticks one or more areas
+ * that are classified as 'restricted'. The visitor sits in reception
+ * until the host (or the escalation backup) decides.
+ *
+ * Lifecycle:
+ *   1. Reception ticks safe areas → confirms visitor (no request needed).
+ *   2. Reception ticks any restricted area → an approval request is created
+ *      with status='pending', requestedAreas = the restricted ticks. Safe
+ *      area ticks pass through immediately.
+ *   3. Host opens their Inbox, sees the request, picks one of:
+ *        - approve-all  → all requestedAreas granted
+ *        - approve-some → granted = subset of requestedAreas
+ *        - decline      → visitor stays at reception, no restricted access
+ *        - keep-reception → explicit "no, just keep them in reception"
+ *        - delegate     → forwards to another employee, status stays pending
+ *   4. Audit log records every action (Phase 106.5 will pipe this through
+ *      the notification dispatcher to email/SMS/WhatsApp).
+ *
+ * Per Aman's spec:
+ *   - All approvals + declines + delegations + overrides MUST be logged.
+ *   - Access expires when visitor checks out, day ends, or admin revokes.
+ * ────────────────────────────────────────────────────────────────────────*/
+export type VisitorApprovalStatus =
+  | 'pending'
+  | 'approved'         // host approved all requested areas
+  | 'approved_partial' // host approved a subset
+  | 'declined'         // host said no
+  | 'keep_reception'   // host says visitor stays at reception
+  | 'delegated'        // forwarded to another approver, still pending
+  | 'escalated'        // auto-routed to backup after timeout (Phase 106.3)
+  | 'expired'          // checkout / day-end / admin revoked
+  | 'overridden';      // admin overrode the chain
+
+export type VisitorApprovalActionType =
+  | 'created'
+  | 'approve-all'
+  | 'approve-some'
+  | 'decline'
+  | 'keep-reception'
+  | 'delegate'
+  | 'escalate'
+  | 'override'
+  | 'expire'
+  | 'revoke';
+
+/** Single audit row inside the approval request's history. */
+export interface VisitorApprovalAuditEntry {
+  at: string;                          // ISO timestamp
+  action: VisitorApprovalActionType;
+  /** Who took the action — employee id when available, otherwise free name. */
+  actorEmployeeId?: string;
+  actorName: string;
+  /** When action='delegate', who it was forwarded to. */
+  delegatedToEmployeeId?: string;
+  delegatedToName?: string;
+  /** Areas granted by this action (for approve-all / approve-some). */
+  approvedAreas?: FactoryArea[];
+  /** Free-text reason / note attached to the action. */
+  note?: string;
+}
+
+export interface VisitorAreaApprovalRequest {
+  id: string;
+  visitorLogEntryId: string;
+  visitorName: string;
+  visitorCompany: string;
+  /** The host the visitor is here to see. */
+  hostEmployeeId: string;
+  hostName: string;
+  /** Restricted areas reception requested on behalf of the visitor. */
+  requestedAreas: FactoryArea[];
+  /** What the host (or backup) ultimately approved. Empty until decided. */
+  approvedAreas: FactoryArea[];
+  status: VisitorApprovalStatus;
+  /** Who the request is currently sitting with — starts as host, changes
+   *  on delegate / escalate. Drives the inbox filter so the right person
+   *  sees it. */
+  currentApproverEmployeeId: string;
+  currentApproverName: string;
+  /** ISO timestamps for SLA tracking + escalation timer. */
+  createdAt: string;
+  decidedAt?: string;
+  /** When set, the request expires automatically and access is revoked. */
+  expiresAt?: string;
+  /** Full audit trail — append-only. */
+  history: VisitorApprovalAuditEntry[];
+  /** Reception's free-text justification ("here for boardroom meeting"). */
+  requestNote: string;
+  /** Phase 106.4 — when the request was satisfied by a pre-booking, the
+   *  booking id is recorded so the audit trail links the two. Reception
+   *  doesn't get an approval request at all when a booking is found and
+   *  is valid; this field is only populated when a booking exists but
+   *  the visitor asked for areas BEYOND the booking's allowed list (so
+   *  the host still has to approve the extras). */
+  satisfiedByBookingId?: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 106.4 — Pre-approved visitor bookings.
+ *
+ * Hosts create a booking ahead of time with the visitor's name, company,
+ * the date / time window of the meeting, and the areas they're allowed
+ * in. When the visitor arrives, reception (or the kiosk) matches the
+ * name+date to a booking and skips the approval flow entirely for the
+ * pre-approved areas — they're already cleared.
+ *
+ * Lifecycle:
+ *   - created  → host fills in the form on My Stuff
+ *   - active   → visitor checked in, within the time window
+ *   - used     → visitor has left or the meeting end time has passed
+ *   - expired  → end-of-day passed without check-in (no-show)
+ *   - cancelled → host cancelled before the visit
+ * ────────────────────────────────────────────────────────────────────────*/
+export type VisitorBookingStatus = 'created' | 'active' | 'used' | 'expired' | 'cancelled';
+
+export interface VisitorBooking {
+  id: string;
+  /** What the visitor will say at reception. Name-match is how we link
+   *  the booking to the kiosk check-in, so capture this faithfully. */
+  visitorName: string;
+  visitorCompany: string;
+  /** Optional — populate when known so reception can pre-load the
+   *  visitor record from the kiosk. */
+  visitorEmail: string;
+  visitorPhone: string;
+  /** Host (the employee being visited). Required so the booking belongs
+   *  to someone. */
+  hostEmployeeId: string;
+  hostName: string;
+  /** ISO date of the visit (YYYY-MM-DD). */
+  visitDate: string;
+  /** Optional time window — when blank the booking is valid all day. */
+  startTime: string;
+  endTime: string;
+  /** Areas the host is pre-approving. Reception can't add to this list
+   *  on check-in — anything extra triggers a normal approval request. */
+  allowedAreas: FactoryArea[];
+  /** Free-text purpose / notes shown on the kiosk + reception verify. */
+  purpose: string;
+  notes: string;
+  status: VisitorBookingStatus;
+  createdAt: string;
+  createdByName: string;
+  /** Set when reception checks the visitor in against this booking. */
+  checkedInAt?: string;
+  /** Linked visitor log entry id once arrival happens. */
+  visitorLogEntryId?: string;
+}
+
+export interface VisitorBookingFormState {
+  visitorName: string;
+  visitorCompany: string;
+  visitorEmail: string;
+  visitorPhone: string;
+  hostEmployeeId: string;
+  visitDate: string;
+  startTime: string;
+  endTime: string;
+  allowedAreas: FactoryArea[];
+  purpose: string;
+  notes: string;
+}
+
+/** Find a booking that matches this arriving visitor.
+ *  Match criteria: name match (case-insensitive, partial OK), same day,
+ *  status not used/expired/cancelled. Returns the most-recent matching
+ *  booking if any. Used by reception verify + kiosk auto-detect. */
+export function findVisitorBooking(
+  bookings: VisitorBooking[],
+  visitorName: string,
+  visitDate: string,
+): VisitorBooking | undefined {
+  const needle = visitorName.trim().toLowerCase();
+  if (!needle) return undefined;
+  return bookings
+    .filter((b) => b.visitDate === visitDate)
+    .filter((b) => b.status === 'created' || b.status === 'active')
+    .filter((b) => {
+      const name = b.visitorName.trim().toLowerCase();
+      return name === needle || name.includes(needle) || needle.includes(name);
+    })
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
 }
 
 // ============================================================================
@@ -4064,6 +4965,142 @@ export interface MaterialReceipt {
   parentMaterialReceiptId?: string;
   /** Phase 75 — production log entry that produced this receipt (slitting). */
   producedByProductionLogId?: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 93 — Traded Goods.
+ *
+ * Items JomoPak buys finished from a third-party supplier (Shereno, China,
+ * India contract printers, etc.) and resells. Distinct from manufactured
+ * FG stock — no production cost, just landed cost + markup.
+ *
+ * Two-level model, mirroring Products + FinishedGoodsStock:
+ *  - TradedGoodsItem = catalogue entry (the SKU / product spec). Default
+ *    cost + sell sit here so a buyer can quickly log new receipts without
+ *    re-typing prices each time.
+ *  - TradedGoodsReceipt = one purchase batch. Cost + qty are pinned at
+ *    receive time so margin reporting stays accurate even if the catalogue
+ *    price changes later. Inventory rolls up by sum(qtyAvailable) per item.
+ *
+ * Pin-to-job: receipts may carry an optional clientId/jobId when bought
+ * against a specific customer order. Plain stock (e.g. plain brown boxes
+ * from China) leaves these blank and ages on the shelf until invoiced.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type TradedGoodsStatus =
+  | 'On order'        // PO placed, not yet received
+  | 'In stock'        // received, available
+  | 'Partial'         // some already sold
+  | 'Sold out'        // fully invoiced / dispatched
+  | 'Pinned to job';  // reserved against a specific job — not available for general sale
+
+export interface TradedGoodsItem {
+  id: string;
+  /** Internal catalogue code, e.g. `TRG-SHERENO-A4-WHT`. Auto-generated
+   *  if blank, see App.tsx receipt save handler. */
+  itemCode: string;
+  /** Display name, e.g. "Shereno 250gsm A4 box — white". */
+  name: string;
+  description: string;
+  /** Supplier this item is normally bought from. A given item can still be
+   *  re-sourced from a different supplier on a per-receipt basis. */
+  defaultSupplierId: string;
+  defaultSupplierName: string;
+  /** Optional dimensions / spec — informational only, not used for pricing. */
+  sizeSpec?: string;
+  /** Default landed cost per unit (ZAR). Snapshot copied onto each new
+   *  receipt at receive time so live edits don't rewrite history. */
+  defaultUnitCost: number;
+  /** Default markup % (cost-plus). 25 → sell at cost × 1.25. Either this
+   *  or defaultSellPrice can be set; if both are set, defaultSellPrice wins. */
+  defaultMarkupPercent: number;
+  /** Optional explicit sell price overriding the markup calc. */
+  defaultSellPrice?: number;
+  unitLabel: string;       // 'unit', 'box', 'piece', 'pack'…
+  active: boolean;
+  notes: string;
+  /** Photo of the item (catalogue thumbnail). */
+  photoUrls?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TradedGoodsReceipt {
+  id: string;
+  receiptNumber: string;
+  /** ISO date when the goods physically arrived (or are expected to). */
+  receivedDate: string;
+  /** PO / supplier invoice reference (e.g. "Shereno INV-4421"). */
+  supplierInvoiceReference: string;
+  itemId: string;
+  itemName: string;
+  itemCode: string;
+  /** Supplier this batch came from (may differ from the item default). */
+  supplierId: string;
+  supplierName: string;
+  /** Country of origin — useful for the "China / India" tracking the user
+   *  wants. Defaults to South Africa / blank. */
+  countryOfOrigin?: string;
+  /** Quantity originally received. */
+  quantityReceived: number;
+  /** Quantity still available to sell. Decremented when invoiced / DN'd. */
+  quantityAvailable: number;
+  unitLabel: string;
+  /** Landed unit cost in ZAR (snapshot). All costs in base currency for
+   *  margin maths — FX conversion happens at PO receive time, not here. */
+  unitCost: number;
+  /** Either markup% or sellPrice is set. If both, sellPrice wins. */
+  markupPercent: number;
+  sellPrice: number;
+  status: TradedGoodsStatus;
+  /** Optional pin: when this batch was bought against a specific
+   *  client/job, stash the IDs so the stock-on-hand view can warn
+   *  before someone sells it to a different customer. */
+  clientId?: string;
+  clientName?: string;
+  jobId?: string;
+  jobNumber?: string;
+  /** Optional storage location — same shelf-tagging idea as MaterialReceipts. */
+  storageLocation?: string;
+  notes: string;
+  photoUrls?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TradedGoodsItemFormState {
+  itemCode: string;
+  name: string;
+  description: string;
+  defaultSupplierId: string;
+  sizeSpec: string;
+  defaultUnitCost: string;
+  defaultMarkupPercent: string;
+  defaultSellPrice: string;
+  unitLabel: string;
+  active: boolean;
+  notes: string;
+  photoUrls: string[];
+}
+
+export interface TradedGoodsReceiptFormState {
+  receiptNumber: string;
+  receivedDate: string;
+  supplierInvoiceReference: string;
+  itemId: string;
+  supplierId: string;
+  countryOfOrigin: string;
+  quantityReceived: string;
+  unitLabel: string;
+  unitCost: string;
+  markupPercent: string;
+  sellPrice: string;
+  status: TradedGoodsStatus;
+  clientId: string;
+  jobId: string;
+  storageLocation: string;
+  notes: string;
+  photoUrls: string[];
 }
 
 export interface ProductionLogEntry {
@@ -4752,6 +5789,16 @@ export interface AppSettings {
    *  edit this in Settings. Defaults to 35% so the engine has something
    *  sensible to compute against on a fresh install. */
   standardMarginPercent?: number;
+  /** Phase 106 — Visitor area approval policy.
+   *
+   * Per-area override of DEFAULT_AREA_SAFETY. Admins flip areas from safe
+   * → restricted (or back) on the Settings → Visitor access tab. Any area
+   * not in this map uses the default. Stored as a partial map so a fresh
+   * install needs no migration — the empty object means "all defaults". */
+  visitorAreaPolicy?: Partial<Record<FactoryArea, AreaSafety>>;
+  /** Phase 106.3 — Minutes the system waits for host approval before
+   *  auto-escalating to the backup approver. Default 5. */
+  visitorApprovalEscalationMinutes?: number;
   /** Last-write metadata, surfaced in the UI so admins can see who changed what. */
   updatedAt: string;
   updatedBy: string;
@@ -4841,6 +5888,9 @@ export interface AppSettingsFormState {
     defaultReviewCadenceDays: string;
     defaultAgreementTermsText: string;
   };
+  /** Phase 92 — company-wide standard margin %, edited as a string so the
+   *  input stays controlled. Persisted back to AppSettings.standardMarginPercent. */
+  standardMarginPercent: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -4850,7 +5900,10 @@ export interface AppSettingsFormState {
  * The file lives in Supabase Storage; the row holds metadata + an optional
  * expiry date so the notification bell can warn before a cert lapses.
  * ────────────────────────────────────────────────────────────────────────*/
-export type DocumentOwnerType = 'supplier' | 'client' | 'internal';
+/** Phase 96 — Doc Vault expansion.
+ *  Added 'employee' (HR docs attach to a specific employee) and 'sars'
+ *  (SARS correspondence attaches to the SARS Centre). */
+export type DocumentOwnerType = 'supplier' | 'client' | 'internal' | 'employee' | 'sars';
 
 export type DocumentCategory =
   // Compliance / on-file docs (client + supplier)
@@ -4885,6 +5938,25 @@ export type DocumentCategory =
   | 'Tax / Compliance'
   | 'Accounting Record'
   | 'Other Internal'
+  // Phase 96 — HR (attach to ownerType = 'employee')
+  | 'Employment Contract'
+  | 'Contract Extension'
+  | 'Warning Letter'
+  | 'Performance Review'
+  | 'Disciplinary Record'
+  | 'Resignation Letter'
+  | 'Reference Letter'
+  | 'Training Certificate'
+  | 'Medical Record'
+  | 'Payslip Acknowledgement'
+  | 'IRP5 / IT3a'
+  | 'Employee ID Copy'
+  // Phase 96 — Correspondence
+  | 'SARS Correspondence'
+  | 'Client Correspondence'
+  | 'Supplier Correspondence'
+  | 'Legal Correspondence'
+  | 'General Correspondence'
   | 'Other';
 
 export const DOCUMENT_CATEGORIES: DocumentCategory[] = [
@@ -4896,8 +5968,57 @@ export const DOCUMENT_CATEGORIES: DocumentCategory[] = [
   'HR Document', 'Staff Handbook', 'Factory Policy', 'Health & Safety',
   'Insurance', 'Lease / Property', 'License / Permit', 'Tax / Compliance',
   'Accounting Record', 'Other Internal',
+  // Phase 96 — HR per-employee documents.
+  'Employment Contract', 'Contract Extension', 'Warning Letter',
+  'Performance Review', 'Disciplinary Record', 'Resignation Letter',
+  'Reference Letter', 'Training Certificate', 'Medical Record',
+  'Payslip Acknowledgement', 'IRP5 / IT3a', 'Employee ID Copy',
+  // Phase 96 — Correspondence buckets.
+  'SARS Correspondence', 'Client Correspondence', 'Supplier Correspondence',
+  'Legal Correspondence', 'General Correspondence',
   'Other',
 ];
+
+/**
+ * Phase 96 — Default retention period in days per category.
+ *
+ * Drives the "past retention" flag on Doc Vault and the auto-archive view.
+ * Documents past their retention are kept (file + metadata) but greyed
+ * out / hidden from default views so the active list stays focused on
+ * current paperwork. Tuned to SA legal minimums where applicable.
+ *
+ *   - SARS Correspondence       = 5 years (SARS rule)
+ *   - Tax / Compliance / VAT    = 5 years (SARS rule)
+ *   - Employment Contract       = 5 years past termination
+ *   - Warning Letter            = 12 months (CCMA presumption)
+ *   - Disciplinary Record       = 3 years
+ *   - IRP5 / IT3a               = 5 years (employer side)
+ *   - Health & Safety / Cleaning = 3 years
+ *   - General Correspondence    = 3 years
+ *   - Insurance                 = 5 years past expiry
+ *   - Lease                     = 5 years past expiry
+ *   - Everything else           = no auto-flag (keep forever)
+ */
+export const DOCUMENT_CATEGORY_RETENTION_DAYS: Partial<Record<DocumentCategory, number>> = {
+  'SARS Correspondence': 5 * 365,
+  'Tax / Compliance': 5 * 365,
+  'Tax / VAT Certificate': 5 * 365,
+  'IRP5 / IT3a': 5 * 365,
+  'Employment Contract': 5 * 365,
+  'Contract Extension': 5 * 365,
+  'Warning Letter': 365,
+  'Disciplinary Record': 3 * 365,
+  'Performance Review': 3 * 365,
+  'Payslip Acknowledgement': 5 * 365,
+  'Insurance': 5 * 365,
+  'Lease / Property': 5 * 365,
+  'Health & Safety': 3 * 365,
+  'Client Correspondence': 3 * 365,
+  'Supplier Correspondence': 3 * 365,
+  'Legal Correspondence': 5 * 365,
+  'General Correspondence': 3 * 365,
+  'Medical Record': 30 * 365,
+};
 
 /**
  * Sensible default roles that can VIEW each internal document category.
@@ -4916,6 +6037,26 @@ export const DOCUMENT_CATEGORY_ROLE_DEFAULTS: Partial<Record<DocumentCategory, U
   'Tax / Compliance': ['admin', 'accounts'],
   'Accounting Record': ['admin', 'accounts'],
   'Other Internal': ['admin'],
+  // Phase 96 — HR docs: admin only by default. Employee themselves can
+  // still see their own docs via My Stuff (separate gate).
+  'Employment Contract': ['admin'],
+  'Contract Extension': ['admin'],
+  'Warning Letter': ['admin'],
+  'Performance Review': ['admin'],
+  'Disciplinary Record': ['admin'],
+  'Resignation Letter': ['admin'],
+  'Reference Letter': ['admin'],
+  'Training Certificate': ['admin'],
+  'Medical Record': ['admin'],
+  'Payslip Acknowledgement': ['admin', 'accounts'],
+  'IRP5 / IT3a': ['admin', 'accounts'],
+  'Employee ID Copy': ['admin'],
+  // Phase 96 — Correspondence buckets.
+  'SARS Correspondence': ['admin', 'accounts'],
+  'Client Correspondence': ['admin', 'sales', 'accounts'],
+  'Supplier Correspondence': ['admin', 'accounts', 'ops'],
+  'Legal Correspondence': ['admin'],
+  'General Correspondence': ['admin'],
 };
 
 export interface DocumentRecord {
@@ -4948,6 +6089,26 @@ export interface DocumentRecord {
    *  - Non-empty = visible only to listed roles (+ admin always).
    *  Ignored for client/supplier-owned docs (those are gated by the owner). */
   visibleToRoles?: UserRole[];
+  /** Phase 96 — retention period in days. When set, the doc is flagged
+   *  past-retention and hidden from default views once (today - issueDate)
+   *  exceeds it. The file + metadata stay; the auditor can still find it
+   *  via the "Past retention" toggle. Falls back to the category default
+   *  (DOCUMENT_CATEGORY_RETENTION_DAYS) when unset. */
+  retentionDays?: number;
+  /** Phase 96 — admin marker once an admin has eyeballed the doc as
+   *  no-longer-needed. Lets you bulk-delete later with a clear conscience. */
+  markedForArchive?: boolean;
+  /** Phase 96 — true when ownerType = 'employee'. Empty otherwise. */
+  employeeId?: string;
+}
+
+/** Phase 96 — is this doc past its retention window?
+ *  Per-doc retentionDays wins; else the category default; else never. */
+export function isDocumentPastRetention(doc: DocumentRecord, today: Date = new Date()): boolean {
+  const days = doc.retentionDays ?? DOCUMENT_CATEGORY_RETENTION_DAYS[doc.category];
+  if (!days || !doc.issueDate) return false;
+  const ageMs = today.getTime() - new Date(doc.issueDate).getTime();
+  return ageMs > days * 86400000;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -5195,6 +6356,50 @@ export interface Employee {
   hourlyRate?: number;
   /** Standard monthly hours, BCEA default 173.33 (40hr week × 52/12). */
   standardMonthlyHours?: number;
+  /* ─── Phase 106.3 — Host availability for visitor approval workflow ───
+   * availabilityStatus lets the employee tell the system whether they
+   * can pick up a visitor approval request right now. When it's anything
+   * other than 'Available', incoming approval requests skip them and
+   * route directly to backupApproverEmployeeId (without waiting for the
+   * escalation timer). When status='Delegate', requests go to
+   * delegateApprovalToEmployeeId instead — explicit delegation rather
+   * than backup-on-failure. */
+  availabilityStatus?: EmployeeAvailabilityStatus;
+  /** Employee id of the person who picks up approvals when this person is
+   *  not Available (or when the escalation timer fires). Required for
+   *  anyone who can host visitors; the system surfaces a warning when an
+   *  employee hosts visits but has no backup set. */
+  backupApproverEmployeeId?: string;
+  /** When availabilityStatus='Delegate', requests go here instead of the
+   *  backup. Lets someone forward approvals while on leave / on-site
+   *  without setting it as a permanent backup. */
+  delegateApprovalToEmployeeId?: string;
+  /** When true, this employee can approve visitor area requests. Defaults
+   *  to true for any employee with a backup set — but admins can flip it
+   *  off so cleaners / production-only roles aren't asked. */
+  canApproveVisitorAreas?: boolean;
+}
+
+/** Phase 106.3 — Possible availability states for visitor approval. */
+export type EmployeeAvailabilityStatus =
+  | 'Available'
+  | 'Busy'
+  | 'On the road'
+  | 'In a meeting'
+  | 'Away'
+  | 'Delegate';
+
+export const ALL_EMPLOYEE_AVAILABILITY_STATUSES: EmployeeAvailabilityStatus[] = [
+  'Available', 'Busy', 'On the road', 'In a meeting', 'Away', 'Delegate',
+];
+
+/** Returns true when an employee is fit to receive an approval request
+ *  directly (vs. their backup needing to pick it up). 'Available' = yes,
+ *  everything else = no. Undefined defaults to Available (legacy rows). */
+export function isEmployeeAvailableForApproval(e: Pick<Employee, 'availabilityStatus' | 'active'>): boolean {
+  if (e.active === false) return false;
+  const status = e.availabilityStatus ?? 'Available';
+  return status === 'Available';
 }
 
 export type PayrollRunStatus = 'Draft' | 'Approved' | 'Paid';
@@ -5483,6 +6688,10 @@ export interface AppData {
   stockIssues: StockIssue[];
   stockCounts: StockCount[];
   materialReceipts: MaterialReceipt[];
+  /** Phase 93 — Traded Goods (bought-in finished items for resale). Optional
+   *  so legacy saved state continues to load cleanly. */
+  tradedGoodsItems?: TradedGoodsItem[];
+  tradedGoodsReceipts?: TradedGoodsReceipt[];
   chemicalRegisterEntries: ChemicalRegisterEntry[];
   foodSafeMaterials: FoodSafeMaterial[];
   cleaningLogs: CleaningLogEntry[];
@@ -5496,6 +6705,19 @@ export interface AppData {
   // Phase 82 — First Aid Register.
   firstAidEntries?: FirstAidEntry[];
   firstAidAiders?: DesignatedFirstAider[];
+  // Phase 95 — SMETA safety registers.
+  incidentEntries?: IncidentEntry[];
+  drillEntries?: DrillEntry[];
+  toolboxTalkEntries?: ToolboxTalkEntry[];
+  sheMeetingEntries?: SheMeetingEntry[];
+  // Phase 103.2 — Audit programmes register (SMETA, FSC, FSSC, ISO, etc.)
+  auditProgrammes?: AuditProgramme[];
+  // Phase 106.2 — Visitor area approval requests (host approval workflow
+  // for restricted areas). Optional so legacy state loads cleanly.
+  visitorAreaApprovalRequests?: VisitorAreaApprovalRequest[];
+  // Phase 106.4 — Pre-approved visitor bookings (host invites visitor in
+  // advance with allowed areas + time window).
+  visitorBookings?: VisitorBooking[];
   visitorLogEntries: VisitorLogEntry[];
   sopDocuments: SopDocument[];
   haccpHazards: HaccpHazard[];
@@ -6104,6 +7326,8 @@ export interface LeadFormState {
   phone: string;
   email: string;
   source: LeadSource;
+  /** Phase 99 — who referred / which page / which campaign. */
+  sourceDetail: string;
   assignedTo: string;
   productId: string;
   requestedQuantity: string;
@@ -6116,6 +7340,12 @@ export interface LeadFormState {
   activities: LeadActivity[];
   lostReason: LostReason | '';
   estimatedValue: string;
+  /** Phase 99 — multi-item enquiry. */
+  items: LeadItem[];
+  /** Phase 99 — onboarding form tracking. */
+  onboardingFormReceived: boolean;
+  onboardingFormReceivedDate: string;
+  onboardingFormNote: string;
 }
 
 export interface QuoteEstimateFormState {
@@ -6366,6 +7596,10 @@ export interface CalculatorLineItem {
   costProfileIdOverride: string;
   /** Per-line margin override; empty inherits the quote-level margin. */
   customMarginPercent: string;
+  /** Phase 91 — Free-text discount reason captured by an admin when a
+   *  margin override is applied on this line. Stored on the saved quote
+   *  for the audit trail. */
+  discountReason?: string;
 }
 
 /** How plate charges are billed on the quote.
@@ -6602,6 +7836,9 @@ export interface JobFormState {
   /** Phase 62 — Tooling references (die + stereo). */
   dieToolId?: string;
   stereoToolId?: string;
+  /** Phase 94 — production-stage tracker, edited via JobPipelineTracker
+   *  on the form and persisted with the job. */
+  pipelineStages?: PipelineStage[];
 }
 
 export interface FinishedGoodsStockFormState {

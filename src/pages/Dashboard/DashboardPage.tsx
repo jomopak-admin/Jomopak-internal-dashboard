@@ -42,6 +42,14 @@ interface DashboardPageProps {
   leads?: Lead[];
   /** Open a lead by id in the Leads page (deep-link). Optional. */
   onOpenLead?: (leadId: string) => void;
+  /** Phase 100 — click-through targets for the big Attention strip at the
+   *  top of the dashboard. Each handler should switch view + apply the
+   *  appropriate filter (status='Awaiting Artwork', etc.). */
+  onJumpToOpenJobs?: () => void;
+  onJumpToAwaitingArtwork?: () => void;
+  onJumpToOverdueJobs?: () => void;
+  onJumpToOverCreditClients?: () => void;
+  onJumpToOnHoldClients?: () => void;
 }
 
 export function DashboardPage({
@@ -69,6 +77,11 @@ export function DashboardPage({
   visibleWidgets,
   leads = [],
   onOpenLead,
+  onJumpToOpenJobs,
+  onJumpToAwaitingArtwork,
+  onJumpToOverdueJobs,
+  onJumpToOverCreditClients,
+  onJumpToOnHoldClients,
 }: DashboardPageProps) {
   const [calculator, setCalculator] = useState({
     quantity: '10000',
@@ -200,6 +213,20 @@ export function DashboardPage({
     || widgetSet.has('wasteByReason')
     || widgetSet.has('topPaper');
 
+  // Phase 100 — Attention strip metrics. Use the full job list (not just
+  // this month) for click-through so the user lands on every open item.
+  const allOpenJobs = jobs.filter((j) => j.status !== 'Completed').length;
+  const allAwaitingArtwork = jobs.filter((j) => !j.artworkReceived && j.status !== 'Completed').length;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const allOverdueJobs = jobs.filter((j) => j.dueDate && j.dueDate < todayStr && j.status !== 'Completed').length;
+  // For "over credit" we need an inline check since DashboardPage doesn't
+  // import effectiveClientBalance. Approximate via the client's stored
+  // outstandingBalance if present; otherwise fall through to clients on
+  // explicit account hold + flagged-by-CEO patterns.
+  const allOverCredit = clients.filter((c) => c.creditLimit > 0
+    && Number((c as Client & { outstandingBalance?: number }).outstandingBalance ?? 0) > c.creditLimit).length;
+  const allOnHold = clients.filter((c) => c.accountHold).length;
+
   return (
     <>
       <div className="dashboard-controls">
@@ -214,6 +241,47 @@ export function DashboardPage({
           </select>
         </label>
         <p className="muted dashboard-controls-caption">Snapshot for {getMonthLabel(dashboardMonth)}</p>
+      </div>
+
+      {/* Phase 100 — Big clickable attention strip. Sits above everything
+          else so it's the first thing you see. Each tile jumps to the
+          relevant page filtered to that bucket. */}
+      <div className="attention-strip">
+        <AttentionTile
+          label="Open jobs"
+          value={allOpenJobs}
+          tone={allOpenJobs > 0 ? 'neutral' : 'quiet'}
+          subtitle={allOpenJobs > 0 ? 'Click to see what\'s in flight' : 'All clear'}
+          onClick={onJumpToOpenJobs}
+        />
+        <AttentionTile
+          label="Awaiting artwork"
+          value={allAwaitingArtwork}
+          tone={allAwaitingArtwork > 0 ? 'warn' : 'quiet'}
+          subtitle={allAwaitingArtwork > 0 ? 'Chase the client / artwork team' : 'No artwork bottleneck'}
+          onClick={onJumpToAwaitingArtwork}
+        />
+        <AttentionTile
+          label="Overdue jobs"
+          value={allOverdueJobs}
+          tone={allOverdueJobs > 0 ? 'alert' : 'quiet'}
+          subtitle={allOverdueJobs > 0 ? 'Past their due date' : 'Nothing past due'}
+          onClick={onJumpToOverdueJobs}
+        />
+        <AttentionTile
+          label="Over credit"
+          value={allOverCredit}
+          tone={allOverCredit > 0 ? 'alert' : 'quiet'}
+          subtitle={allOverCredit > 0 ? 'Clients past their credit limit' : 'Everyone within limit'}
+          onClick={onJumpToOverCreditClients}
+        />
+        <AttentionTile
+          label="On hold"
+          value={allOnHold}
+          tone={allOnHold > 0 ? 'warn' : 'quiet'}
+          subtitle={allOnHold > 0 ? 'Accounts blocked from invoicing' : 'No holds in place'}
+          onClick={onJumpToOnHoldClients}
+        />
       </div>
 
       {widgetSet.has('stats') ? (
@@ -729,5 +797,73 @@ function LeadsAttentionWidget({ leads, onOpenLead }: { leads: Lead[]; onOpenLead
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Phase 100: AttentionTile ──────────────────────────────────────────
+ * Big clickable card that surfaces an important count + a one-line
+ * subtitle. Tone drives the border + value colour:
+ *   - quiet    = green / faded (everything fine)
+ *   - neutral  = plain (some open work, nothing urgent)
+ *   - warn     = amber (chase / look at it)
+ *   - alert    = red (act now)
+ * Clicking calls onClick which the parent wires to a setView + filter
+ * change so you land on the relevant page already drilled-in.
+ * ──────────────────────────────────────────────────────────────────── */
+
+function AttentionTile(props: {
+  label: string;
+  value: number;
+  tone: 'quiet' | 'neutral' | 'warn' | 'alert';
+  subtitle: string;
+  onClick?: () => void;
+}) {
+  const { label, value, tone, subtitle, onClick } = props;
+  const palette = {
+    quiet:   { border: 'var(--jp-border, #e5e2dc)', bg: 'var(--jp-paper, #fff)',           valueColour: '#2e6f3e' },
+    neutral: { border: 'var(--jp-border, #e5e2dc)', bg: 'var(--jp-paper, #fff)',           valueColour: 'var(--jp-ink, #222)' },
+    warn:    { border: 'rgba(184,134,11,0.45)',     bg: 'rgba(184,134,11,0.06)',           valueColour: '#8a6510' },
+    alert:   { border: 'rgba(178,43,43,0.55)',      bg: 'rgba(178,43,43,0.06)',            valueColour: '#b22b2b' },
+  }[tone];
+
+  const Wrap = onClick ? 'button' : 'div';
+
+  return (
+    <Wrap
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      style={{
+        textAlign: 'left',
+        padding: '16px 18px',
+        borderRadius: 12,
+        border: `1px solid ${palette.border}`,
+        background: palette.bg,
+        cursor: onClick ? 'pointer' : 'default',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        minWidth: 0,
+        fontFamily: 'inherit',
+        transition: 'transform 80ms ease, box-shadow 80ms ease',
+      }}
+      onMouseEnter={onClick ? (e) => {
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 10px rgba(0,0,0,0.06)';
+      } : undefined}
+      onMouseLeave={onClick ? (e) => {
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+      } : undefined}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>
+        {label}
+      </span>
+      <div style={{ fontSize: 32, fontWeight: 700, color: palette.valueColour, lineHeight: 1.1, fontFeatureSettings: '"tnum"' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>
+        {subtitle}{onClick ? ' →' : ''}
+      </div>
+    </Wrap>
   );
 }

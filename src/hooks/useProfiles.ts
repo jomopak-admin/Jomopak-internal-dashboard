@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { normalizeDashboardWidgets, normalizeProfilePermissions, UserProfile } from '../types';
+import {
+  InboxCategory,
+  normalizeDashboardWidgets,
+  normalizeProfilePermissions,
+  PartnerScope,
+  UserProfile,
+} from '../types';
 import { supabase } from '../utils/supabase';
 
 interface CreateUserInput {
@@ -33,6 +39,7 @@ interface CreateUserResultRow {
   dashboard_widgets?: string[] | null;
   stock_visibility?: string | null;
   approval_pin?: string | null;
+  pricing_editor?: boolean | null;
 }
 
 const DASHBOARD_WIDGETS_STORAGE_KEY = 'jomopak-dashboard-widgets';
@@ -89,7 +96,11 @@ export function useProfiles(enabled: boolean) {
             phoneNumber: row.phone_number ?? '',
             clientId: row.client_id ?? '',
             linkedEmployeeId: row.linked_employee_id ?? undefined,
-            accountType: row.account_type === 'client' ? 'client' : 'internal',
+            accountType: row.account_type === 'client'
+              ? 'client'
+              : row.account_type === 'external_partner'
+                ? 'external_partner'
+                : 'internal',
             publicDisplayName: row.public_display_name ?? row.full_name ?? '',
             publicDisplayRole: row.public_display_role ?? row.role ?? '',
             role: (row.role ?? 'ops') as UserProfile['role'],
@@ -100,6 +111,15 @@ export function useProfiles(enabled: boolean) {
             ),
             stockVisibility: row.stock_visibility === 'restricted' ? 'restricted' : 'full',
             approvalPin: row.approval_pin ?? undefined,
+            pricingEditor: Boolean(row.pricing_editor),
+            // Phase 103.3/4 — per-user inbox + partner scoping. jsonb arrays.
+            inboxCategories: Array.isArray(row.inbox_categories) && row.inbox_categories.length > 0
+              ? (row.inbox_categories as InboxCategory[])
+              : undefined,
+            partnerScope: Array.isArray(row.partner_scope) && row.partner_scope.length > 0
+              ? (row.partner_scope as PartnerScope[])
+              : undefined,
+            canPostInvoices: Boolean(row.can_post_invoices),
           })),
         );
       }
@@ -132,14 +152,31 @@ export function useProfiles(enabled: boolean) {
       permissions: nextProfile.permissions,
       dashboard_widgets: nextProfile.dashboardWidgets,
       stock_visibility: nextProfile.stockVisibility || 'full',
+      pricing_editor: Boolean(nextProfile.pricingEditor),
       approval_pin: nextProfile.approvalPin || null,
+      // Phase 103 — partner scoping + per-user inbox filter.
+      inbox_categories: nextProfile.inboxCategories ?? [],
+      partner_scope: nextProfile.partnerScope ?? [],
+      can_post_invoices: Boolean(nextProfile.canPostInvoices),
     };
 
     let { error } = await supabase.from('profiles').upsert(payload);
+    // Phase 103 SQL not yet applied — strip the new columns and retry.
+    if (error && /inbox_categories|partner_scope|can_post_invoices/.test(String(error.message || ''))) {
+      const { inbox_categories: _ic, partner_scope: _ps, can_post_invoices: _ci, ...rest } = payload;
+      void _ic; void _ps; void _ci;
+      ({ error } = await supabase.from('profiles').upsert(rest));
+    }
+    if (error && String(error.message || '').includes('pricing_editor')) {
+      // Phase 91 SQL not yet applied — retry without pricing_editor.
+      const { pricing_editor: _pe, ...rest } = payload;
+      void _pe;
+      ({ error } = await supabase.from('profiles').upsert(rest));
+    }
     if (error && String(error.message || '').includes('stock_visibility')) {
       // Phase 66 SQL not yet applied — retry without the security fields.
-      const { stock_visibility: _sv, approval_pin: _pin, ...rest } = payload;
-      void _sv; void _pin;
+      const { stock_visibility: _sv, approval_pin: _pin, pricing_editor: _pe, ...rest } = payload;
+      void _sv; void _pin; void _pe;
       ({ error } = await supabase.from('profiles').upsert(rest));
     }
     if (error && String(error.message || '').includes('linked_employee_id')) {

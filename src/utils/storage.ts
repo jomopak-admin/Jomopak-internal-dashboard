@@ -895,6 +895,13 @@ export function loadAppData(): AppData {
       stockIssues: (parsed.stockIssues ?? []).map(normalizeStockIssue),
       stockCounts: (parsed.stockCounts ?? []).map(normalizeStockCount),
       materialReceipts: (parsed.materialReceipts ?? []).map(normalizeMaterialReceipt),
+      tradedGoodsItems: parsed.tradedGoodsItems ?? [],
+      tradedGoodsReceipts: parsed.tradedGoodsReceipts ?? [],
+      // Phase 95 — SMETA safety registers.
+      incidentEntries: parsed.incidentEntries ?? [],
+      drillEntries: parsed.drillEntries ?? [],
+      toolboxTalkEntries: parsed.toolboxTalkEntries ?? [],
+      sheMeetingEntries: parsed.sheMeetingEntries ?? [],
       chemicalRegisterEntries: parsed.chemicalRegisterEntries ?? [],
       foodSafeMaterials: parsed.foodSafeMaterials ?? [],
       cleaningLogs: parsed.cleaningLogs ?? [],

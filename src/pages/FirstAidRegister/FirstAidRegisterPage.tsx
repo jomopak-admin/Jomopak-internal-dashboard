@@ -210,6 +210,77 @@ export function FirstAidRegisterPage(props: FirstAidRegisterPageProps) {
           <label><span>Witness</span>
             <input value={entryForm.witnessName} onChange={(e) => setEntryForm({ ...entryForm, witnessName: e.target.value })} />
           </label>
+          {/* Phase 98 — Dressings used from the first aid box. Auditors
+              and the SHE rep want to see what came out for restocking. */}
+          <div className="full-span" style={{ marginTop: 6, padding: 10, background: 'var(--jp-paper-2, #faf8f4)', borderRadius: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <strong style={{ fontSize: 13 }}>Dressings used from first aid box</strong>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setEntryForm({
+                  ...entryForm,
+                  dressingsUsed: [...entryForm.dressingsUsed, { item: '', quantity: 1, notes: '' }],
+                })}
+              >+ Add dressing</button>
+            </div>
+            {entryForm.dressingsUsed.length === 0 ? (
+              <p className="muted" style={{ fontSize: 12, margin: 0 }}>None recorded. Add what came out of the box so it gets restocked.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead><tr><th>Item</th><th>Qty</th><th>Note</th><th /></tr></thead>
+                  <tbody>
+                    {entryForm.dressingsUsed.map((d, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <input
+                            value={d.item}
+                            onChange={(e) => setEntryForm({
+                              ...entryForm,
+                              dressingsUsed: entryForm.dressingsUsed.map((x, i) => i === idx ? { ...x, item: e.target.value } : x),
+                            })}
+                            placeholder="Plaster / Crepe bandage 75mm / Wound dressing #3"
+                          />
+                        </td>
+                        <td style={{ width: 80 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            value={d.quantity}
+                            onChange={(e) => setEntryForm({
+                              ...entryForm,
+                              dressingsUsed: entryForm.dressingsUsed.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) || 0 } : x),
+                            })}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={d.notes ?? ''}
+                            onChange={(e) => setEntryForm({
+                              ...entryForm,
+                              dressingsUsed: entryForm.dressingsUsed.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x),
+                            })}
+                            placeholder="Optional"
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => setEntryForm({
+                              ...entryForm,
+                              dressingsUsed: entryForm.dressingsUsed.filter((_, i) => i !== idx),
+                            })}
+                          >Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       ),
     },

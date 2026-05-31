@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { SectionTitle } from '../../components/SectionTitle';
+import { toast } from '../../components/Toast';
 import {
+  ALL_INBOX_CATEGORIES,
+  ALL_PARTNER_SCOPES,
   Client,
   DASHBOARD_WIDGET_LABELS,
   DashboardWidget,
   Employee,
+  InboxCategory,
   JobCard,
   Lead,
   normalizeDashboardWidgets,
   normalizeProfilePermissions,
+  PARTNER_SCOPE_INBOX_DEFAULTS,
+  PartnerScope,
   ROLE_DEFAULT_DASHBOARD_WIDGETS,
   ROLE_DEFAULT_VIEWS,
   UserProfile,
@@ -213,7 +219,10 @@ const PERMISSION_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLeaveApprove', 'staffLoans', 'expenseClaims', 'expenseClaimsApprove', 'irp5Centre', 'staffWarnings'] },
   { title: 'Food Safety & Compliance', views: ['foodSafetyControlCentre', 'haccpRegister', 'sopRegister', 'nonConformance', 'traceability', 'complaints', 'staffTraining', 'ppeControl', 'pestControl', 'foreignObjectControl', 'toolBladeControl', 'visitorLog', 'chemicalRegister', 'foodSafeMaterials', 'cleaningLogs'] },
   { title: 'Staff portal', views: ['myPortal', 'notices'] },
-  { title: 'Admin', views: ['documentVault', 'osConnector', 'visitorKiosk', 'permissions', 'settings'] },
+  // Phase 103.7 — 'osConnector' (API Access) is no longer a top-level
+  // permission. It lives inside Settings → API access tab and is gated
+  // by Settings access, not its own permission.
+  { title: 'Admin', views: ['documentVault', 'visitorKiosk', 'permissions', 'settings'] },
 ];
 
 /** Short, plain-English explanation of what each section is, shown as a hover
@@ -385,6 +394,14 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
   // Phase 66 — stock security drafts.
   const [draftStockVisibility, setDraftStockVisibility] = useState<'full' | 'restricted'>('full');
   const [draftApprovalPin, setDraftApprovalPin] = useState('');
+  // Phase 91 — pricing editor flag (CEO discount mode access).
+  const [draftPricingEditor, setDraftPricingEditor] = useState(false);
+  // Phase 103.3 — per-user inbox category filter (empty = see everything).
+  const [draftInboxCategories, setDraftInboxCategories] = useState<InboxCategory[]>([]);
+  // Phase 103.4 — external partner scope (HR / Legal / Accounting / Marketing / Audit).
+  const [draftPartnerScope, setDraftPartnerScope] = useState<PartnerScope[]>([]);
+  // Phase 103.4 — allow this external_partner=accounting user to post supplier invoices.
+  const [draftCanPostInvoices, setDraftCanPostInvoices] = useState(false);
   const [createUserForm, setCreateUserForm] = useState(initialCreateUserForm);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [message, setMessage] = useState('');
@@ -417,10 +434,17 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
         dashboardWidgets: normalizeDashboardWidgets(draftRole, draftDashboardWidgets),
         stockVisibility: draftStockVisibility,
         approvalPin: draftApprovalPin.trim() || undefined,
+        pricingEditor: draftPricingEditor,
+        inboxCategories: draftInboxCategories.length > 0 ? draftInboxCategories : undefined,
+        partnerScope: draftPartnerScope.length > 0 ? draftPartnerScope : undefined,
+        canPostInvoices: draftCanPostInvoices || undefined,
       });
       setMessage('Permissions updated.');
+      toast.success(`Permissions updated for ${current.fullName || current.email || 'user'}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to update permissions.');
+      const msg = error instanceof Error ? error.message : 'Failed to update permissions.';
+      setMessage(msg);
+      toast.error(`Permissions save failed: ${msg}`);
     }
   }
 
@@ -435,6 +459,10 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
     setDraftLinkedEmployeeId(profile.linkedEmployeeId ?? '');
     setDraftStockVisibility(profile.stockVisibility === 'restricted' ? 'restricted' : 'full');
     setDraftApprovalPin(profile.approvalPin ?? '');
+    setDraftPricingEditor(profile.pricingEditor === true);
+    setDraftInboxCategories(profile.inboxCategories ?? []);
+    setDraftPartnerScope(profile.partnerScope ?? []);
+    setDraftCanPostInvoices(profile.canPostInvoices === true);
     setDraftAccountType(profile.accountType);
     setDraftPublicDisplayName(profile.publicDisplayName);
     setDraftPublicDisplayRole(profile.publicDisplayRole);
@@ -528,6 +556,7 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
               >
                 <option value="internal">internal</option>
                 <option value="client">client</option>
+                <option value="external_partner">external partner</option>
               </select>
             </label>
             <label>
@@ -702,13 +731,132 @@ export function PermissionsPage({ profiles, loading, onSave, onCreateUser, staff
                     />
                     <small className="muted">Required to approve issuance of high-value items. Leave blank for users who can't approve.</small>
                   </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={draftPricingEditor || draftRole === 'admin'}
+                      disabled={draftRole === 'admin'}
+                      onChange={(e) => setDraftPricingEditor(e.target.checked)}
+                    />
+                    <span>
+                      <strong>Can edit pricing &amp; see CEO discount mode</strong>
+                      <br />
+                      <small className="muted">
+                        Unlocks the per-line cost / margin / what-if widget on the calculator. Admins always have this.
+                      </small>
+                    </span>
+                  </label>
                   <label>
                     <span>Account type</span>
                     <select value={draftAccountType} onChange={(event) => setDraftAccountType(event.target.value as UserProfile['accountType'])}>
                       <option value="internal">internal</option>
                       <option value="client">client</option>
+                      <option value="external_partner">external partner (HR / legal / accountant / marketing / auditor)</option>
                     </select>
                   </label>
+
+                  {/* Phase 103.4 — External-partner scope picker. Only shown
+                      when accountType === 'external_partner'. Multi-select.
+                      Each scope auto-suggests inbox categories. */}
+                  {draftAccountType === 'external_partner' && (
+                    <div className="permission-panel" style={{ gridColumn: '1 / -1' }}>
+                      <div className="permission-panel-header">
+                        <strong>External partner scope</strong>
+                        <span className="table-subtext">
+                          Pick what this partner is responsible for. Each scope unlocks a focused subset of the dashboard
+                          and inbox. Partners only see what's tagged to their scope — nothing else.
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0' }}>
+                        {ALL_PARTNER_SCOPES.map((scope) => {
+                          const active = draftPartnerScope.includes(scope);
+                          return (
+                            <button
+                              key={scope}
+                              type="button"
+                              onClick={() => {
+                                const next = active
+                                  ? draftPartnerScope.filter((s) => s !== scope)
+                                  : [...draftPartnerScope, scope];
+                                setDraftPartnerScope(next);
+                                // Auto-merge in the recommended inbox categories.
+                                const merged = new Set<InboxCategory>(draftInboxCategories);
+                                next.forEach((s) => PARTNER_SCOPE_INBOX_DEFAULTS[s].forEach((c) => merged.add(c)));
+                                setDraftInboxCategories(Array.from(merged));
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: 999,
+                                border: `1px solid ${active ? 'var(--jp-ink-2, #475569)' : 'var(--jp-divider, #cbd5e1)'}`,
+                                background: active ? 'var(--jp-ink-1, #1e293b)' : 'transparent',
+                                color: active ? 'var(--jp-paper, #fff)' : 'var(--jp-ink-2, #475569)',
+                                cursor: 'pointer',
+                                fontSize: 13,
+                                textTransform: 'capitalize',
+                              }}
+                            >
+                              {scope}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {draftPartnerScope.includes('accounting') && (
+                        <label className="checkbox-row" style={{ marginTop: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={draftCanPostInvoices}
+                            onChange={(e) => setDraftCanPostInvoices(e.target.checked)}
+                          />
+                          <span>
+                            <strong>Can post supplier invoices</strong>
+                            <br />
+                            <small className="muted">
+                              Lets this external accountant upload &amp; classify supplier invoices into the Invoice Inbox.
+                            </small>
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Phase 103.3 — Per-user inbox category filter. Empty = see
+                      everything (admin / ops default). Most non-admins should
+                      have this constrained. */}
+                  <div className="permission-panel" style={{ gridColumn: '1 / -1' }}>
+                    <div className="permission-panel-header">
+                      <strong>Inbox categories</strong>
+                      <span className="table-subtext">
+                        Which event categories show up in this user's Inbox. Leave empty for full access (admin).
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0' }}>
+                      {ALL_INBOX_CATEGORIES.map((cat) => {
+                        const active = draftInboxCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              setDraftInboxCategories(
+                                active ? draftInboxCategories.filter((c) => c !== cat) : [...draftInboxCategories, cat],
+                              );
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 999,
+                              border: `1px solid ${active ? 'var(--jp-ink-2, #475569)' : 'var(--jp-divider, #cbd5e1)'}`,
+                              background: active ? 'var(--jp-ink-1, #1e293b)' : 'transparent',
+                              color: active ? 'var(--jp-paper, #fff)' : 'var(--jp-ink-2, #475569)',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                            }}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <label>
                     <span>Display name</span>
                     <input value={draftPublicDisplayName} onChange={(event) => setDraftPublicDisplayName(event.target.value)} placeholder="Lebo" />

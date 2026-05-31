@@ -12,12 +12,14 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { SignaturePad } from '../../components/SignaturePad';
 import {
   PPE_ITEM_TYPES,
+  PPE_TRANSACTION_TYPES,
   PpeIssueFilters,
   PpeIssueFormState,
   PpeIssueLineItem,
   PpeIssueRecord,
   PpeIssueStatus,
   PpeItemType,
+  PpeTransactionType,
 } from '../../types';
 import { formatDate } from '../../utils/calculations';
 
@@ -77,6 +79,28 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
     ],
     body: (
       <div className="form-grid">
+        {/* Phase 98 — Transaction type segmented control. Drives which
+            extra fields show below (Required-by for Request, Return
+            condition for Return). */}
+        <div className="full-span" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, marginRight: 8 }}>Transaction type</span>
+          {PPE_TRANSACTION_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setForm({ ...form, transactionType: t })}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 999,
+                fontSize: 12,
+                border: form.transactionType === t ? '1px solid var(--jp-accent, #2563eb)' : '1px solid var(--jp-border, #e5e2dc)',
+                background: form.transactionType === t ? 'var(--jp-accent, #2563eb)' : 'var(--jp-paper, #fff)',
+                color: form.transactionType === t ? '#fff' : 'var(--jp-ink, #444)',
+                cursor: 'pointer',
+              }}
+            >{t}</button>
+          ))}
+        </div>
         <label><span>Staff name <RequiredMarker /></span><input value={form.staffName} onChange={(e) => setForm({ ...form, staffName: e.target.value })} /></label>
         <label><span>Role</span><input value={form.staffRole} onChange={(e) => setForm({ ...form, staffRole: e.target.value })} /></label>
 
@@ -129,6 +153,18 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
         </label>
         <label><span>Replacement due</span><input type="date" value={form.replacementDueDate} onChange={(e) => setForm({ ...form, replacementDueDate: e.target.value })} /></label>
         <label><span>Return date</span><input type="date" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></label>
+        {/* Phase 98 — conditional lifecycle fields. */}
+        {form.transactionType === 'Request' ? (
+          <label><span>Required by</span><input type="date" value={form.requiredByDate} onChange={(e) => setForm({ ...form, requiredByDate: e.target.value })} /></label>
+        ) : null}
+        {form.transactionType === 'Return' || form.transactionType === 'Disposal' ? (
+          <label>
+            <span>Return condition</span>
+            <select value={form.returnCondition} onChange={(e) => setForm({ ...form, returnCondition: e.target.value as 'Good' | 'Damaged' | 'Expired' })}>
+              <option>Good</option><option>Damaged</option><option>Expired</option>
+            </select>
+          </label>
+        ) : null}
         <label className="full-span"><span>Notes</span><textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
 
         <div className="full-span">

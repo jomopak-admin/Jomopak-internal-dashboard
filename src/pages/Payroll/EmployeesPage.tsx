@@ -9,7 +9,14 @@
 import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
-import { Employee, PayCycle } from '../../types';
+import {
+  ALL_EMPLOYEE_AVAILABILITY_STATUSES,
+  DocumentRecord,
+  Employee,
+  EmployeeAvailabilityStatus,
+  PayCycle,
+} from '../../types';
+import { EmployeeDocumentsPanel } from '../../components/EmployeeDocumentsPanel';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { formatNumber } from '../../utils/calculations';
 
@@ -20,6 +27,12 @@ interface EmployeesPageProps {
   /** Used by the UI-19 generator for the employer-side fields. */
   companyName?: string;
   companyUifReference?: string;
+  /** Phase 96 — HR documents (Doc Vault rows where ownerType='employee'). */
+  documents?: DocumentRecord[];
+  uploaderName?: string;
+  onSaveDocument?: (doc: DocumentRecord) => void;
+  onDeleteDocument?: (id: string) => void;
+  onUploadDocumentFile?: (file: File, docId: string) => Promise<{ storagePath: string; signedUrl: string } | null>;
 }
 
 function emptyEmployee(): Employee {
@@ -34,6 +47,9 @@ function emptyEmployee(): Employee {
     // even if you forget to set it.
     hourlyRate: 0,
     standardMonthlyHours: 173.33,
+    // Phase 106.3 — visitor approval routing defaults.
+    availabilityStatus: 'Available',
+    canApproveVisitorAreas: true,
   };
 }
 
@@ -111,7 +127,7 @@ function printUi19(e: Employee, companyName: string, companyUifRef: string) {
   setTimeout(() => w.print(), 250);
 }
 
-export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference }: EmployeesPageProps) {
+export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference, documents = [], uploaderName = '', onSaveDocument, onDeleteDocument, onUploadDocumentFile }: EmployeesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [draft, setDraft] = useState<Employee>(emptyEmployee());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -198,6 +214,66 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
               </select>
             </label>
           </div>
+          {/* Phase 107.2 — Visitor approval routing.
+              The employee's availability + backup wire into the Phase 106
+              visitor approval router. When the employee is anything other
+              than Available, incoming visitor requests for areas they host
+              auto-route to the backup picked here. If no backup is set,
+              requests stay with them and only escalate via the 5-min timer. */}
+          <fieldset style={{ marginTop: '1rem', border: '1px solid var(--jp-divider, #cbd5e1)', borderRadius: 6, padding: '0.75rem' }}>
+            <legend style={{ padding: '0 0.4rem', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>
+              Visitor approval routing
+            </legend>
+            <div className="form-grid">
+              <label>
+                <span>Availability</span>
+                <select
+                  value={draft.availabilityStatus ?? 'Available'}
+                  onChange={(e) => update({ availabilityStatus: e.target.value as EmployeeAvailabilityStatus })}
+                >
+                  {ALL_EMPLOYEE_AVAILABILITY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Backup approver</span>
+                <select
+                  value={draft.backupApproverEmployeeId ?? ''}
+                  onChange={(e) => update({ backupApproverEmployeeId: e.target.value || undefined })}
+                >
+                  <option value="">— None —</option>
+                  {employees
+                    .filter((e) => e.id && e.id !== draft.id && e.active)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>{e.firstName} {e.lastName} · {e.jobTitle || e.department}</option>
+                    ))}
+                </select>
+              </label>
+              {(draft.availabilityStatus ?? 'Available') === 'Delegate' ? (
+                <label>
+                  <span>Delegate to (while on Delegate status)</span>
+                  <select
+                    value={draft.delegateApprovalToEmployeeId ?? ''}
+                    onChange={(e) => update({ delegateApprovalToEmployeeId: e.target.value || undefined })}
+                  >
+                    <option value="">— Pick a colleague —</option>
+                    {employees
+                      .filter((e) => e.id && e.id !== draft.id && e.active)
+                      .map((e) => (
+                        <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>
+                      ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="checkbox-row" style={{ alignSelf: 'end' }}>
+                <input
+                  type="checkbox"
+                  checked={draft.canApproveVisitorAreas !== false}
+                  onChange={(e) => update({ canApproveVisitorAreas: e.target.checked })}
+                />
+                Can approve visitor area requests
+              </label>
+            </div>
+          </fieldset>
           <label style={{ display: 'block', marginTop: '0.75rem' }}><span>Notes</span><input value={draft.notes} onChange={(e) => update({ notes: e.target.value })} /></label>
           <div style={{ marginTop: '0.75rem' }}>
             <PhotoUploader
@@ -209,6 +285,17 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
               max={3}
             />
           </div>
+          {/* Phase 96.2 — HR documents (warnings, contracts, extensions, etc.) */}
+          {onSaveDocument && onDeleteDocument && onUploadDocumentFile ? (
+            <EmployeeDocumentsPanel
+              employee={draft}
+              documents={documents}
+              uploaderName={uploaderName}
+              onSave={onSaveDocument}
+              onDelete={onDeleteDocument}
+              onUploadFile={onUploadDocumentFile}
+            />
+          ) : null}
           <div className="accounting-actions">
             <button className="primary-button" onClick={save} disabled={!draft.firstName.trim() && !draft.lastName.trim()}>Save employee</button>
           </div>

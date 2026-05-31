@@ -45,6 +45,15 @@ interface DocumentVaultPageProps {
   deliveryNotes: DeliveryNote[];
   uploaderName: string;
   currentUserRole: UserProfile['role'];
+  /** Phase 103.4 — when the viewer is an external_partner, scope the visible
+   *  documents to the categories that match their granted partner scopes
+   *  (HR scope = HR Document / Staff Handbook / Factory Policy / SMETA;
+   *  Legal scope = Lease / Property / License / Permit / Insurance / Factory
+   *  Policy; Accounting scope = Tax / Compliance / Accounting Record /
+   *  Insurance; Marketing scope = nothing in the vault yet but can browse
+   *  client-owned operational docs they need for campaigns; Audit scope =
+   *  Certification / Health & Safety / SMETA artefacts). */
+  viewerPartnerScopes?: import('../../types').PartnerScope[];
   onSave: (doc: DocumentRecord) => void;
   onDelete: (id: string) => void;
   onUploadFile: (file: File, docId: string) => Promise<{
@@ -55,6 +64,18 @@ interface DocumentVaultPageProps {
     fileSizeBytes: number;
   }>;
 }
+
+/** Phase 103.4 — which DocumentCategory rows an external_partner with the
+ *  given scope is allowed to see. Categories not in any of their scopes are
+ *  filtered out entirely (not just hidden from listing — they're also blocked
+ *  from upload since they shouldn't know those categories exist). */
+const PARTNER_SCOPE_DOC_CATEGORIES: Record<import('../../types').PartnerScope, DocumentCategory[]> = {
+  hr:         ['HR Document', 'Staff Handbook', 'Factory Policy', 'Health & Safety'],
+  legal:      ['Lease / Property', 'License / Permit', 'Insurance', 'Factory Policy'],
+  accounting: ['Tax / Compliance', 'Accounting Record', 'Insurance', 'Invoice Copy', 'Credit Note', 'Proof of Payment'],
+  marketing:  ['Other Internal'],
+  audit:      ['Certification', 'Health & Safety', 'Factory Policy', 'License / Permit'],
+};
 
 const ALL_ROLES: UserRole[] = ['admin', 'ops', 'production', 'sales', 'artwork', 'accounts'];
 
@@ -97,10 +118,20 @@ export function DocumentVaultPage({
   deliveryNotes,
   uploaderName,
   currentUserRole,
+  viewerPartnerScopes,
   onSave,
   onDelete,
   onUploadFile,
 }: DocumentVaultPageProps) {
+  // Phase 103.4 — union of all categories this external partner is permitted
+  // to see across their granted scopes. Internal users get a null sentinel
+  // meaning "no scope restriction".
+  const partnerAllowedCategories: Set<DocumentCategory> | null = (() => {
+    if (!viewerPartnerScopes || viewerPartnerScopes.length === 0) return null;
+    const set = new Set<DocumentCategory>();
+    viewerPartnerScopes.forEach((s) => PARTNER_SCOPE_DOC_CATEGORIES[s].forEach((c) => set.add(c)));
+    return set;
+  })();
   const [ownerType, setOwnerType] = useState<DocumentOwnerType>('supplier');
   const [ownerId, setOwnerId] = useState('');
   const [category, setCategory] = useState<DocumentCategory>('Certification');
@@ -172,8 +203,12 @@ export function DocumentVaultPage({
       .filter((d) => !filterOwnerId || d.ownerId === filterOwnerId)
       // Apply role-based visibility to internal docs.
       .filter((d) => d.ownerType !== 'internal' || userCanViewInternalDoc(d, currentUserRole))
+      // Phase 103.4 — external partners only see docs in categories tied to
+      // their granted scope. Internal users (partnerAllowedCategories == null)
+      // are unaffected.
+      .filter((d) => partnerAllowedCategories === null || partnerAllowedCategories.has(d.category))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [documents, filterOwnerType, filterOwnerId, currentUserRole]);
+  }, [documents, filterOwnerType, filterOwnerId, currentUserRole, partnerAllowedCategories]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

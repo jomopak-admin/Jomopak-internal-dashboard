@@ -24,6 +24,8 @@ import {
   Client,
   LEAD_ACTIVITY_TYPES,
   LEAD_SOURCES,
+  LEAD_SOURCE_GROUPS,
+  LeadItem,
   LOST_REASONS,
   Lead,
   LeadActivity,
@@ -215,11 +217,43 @@ export function LeadsPage(props: LeadsPageProps) {
           <h3 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)', margin: '20px 0 8px' }}>Contact</h3>
           <div className="form-grid">
             <label><span>Enquiry date</span><input type="date" value={leadForm.enquiryDate} onChange={(e) => setLeadForm({ ...leadForm, enquiryDate: e.target.value })} /></label>
-            <label><span>Source</span>
-              <select value={leadForm.source} onChange={(e) => setLeadForm({ ...leadForm, source: e.target.value as LeadSource })}>
-                {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </label>
+            {/* Phase 99 — niched source picker. Grouped pill-buttons rather
+                than a 19-item dropdown so it's quick to tag the right channel
+                and we can analyse which converts best later. */}
+            <div className="full-span">
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Where did they come from?</span>
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {LEAD_SOURCE_GROUPS.map((group) => (
+                  <div key={group.label} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="muted" style={{ fontSize: 11, minWidth: 90, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{group.label}</span>
+                    {group.sources.map((s) => {
+                      const active = leadForm.source === s;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setLeadForm({ ...leadForm, source: s })}
+                          style={{
+                            padding: '4px 10px', borderRadius: 999, fontSize: 12,
+                            border: active ? '1px solid var(--jp-accent, #2563eb)' : '1px solid var(--jp-border, #e5e2dc)',
+                            background: active ? 'var(--jp-accent, #2563eb)' : 'var(--jp-paper, #fff)',
+                            color: active ? '#fff' : 'var(--jp-ink, #444)',
+                            cursor: 'pointer',
+                          }}
+                        >{s}</button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Phase 99 — sourceDetail surfaces only when the source needs
+                attribution (who referred, which post, which event). */}
+            {['Referral', 'Word of Mouth', 'Existing Customer', 'Trade Show', 'Networking Event'].includes(leadForm.source) ? (
+              <label className="full-span"><span>{leadForm.source === 'Referral' || leadForm.source === 'Word of Mouth' ? 'Referred by' : 'Event / campaign name'}</span>
+                <input value={leadForm.sourceDetail} onChange={(e) => setLeadForm({ ...leadForm, sourceDetail: e.target.value })} placeholder={leadForm.source === 'Referral' ? 'Who pointed them at us' : 'Which event / which post'} />
+              </label>
+            ) : null}
             <label><span>Linked client (if existing)</span>
               <Combobox options={clientOptions} value={leadForm.clientId} onChange={(v) => setLeadForm({ ...leadForm, clientId: v })} placeholder="Search clients…" emptyMessage="No matching clients" />
             </label>
@@ -231,14 +265,165 @@ export function LeadsPage(props: LeadsPageProps) {
           </div>
 
           {/* ===== Opportunity ===== */}
+          {/* Phase 99 — Multi-item enquiry. A client often asks for 3
+              different things in one message; we model each as a row.
+              The first row backfills the legacy productId / requestedQuantity
+              on save so pipeline reports keep working. */}
           <h3 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)', margin: '20px 0 8px' }}>What they want</h3>
+          <div style={{ padding: 12, background: 'var(--jp-paper-2, #faf8f4)', borderRadius: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong style={{ fontSize: 13 }}>Items requested ({leadForm.items.length})</strong>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setLeadForm({
+                  ...leadForm,
+                  items: [
+                    ...leadForm.items,
+                    { id: `LI-${Date.now()}-${leadForm.items.length}`, productId: '', productName: '', description: '', requestedQuantity: 0, unit: 'units', specNote: '', estimatedValue: 0 },
+                  ],
+                })}
+              >+ Add item</button>
+            </div>
+            {leadForm.items.length === 0 ? (
+              <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                Click <strong>+ Add item</strong> for each thing the client asked about.
+                One item is fine for a single-product enquiry.
+              </p>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>Product / description</th><th>Spec</th><th>Qty</th><th>Unit</th><th>Est. value (R)</th><th /></tr>
+                  </thead>
+                  <tbody>
+                    {leadForm.items.map((it, idx) => (
+                      <tr key={it.id}>
+                        <td>
+                          <Combobox
+                            options={productOptions}
+                            value={it.productId}
+                            onChange={(v) => {
+                              const prod = productOptions.find((p) => p.value === v);
+                              setLeadForm({
+                                ...leadForm,
+                                items: leadForm.items.map((x, i) => i === idx ? { ...x, productId: v, productName: prod?.label ?? '' } : x),
+                              });
+                            }}
+                            placeholder="Pick product…"
+                            emptyMessage="No matching"
+                          />
+                          <input
+                            style={{ marginTop: 4, fontSize: 12 }}
+                            value={it.description}
+                            onChange={(e) => setLeadForm({
+                              ...leadForm,
+                              items: leadForm.items.map((x, i) => i === idx ? { ...x, description: e.target.value } : x),
+                            })}
+                            placeholder="Or free text — e.g. 'Branded gift bags 12oz'"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={it.specNote}
+                            onChange={(e) => setLeadForm({
+                              ...leadForm,
+                              items: leadForm.items.map((x, i) => i === idx ? { ...x, specNote: e.target.value } : x),
+                            })}
+                            placeholder="White kraft, 80gsm, flat handle"
+                          />
+                        </td>
+                        <td style={{ width: 100 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            value={it.requestedQuantity}
+                            onChange={(e) => setLeadForm({
+                              ...leadForm,
+                              items: leadForm.items.map((x, i) => i === idx ? { ...x, requestedQuantity: Number(e.target.value) || 0 } : x),
+                            })}
+                          />
+                        </td>
+                        <td style={{ width: 80 }}>
+                          <input
+                            value={it.unit}
+                            onChange={(e) => setLeadForm({
+                              ...leadForm,
+                              items: leadForm.items.map((x, i) => i === idx ? { ...x, unit: e.target.value } : x),
+                            })}
+                          />
+                        </td>
+                        <td style={{ width: 120 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={it.estimatedValue}
+                            onChange={(e) => setLeadForm({
+                              ...leadForm,
+                              items: leadForm.items.map((x, i) => i === idx ? { ...x, estimatedValue: Number(e.target.value) || 0 } : x),
+                            })}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => setLeadForm({ ...leadForm, items: leadForm.items.filter((_, i) => i !== idx) })}
+                          >Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
           <div className="form-grid">
-            <label><span>Product / interest</span>
-              <Combobox options={productOptions} value={leadForm.productId} onChange={(v) => setLeadForm({ ...leadForm, productId: v })} placeholder="Search products…" emptyMessage="No matching products" />
-            </label>
-            <label><span>Requested quantity</span><input type="number" min="0" value={leadForm.requestedQuantity} onChange={(e) => setLeadForm({ ...leadForm, requestedQuantity: e.target.value })} /></label>
             <label><span>Due / target date</span><input type="date" value={leadForm.dueDate} onChange={(e) => setLeadForm({ ...leadForm, dueDate: e.target.value })} /></label>
-            <label><span>Estimated value (R)</span><input type="number" min="0" step="0.01" value={leadForm.estimatedValue} onChange={(e) => setLeadForm({ ...leadForm, estimatedValue: e.target.value })} placeholder="Forecast revenue" /></label>
+            <label>
+              <span>Estimated value (R) {leadForm.items.length > 0 ? <span className="muted" style={{ fontSize: 11 }}>· auto-sums from items</span> : null}</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={leadForm.items.length > 0
+                  ? String(leadForm.items.reduce((s, i) => s + (Number(i.estimatedValue) || 0), 0))
+                  : leadForm.estimatedValue}
+                onChange={(e) => setLeadForm({ ...leadForm, estimatedValue: e.target.value })}
+                placeholder="Forecast revenue"
+                disabled={leadForm.items.length > 0}
+              />
+            </label>
+          </div>
+
+          {/* Phase 99 — Client onboarding form tracking. Sales tick this
+              when the New Client Detail Form PDF comes back. The bell
+              can chase outstanding ones after N days. */}
+          <h3 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)', margin: '20px 0 8px' }}>Onboarding form</h3>
+          <div style={{ padding: 10, background: 'var(--jp-paper-2, #faf8f4)', borderRadius: 8 }}>
+            <label className="checkbox-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={leadForm.onboardingFormReceived}
+                onChange={(e) => setLeadForm({
+                  ...leadForm,
+                  onboardingFormReceived: e.target.checked,
+                  onboardingFormReceivedDate: e.target.checked && !leadForm.onboardingFormReceivedDate
+                    ? new Date().toISOString().slice(0, 10)
+                    : leadForm.onboardingFormReceivedDate,
+                })}
+              />
+              <span>JomoPak New Client Detail Form returned</span>
+            </label>
+            <div className="form-grid" style={{ marginTop: 8 }}>
+              {leadForm.onboardingFormReceived ? (
+                <label><span>Received date</span>
+                  <input type="date" value={leadForm.onboardingFormReceivedDate} onChange={(e) => setLeadForm({ ...leadForm, onboardingFormReceivedDate: e.target.value })} />
+                </label>
+              ) : null}
+              <label className="full-span"><span>{leadForm.onboardingFormReceived ? 'Notes' : 'Why not? (status / chase)'}</span>
+                <input value={leadForm.onboardingFormNote} onChange={(e) => setLeadForm({ ...leadForm, onboardingFormNote: e.target.value })} placeholder={leadForm.onboardingFormReceived ? 'Optional' : 'Sent via WhatsApp 12 May, awaiting reply'} />
+              </label>
+            </div>
           </div>
 
           {/* ===== Status + Follow-up ===== */}

@@ -103,6 +103,18 @@ function mapAppSettings(row: any): AppSettings {
     sarsConfig: row.sars_config ?? row.sarsConfig ?? undefined,
     currencyConfig: row.currency_config ?? row.currencyConfig ?? undefined,
     connectorConfig: row.connector_config ?? row.connectorConfig ?? undefined,
+    standardMarginPercent:
+      row.standard_margin_percent !== undefined && row.standard_margin_percent !== null
+        ? Number(row.standard_margin_percent)
+        : (row.standardMarginPercent ?? undefined),
+    // Phase 106 — visitor approval policy + escalation timer.
+    visitorAreaPolicy: row.visitor_area_policy && typeof row.visitor_area_policy === 'object'
+      ? row.visitor_area_policy
+      : (row.visitorAreaPolicy ?? undefined),
+    visitorApprovalEscalationMinutes:
+      row.visitor_approval_escalation_minutes !== undefined && row.visitor_approval_escalation_minutes !== null
+        ? Number(row.visitor_approval_escalation_minutes)
+        : (row.visitorApprovalEscalationMinutes ?? undefined),
     updatedAt: row.updated_at ?? row.updatedAt ?? '',
     updatedBy: row.updated_by ?? row.updatedBy ?? '',
   });
@@ -230,6 +242,11 @@ export function mapQuoteEstimate(row: any): QuoteEstimate {
     status: row.status ?? 'Draft',
     notes: row.notes ?? '',
     customerNote: row.customer_note ?? '',
+    // Phase 118.1 — calculator snapshot for multi-line re-print.
+    calculatorBatchId: row.calculator_batch_id ?? undefined,
+    calculatorSnapshot: row.calculator_snapshot && typeof row.calculator_snapshot === 'object'
+      ? row.calculator_snapshot
+      : undefined,
   };
 }
 
@@ -762,6 +779,8 @@ export function mapJob(row: any): JobCard {
     dieToolCode: row.die_tool_code ?? undefined,
     stereoToolId: row.stereo_tool_id ?? undefined,
     stereoToolCode: row.stereo_tool_code ?? undefined,
+    // Phase 94 — production pipeline tracker.
+    pipelineStages: Array.isArray(row.pipeline_stages) ? row.pipeline_stages : undefined,
   };
 }
 
@@ -961,6 +980,62 @@ export function mapMaterialReceipt(row: any): MaterialReceipt {
     // Phase 75 — slit-child lineage. Empty for parent rolls received from suppliers.
     parentMaterialReceiptId: row.parent_material_receipt_id ?? undefined,
     producedByProductionLogId: row.produced_by_production_log_id ?? undefined,
+  };
+}
+
+/* ─── Phase 93 — Traded Goods mappers. ────────────────────────────────── */
+
+function mapTradedGoodsItem(row: any): import('../types').TradedGoodsItem {
+  return {
+    id: row.id,
+    itemCode: row.item_code ?? row.itemCode ?? '',
+    name: row.name ?? '',
+    description: row.description ?? '',
+    defaultSupplierId: row.default_supplier_id ?? '',
+    defaultSupplierName: row.default_supplier_name ?? '',
+    sizeSpec: row.size_spec ?? undefined,
+    defaultUnitCost: Number(row.default_unit_cost ?? 0),
+    defaultMarkupPercent: Number(row.default_markup_percent ?? 0),
+    defaultSellPrice: row.default_sell_price !== null && row.default_sell_price !== undefined
+      ? Number(row.default_sell_price)
+      : undefined,
+    unitLabel: row.unit_label ?? 'unit',
+    active: row.active !== false,
+    notes: row.notes ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    createdAt: row.created_at ?? row.createdAt ?? '',
+    updatedAt: row.updated_at ?? row.updatedAt ?? '',
+  };
+}
+
+function mapTradedGoodsReceipt(row: any): import('../types').TradedGoodsReceipt {
+  return {
+    id: row.id,
+    receiptNumber: row.receipt_number ?? '',
+    receivedDate: row.received_date ?? '',
+    supplierInvoiceReference: row.supplier_invoice_reference ?? '',
+    itemId: row.item_id ?? '',
+    itemName: row.item_name ?? '',
+    itemCode: row.item_code ?? '',
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    countryOfOrigin: row.country_of_origin ?? undefined,
+    quantityReceived: Number(row.quantity_received ?? 0),
+    quantityAvailable: Number(row.quantity_available ?? row.quantity_received ?? 0),
+    unitLabel: row.unit_label ?? 'unit',
+    unitCost: Number(row.unit_cost ?? 0),
+    markupPercent: Number(row.markup_percent ?? 0),
+    sellPrice: Number(row.sell_price ?? 0),
+    status: row.status ?? 'In stock',
+    clientId: row.client_id ?? undefined,
+    clientName: row.client_name ?? undefined,
+    jobId: row.job_id ?? undefined,
+    jobNumber: row.job_number ?? undefined,
+    storageLocation: row.storage_location ?? undefined,
+    notes: row.notes ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
   };
 }
 
@@ -1806,6 +1881,227 @@ function mapToolBladeRecord(row: any): any {
   };
 }
 
+/* ─── Phase 82 / 95 / 103 — Safety + Compliance registers ───────────────
+ * Mappers for first aid, designated aiders, incidents, drills, toolbox
+ * talks, SHE committee, and audit programmes. Each one is a straight
+ * snake_case ↔ camelCase translation; jsonb columns (photo_urls,
+ * dressings_used, attendees, action_items) come through as arrays already.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+function mapFirstAidEntry(row: any): any {
+  return {
+    id: row.id,
+    entryNumber: row.entry_number,
+    createdAt: row.created_at,
+    incidentDate: row.incident_date ?? '',
+    incidentTime: row.incident_time ?? '',
+    location: row.location ?? '',
+    isVisitor: Boolean(row.is_visitor),
+    employeeId: row.injured_person_employee_id ?? '',
+    employeeName: row.injured_person_name ?? '',
+    visitorName: '',
+    visitorCompany: '',
+    injuryType: row.injury_type ?? 'Minor cut',
+    bodyPart: row.body_part ?? '',
+    description: row.description ?? '',
+    treatmentGiven: row.treatment_given ?? '',
+    treatedByName: row.treated_by_name ?? '',
+    treatedByCertNumber: row.treated_by_aider_id ?? '',
+    isIod: Boolean(row.iod_case),
+    iodReportNumber: row.iod_reference ?? '',
+    iodReportedDate: '',
+    followUpRequired: Boolean(row.referred_to_doctor),
+    followUpNotes: row.referred_to ?? '',
+    resolvedDate: '',
+    witnessName: row.witness_name ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    signatureDataUrl: row.signature_url ?? undefined,
+    notes: row.notes ?? '',
+    dressingsUsed: row.dressings_used && Array.isArray(row.dressings_used)
+      ? row.dressings_used
+      : (row.dressings_used ? [{ item: row.dressings_used, quantity: 1 }] : []),
+  };
+}
+
+function mapDesignatedFirstAider(row: any): any {
+  return {
+    id: row.employee_id,
+    employeeId: row.employee_id,
+    fullName: row.full_name,
+    certLevel: row.cert_level ?? 'Level 1',
+    certNumber: row.cert_number ?? '',
+    certIssuedDate: row.cert_issued_date ?? '',
+    certExpiryDate: row.cert_expiry_date ?? '',
+    phoneNumber: row.phone_number ?? '',
+    notes: row.notes ?? '',
+    active: row.active !== false,
+  };
+}
+
+function mapIncidentEntry(row: any): any {
+  return {
+    id: row.id,
+    incidentNumber: row.incident_number,
+    createdAt: row.created_at,
+    incidentDate: row.incident_date ?? '',
+    incidentTime: row.incident_time ?? '',
+    incidentType: row.incident_type ?? 'Near miss',
+    severity: row.severity ?? 'Low',
+    personEmployeeId: row.person_employee_id ?? undefined,
+    personName: row.person_name ?? '',
+    personRole: row.person_role ?? '',
+    isContractor: Boolean(row.is_contractor),
+    bodyPartAffected: row.body_part_affected ?? '',
+    location: row.location ?? '',
+    description: row.description ?? '',
+    immediateAction: row.immediate_action ?? '',
+    treatmentGiven: row.treatment_given ?? '',
+    treatedByName: row.treated_by_name ?? '',
+    firstAiderEmployeeId: row.first_aider_employee_id ?? undefined,
+    witnessName: row.witness_name ?? '',
+    rootCause: row.root_cause ?? '',
+    correctiveAction: row.corrective_action ?? '',
+    linkedNcrId: row.linked_ncr_id ?? undefined,
+    iodSubmitted: Boolean(row.iod_submitted),
+    iodReference: row.iod_reference ?? '',
+    daysLost: Number(row.days_lost ?? 0),
+    returnToWorkDate: row.return_to_work_date ?? '',
+    closedAt: row.closed_at ?? '',
+    closedByName: row.closed_by_name ?? '',
+    reporterName: row.reporter_name ?? '',
+    reporterSignatureUrl: row.reporter_signature_url ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    notes: row.notes ?? '',
+  };
+}
+
+function mapDrillEntry(row: any): any {
+  return {
+    id: row.id,
+    drillNumber: row.drill_number,
+    createdAt: row.created_at,
+    drillDate: row.drill_date ?? '',
+    drillType: row.drill_type ?? 'Fire',
+    scenario: row.scenario ?? '',
+    alarmRaisedTime: row.alarm_raised_time ?? '',
+    evacuationCompleteTime: row.evacuation_complete_time ?? '',
+    totalMinutes: Number(row.total_minutes ?? 0),
+    headcountExpected: Number(row.headcount_expected ?? 0),
+    headcountAtMuster: Number(row.headcount_at_muster ?? 0),
+    missingPersons: row.missing_persons ?? '',
+    fireMarshalName: row.fire_marshal_name ?? '',
+    fireMarshalSignatureUrl: row.fire_marshal_signature_url ?? '',
+    observations: row.observations ?? '',
+    lessonsLearned: row.lessons_learned ?? '',
+    outcome: row.outcome ?? 'Successful',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    notes: row.notes ?? '',
+  };
+}
+
+function mapToolboxTalkEntry(row: any): any {
+  return {
+    id: row.id,
+    talkNumber: row.talk_number,
+    createdAt: row.created_at,
+    talkDate: row.talk_date ?? '',
+    topic: row.topic ?? '',
+    keyPoints: row.key_points ?? '',
+    discussion: row.discussion ?? '',
+    facilitatorName: row.facilitator_name ?? '',
+    facilitatorSignatureUrl: row.facilitator_signature_url ?? '',
+    durationMinutes: Number(row.duration_minutes ?? 0),
+    attendees: Array.isArray(row.attendees) ? row.attendees : [],
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    notes: row.notes ?? '',
+  };
+}
+
+function mapSheMeetingEntry(row: any): any {
+  return {
+    id: row.id,
+    meetingNumber: row.meeting_number,
+    createdAt: row.created_at,
+    meetingDate: row.meeting_date ?? '',
+    meetingTime: row.meeting_time ?? '',
+    chairpersonName: row.chairperson_name ?? '',
+    scribeName: row.scribe_name ?? '',
+    attendees: Array.isArray(row.attendees) ? row.attendees : [],
+    agenda: row.agenda ?? '',
+    minutes: row.minutes ?? '',
+    actionItems: Array.isArray(row.action_items) ? row.action_items : [],
+    nextMeetingDate: row.next_meeting_date ?? '',
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : [],
+    notes: row.notes ?? '',
+  };
+}
+
+function mapAuditProgramme(row: any): any {
+  return {
+    id: row.id,
+    code: row.code ?? '',
+    name: row.name,
+    auditingBody: row.auditing_body ?? '',
+    contactEmail: row.contact_email ?? '',
+    lastAuditedDate: row.last_audited_date ?? '',
+    cadenceMonths: Number(row.cadence_months ?? 12),
+    nextDueDateOverride: row.next_due_date_override ?? undefined,
+    notes: row.notes ?? '',
+    status: row.status ?? 'Active',
+    certificateUrl: row.certificate_url ?? '',
+    certificateExpiryDate: row.certificate_expiry_date ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
+  };
+}
+
+/* ─── Phase 106.2 / 106.4 — Visitor approval + booking mappers ──────── */
+
+function mapVisitorAreaApprovalRequest(row: any): any {
+  return {
+    id: row.id,
+    visitorLogEntryId: row.visitor_log_entry_id,
+    visitorName: row.visitor_name,
+    visitorCompany: row.visitor_company ?? '',
+    hostEmployeeId: row.host_employee_id ?? '',
+    hostName: row.host_name,
+    requestedAreas: Array.isArray(row.requested_areas) ? row.requested_areas : [],
+    approvedAreas: Array.isArray(row.approved_areas) ? row.approved_areas : [],
+    status: row.status ?? 'pending',
+    currentApproverEmployeeId: row.current_approver_employee_id ?? '',
+    currentApproverName: row.current_approver_name ?? '',
+    createdAt: row.created_at,
+    decidedAt: row.decided_at ?? undefined,
+    expiresAt: row.expires_at ?? undefined,
+    history: Array.isArray(row.history) ? row.history : [],
+    requestNote: row.request_note ?? '',
+    satisfiedByBookingId: row.satisfied_by_booking_id ?? undefined,
+  };
+}
+
+function mapVisitorBooking(row: any): any {
+  return {
+    id: row.id,
+    visitorName: row.visitor_name,
+    visitorCompany: row.visitor_company ?? '',
+    visitorEmail: row.visitor_email ?? '',
+    visitorPhone: row.visitor_phone ?? '',
+    hostEmployeeId: row.host_employee_id,
+    hostName: row.host_name,
+    visitDate: row.visit_date,
+    startTime: row.start_time ?? '',
+    endTime: row.end_time ?? '',
+    allowedAreas: Array.isArray(row.allowed_areas) ? row.allowed_areas : [],
+    purpose: row.purpose ?? '',
+    notes: row.notes ?? '',
+    status: row.status ?? 'created',
+    createdAt: row.created_at,
+    createdByName: row.created_by_name ?? '',
+    checkedInAt: row.checked_in_at ?? undefined,
+    visitorLogEntryId: row.visitor_log_entry_id ?? undefined,
+  };
+}
+
 function mapVisitorLogEntry(row: any): any {
   return {
     id: row.id,
@@ -2057,6 +2353,11 @@ function mapEmployee(row: any): any {
     endDate: row.end_date ?? '',
     active: row.active === undefined ? true : Boolean(row.active),
     notes: row.notes ?? '',
+    // Phase 106.3 — visitor approval routing fields.
+    availabilityStatus: row.availability_status ?? 'Available',
+    backupApproverEmployeeId: row.backup_approver_employee_id ?? undefined,
+    delegateApprovalToEmployeeId: row.delegate_approval_to_employee_id ?? undefined,
+    canApproveVisitorAreas: row.can_approve_visitor_areas === undefined ? true : Boolean(row.can_approve_visitor_areas),
   };
 }
 
@@ -2235,6 +2536,20 @@ export async function fetchAppData(): Promise<AppData> {
     companyRows,
     dispatchRunRows,
     toolingRows,
+    // Phase 93 — Traded Goods.
+    tradedGoodsItemRows,
+    tradedGoodsReceiptRows,
+    // Phase 82 / 95 / 103 — safety + compliance registers.
+    firstAidEntryRows,
+    firstAidAiderRows,
+    incidentEntryRows,
+    drillEntryRows,
+    toolboxTalkEntryRows,
+    sheMeetingEntryRows,
+    auditProgrammeRows,
+    // Phase 106 — visitor approval requests + bookings.
+    visitorAreaApprovalRequestRows,
+    visitorBookingRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -2329,6 +2644,20 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('dispatch_runs'),
     // Phase 62 — Tooling (Dies + Stereos).
     safeSelect('tooling'),
+    // Phase 93 — Traded Goods (bought-in items for resale).
+    safeSelect('traded_goods_items'),
+    safeSelect('traded_goods_receipts'),
+    // Phase 82 / 95 / 103 — safety + compliance registers.
+    safeSelect('first_aid_entries'),
+    safeSelect('first_aid_aiders'),
+    safeSelect('incident_entries'),
+    safeSelect('drill_entries'),
+    safeSelect('toolbox_talk_entries'),
+    safeSelect('she_meeting_entries'),
+    safeSelect('audit_programmes'),
+    // Phase 106 — visitor approval requests + bookings.
+    safeSelect('visitor_area_approval_requests'),
+    safeSelect('visitor_bookings'),
   ]);
 
   return {
@@ -2402,6 +2731,20 @@ export async function fetchAppData(): Promise<AppData> {
     staffLoans: staffLoanRows.map(mapStaffLoan),
     expenseClaims: expenseClaimRows.map(mapExpenseClaim),
     companies: companyRows.map(mapCompany),
+    // Phase 93 — Traded Goods.
+    tradedGoodsItems: tradedGoodsItemRows.map(mapTradedGoodsItem),
+    tradedGoodsReceipts: tradedGoodsReceiptRows.map(mapTradedGoodsReceipt),
+    // Phase 82 / 95 / 103 — safety + compliance registers.
+    firstAidEntries: firstAidEntryRows.map(mapFirstAidEntry),
+    firstAidAiders: firstAidAiderRows.map(mapDesignatedFirstAider),
+    incidentEntries: incidentEntryRows.map(mapIncidentEntry),
+    drillEntries: drillEntryRows.map(mapDrillEntry),
+    toolboxTalkEntries: toolboxTalkEntryRows.map(mapToolboxTalkEntry),
+    sheMeetingEntries: sheMeetingEntryRows.map(mapSheMeetingEntry),
+    auditProgrammes: auditProgrammeRows.map(mapAuditProgramme),
+    // Phase 106 — visitor approval system.
+    visitorAreaApprovalRequests: visitorAreaApprovalRequestRows.map(mapVisitorAreaApprovalRequest),
+    visitorBookings: visitorBookingRows.map(mapVisitorBooking),
     appSettings: mapAppSettings(appSettingsRow),
   };
 }
@@ -2513,6 +2856,10 @@ export async function syncAppData(data: AppData): Promise<void> {
       status: quote.status,
       notes: quote.notes || null,
       customer_note: quote.customerNote || null,
+      // Phase 118.1 — calculator snapshot for multi-line re-print.
+      // jsonb auto-serialises. Null when not a calculator quote.
+      calculator_batch_id: quote.calculatorBatchId ?? null,
+      calculator_snapshot: quote.calculatorSnapshot ?? null,
     }))),
     safeUpsert('artwork_records', data.artworkRecords.map((artwork) => ({
       id: artwork.id,
@@ -3026,6 +3373,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       die_tool_code: job.dieToolCode || null,
       stereo_tool_id: job.stereoToolId || null,
       stereo_tool_code: job.stereoToolCode || null,
+      // Phase 94 — production pipeline tracker.
+      pipeline_stages: job.pipelineStages ?? null,
     }))),
     safeUpsert('tooling', (data.tooling ?? []).map((t) => ({
       id: t.id,
@@ -3066,6 +3415,239 @@ export async function syncAppData(data: AppData): Promise<void> {
       signature_data_url: t.signatureDataUrl ?? null,
       signed_sample_document_url: t.signedSampleDocumentUrl ?? null,
     }))),
+    // Phase 93 — Traded Goods upserts.
+    safeUpsert('traded_goods_items', (data.tradedGoodsItems ?? []).map((i) => ({
+      id: i.id,
+      item_code: i.itemCode,
+      name: i.name,
+      description: i.description,
+      default_supplier_id: i.defaultSupplierId || null,
+      default_supplier_name: i.defaultSupplierName || null,
+      size_spec: i.sizeSpec ?? null,
+      default_unit_cost: i.defaultUnitCost,
+      default_markup_percent: i.defaultMarkupPercent,
+      default_sell_price: i.defaultSellPrice ?? null,
+      unit_label: i.unitLabel,
+      active: i.active,
+      notes: i.notes,
+      photo_urls: i.photoUrls ?? [],
+      created_at: i.createdAt,
+      updated_at: i.updatedAt,
+    }))),
+    safeUpsert('traded_goods_receipts', (data.tradedGoodsReceipts ?? []).map((r) => ({
+      id: r.id,
+      receipt_number: r.receiptNumber,
+      received_date: r.receivedDate,
+      supplier_invoice_reference: r.supplierInvoiceReference,
+      item_id: r.itemId,
+      item_name: r.itemName,
+      item_code: r.itemCode,
+      supplier_id: r.supplierId || null,
+      supplier_name: r.supplierName || null,
+      country_of_origin: r.countryOfOrigin ?? null,
+      quantity_received: r.quantityReceived,
+      quantity_available: r.quantityAvailable,
+      unit_label: r.unitLabel,
+      unit_cost: r.unitCost,
+      markup_percent: r.markupPercent,
+      sell_price: r.sellPrice,
+      status: r.status,
+      client_id: r.clientId ?? null,
+      client_name: r.clientName ?? null,
+      job_id: r.jobId ?? null,
+      job_number: r.jobNumber ?? null,
+      storage_location: r.storageLocation ?? null,
+      notes: r.notes,
+      photo_urls: r.photoUrls ?? [],
+      created_at: r.createdAt,
+      updated_at: r.updatedAt,
+    }))),
+
+    /* ─── Phase 82 / 95 / 103 — safety + compliance registers ─────────── */
+    safeUpsert('first_aid_entries', (data.firstAidEntries ?? []).map((e) => ({
+      id: e.id,
+      entry_number: e.entryNumber,
+      created_at: e.createdAt,
+      incident_date: e.incidentDate || null,
+      incident_time: e.incidentTime || null,
+      injured_person_employee_id: e.employeeId || null,
+      injured_person_name: e.isVisitor ? (e.visitorName || '') : (e.employeeName || ''),
+      injured_person_role: e.isVisitor ? (e.visitorCompany || '') : null,
+      is_visitor: !!e.isVisitor,
+      injury_type: e.injuryType,
+      body_part: e.bodyPart,
+      location: e.location,
+      description: e.description,
+      // first_aid_entries.dressings_used is text in the original schema, but
+      // we want to keep the structured array — write it as jsonb-stringified
+      // so the column accepts it whether the column type is jsonb or text.
+      dressings_used: JSON.stringify(e.dressingsUsed ?? []),
+      treated_by_aider_id: e.treatedByCertNumber || null,
+      treated_by_name: e.treatedByName,
+      referred_to_doctor: !!e.followUpRequired,
+      referred_to: e.followUpNotes || null,
+      iod_case: !!e.isIod,
+      iod_reference: e.iodReportNumber || null,
+      witness_name: e.witnessName || null,
+      photo_urls: e.photoUrls ?? [],
+      signature_url: e.signatureDataUrl || null,
+      notes: e.notes ?? '',
+    }))),
+    safeUpsert('first_aid_aiders', (data.firstAidAiders ?? []).map((a) => ({
+      employee_id: a.employeeId || a.id,
+      full_name: a.fullName,
+      cert_level: a.certLevel,
+      cert_number: a.certNumber || null,
+      cert_issued_date: a.certIssuedDate || null,
+      cert_expiry_date: a.certExpiryDate || null,
+      phone_number: a.phoneNumber || null,
+      notes: a.notes ?? '',
+      active: a.active !== false,
+    }))),
+    safeUpsert('incident_entries', (data.incidentEntries ?? []).map((i) => ({
+      id: i.id,
+      incident_number: i.incidentNumber,
+      created_at: i.createdAt,
+      incident_date: i.incidentDate,
+      incident_time: i.incidentTime || null,
+      incident_type: i.incidentType,
+      severity: i.severity,
+      person_employee_id: i.personEmployeeId || null,
+      person_name: i.personName,
+      person_role: i.personRole || null,
+      is_contractor: !!i.isContractor,
+      body_part_affected: i.bodyPartAffected || null,
+      location: i.location || null,
+      description: i.description,
+      immediate_action: i.immediateAction || null,
+      treatment_given: i.treatmentGiven || null,
+      treated_by_name: i.treatedByName || null,
+      first_aider_employee_id: i.firstAiderEmployeeId || null,
+      witness_name: i.witnessName || null,
+      root_cause: i.rootCause || null,
+      corrective_action: i.correctiveAction || null,
+      linked_ncr_id: i.linkedNcrId || null,
+      iod_submitted: !!i.iodSubmitted,
+      iod_reference: i.iodReference || null,
+      days_lost: Number(i.daysLost ?? 0),
+      return_to_work_date: i.returnToWorkDate || null,
+      closed_at: i.closedAt || null,
+      closed_by_name: i.closedByName || null,
+      reporter_name: i.reporterName || null,
+      reporter_signature_url: i.reporterSignatureUrl || null,
+      photo_urls: i.photoUrls ?? [],
+      notes: i.notes ?? '',
+    }))),
+    safeUpsert('drill_entries', (data.drillEntries ?? []).map((d) => ({
+      id: d.id,
+      drill_number: d.drillNumber,
+      created_at: d.createdAt,
+      drill_date: d.drillDate,
+      drill_type: d.drillType,
+      scenario: d.scenario,
+      alarm_raised_time: d.alarmRaisedTime || null,
+      evacuation_complete_time: d.evacuationCompleteTime || null,
+      total_minutes: Number(d.totalMinutes ?? 0),
+      headcount_expected: Number(d.headcountExpected ?? 0),
+      headcount_at_muster: Number(d.headcountAtMuster ?? 0),
+      missing_persons: d.missingPersons || null,
+      fire_marshal_name: d.fireMarshalName || null,
+      fire_marshal_signature_url: d.fireMarshalSignatureUrl || null,
+      observations: d.observations || null,
+      lessons_learned: d.lessonsLearned || null,
+      outcome: d.outcome,
+      photo_urls: d.photoUrls ?? [],
+      notes: d.notes ?? '',
+    }))),
+    safeUpsert('toolbox_talk_entries', (data.toolboxTalkEntries ?? []).map((t) => ({
+      id: t.id,
+      talk_number: t.talkNumber,
+      created_at: t.createdAt,
+      talk_date: t.talkDate,
+      topic: t.topic,
+      key_points: t.keyPoints || null,
+      discussion: t.discussion || null,
+      facilitator_name: t.facilitatorName || null,
+      facilitator_signature_url: t.facilitatorSignatureUrl || null,
+      duration_minutes: Number(t.durationMinutes ?? 0),
+      attendees: t.attendees ?? [],
+      photo_urls: t.photoUrls ?? [],
+      notes: t.notes ?? '',
+    }))),
+    safeUpsert('she_meeting_entries', (data.sheMeetingEntries ?? []).map((m) => ({
+      id: m.id,
+      meeting_number: m.meetingNumber,
+      created_at: m.createdAt,
+      meeting_date: m.meetingDate,
+      meeting_time: m.meetingTime || null,
+      chairperson_name: m.chairpersonName || null,
+      scribe_name: m.scribeName || null,
+      attendees: m.attendees ?? [],
+      agenda: m.agenda || null,
+      minutes: m.minutes || null,
+      action_items: m.actionItems ?? [],
+      next_meeting_date: m.nextMeetingDate || null,
+      photo_urls: m.photoUrls ?? [],
+      notes: m.notes ?? '',
+    }))),
+    safeUpsert('audit_programmes', (data.auditProgrammes ?? []).map((a) => ({
+      id: a.id,
+      code: a.code,
+      name: a.name,
+      auditing_body: a.auditingBody,
+      contact_email: a.contactEmail,
+      last_audited_date: a.lastAuditedDate || null,
+      cadence_months: Number(a.cadenceMonths ?? 12),
+      next_due_date_override: a.nextDueDateOverride || null,
+      notes: a.notes,
+      status: a.status,
+      certificate_url: a.certificateUrl,
+      certificate_expiry_date: a.certificateExpiryDate || null,
+      created_at: a.createdAt,
+      updated_at: a.updatedAt,
+    }))),
+
+    /* ─── Phase 106 — Visitor approval system ──────────────────────── */
+    safeUpsert('visitor_area_approval_requests', (data.visitorAreaApprovalRequests ?? []).map((r) => ({
+      id: r.id,
+      visitor_log_entry_id: r.visitorLogEntryId,
+      visitor_name: r.visitorName,
+      visitor_company: r.visitorCompany,
+      host_employee_id: r.hostEmployeeId || null,
+      host_name: r.hostName,
+      requested_areas: r.requestedAreas ?? [],
+      approved_areas: r.approvedAreas ?? [],
+      status: r.status,
+      current_approver_employee_id: r.currentApproverEmployeeId || null,
+      current_approver_name: r.currentApproverName,
+      created_at: r.createdAt,
+      decided_at: r.decidedAt || null,
+      expires_at: r.expiresAt || null,
+      history: r.history ?? [],
+      request_note: r.requestNote,
+      satisfied_by_booking_id: r.satisfiedByBookingId || null,
+    }))),
+    safeUpsert('visitor_bookings', (data.visitorBookings ?? []).map((b) => ({
+      id: b.id,
+      visitor_name: b.visitorName,
+      visitor_company: b.visitorCompany,
+      visitor_email: b.visitorEmail,
+      visitor_phone: b.visitorPhone,
+      host_employee_id: b.hostEmployeeId,
+      host_name: b.hostName,
+      visit_date: b.visitDate,
+      start_time: b.startTime,
+      end_time: b.endTime,
+      allowed_areas: b.allowedAreas ?? [],
+      purpose: b.purpose,
+      notes: b.notes,
+      status: b.status,
+      created_at: b.createdAt,
+      created_by_name: b.createdByName,
+      checked_in_at: b.checkedInAt || null,
+      visitor_log_entry_id: b.visitorLogEntryId || null,
+    }))),
+
     safeUpsert('material_order_requests', data.materialOrderRequests.map((request) => ({
       id: request.id,
       order_number: request.orderNumber,
@@ -3384,6 +3966,10 @@ export async function syncAppData(data: AppData): Promise<void> {
       sars_config: data.appSettings.sarsConfig,
       currency_config: data.appSettings.currencyConfig,
       connector_config: data.appSettings.connectorConfig,
+      standard_margin_percent: data.appSettings.standardMarginPercent ?? 35,
+      // Phase 106 — visitor approval policy + escalation timer.
+      visitor_area_policy: data.appSettings.visitorAreaPolicy ?? {},
+      visitor_approval_escalation_minutes: data.appSettings.visitorApprovalEscalationMinutes ?? 5,
       updated_at: data.appSettings.updatedAt || new Date().toISOString(),
       updated_by: data.appSettings.updatedBy || null,
     }]),
@@ -3920,6 +4506,13 @@ export async function syncAppData(data: AppData): Promise<void> {
       end_date: e.endDate || '',
       active: e.active,
       notes: e.notes || '',
+      // Phase 106.3 — visitor approval routing fields. Omitted columns
+      // default safely (Available + canApprove=true) when the SQL hasn't
+      // been applied yet — Supabase ignores unknown keys in upsert.
+      availability_status: e.availabilityStatus ?? 'Available',
+      backup_approver_employee_id: e.backupApproverEmployeeId ?? null,
+      delegate_approval_to_employee_id: e.delegateApprovalToEmployeeId ?? null,
+      can_approve_visitor_areas: e.canApproveVisitorAreas !== false,
     }))),
     safeUpsert('payroll_runs', data.payrollRuns.map((r) => ({
       id: r.id,

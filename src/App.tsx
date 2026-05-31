@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from './components/Layout/AppLayout';
 import { UndoToast, UndoToastState } from './components/UndoToast';
+import { toast } from './components/Toast';
+import { applyVisitorApprovalDecision, autoEscalateStaleRequests, createApprovalRequest, notificationFromApprovalRequest } from './utils/visitorApproval';
+import { dispatch as dispatchNotification, recipientFromEmployee } from './utils/notifications';
 import { HistoryDrawer, HistoryDrawerTarget } from './components/HistoryDrawer';
 import { CommandPalette } from './components/CommandPalette';
 import { ArtworkPage } from './pages/Artwork/ArtworkPage';
@@ -35,6 +38,7 @@ import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { computeQuote, emptyCalculatorState } from './utils/calculatorEngine';
 import { FoodSafeCertificatePrint } from './pages/Phase5/FoodSafeCertificatePrint';
 import { QuotePrint } from './pages/Quotes/QuotePrint';
+import { CalculatorQuotePrint } from './pages/Calculator/CalculatorQuotePrint';
 import { JobCardPrint } from './pages/JobCards/JobCardPrint';
 import { SopRegisterPage } from './pages/Phase5/SopRegisterPage';
 import { TraceabilityPage } from './pages/Traceability/TraceabilityPage';
@@ -117,7 +121,20 @@ import { MaintenancePage } from './pages/Maintenance/MaintenancePage';
 import { CurrenciesPage } from './pages/Sars/CurrenciesPage';
 import { OsConnectorPage } from './pages/OsConnector/OsConnectorPage';
 import { publishConnectorFeed } from './utils/supabaseData';
-import { Employee, PayrollRun, BankTransaction, JournalEntry, FixedAsset, MaintenanceWorkOrder, AppSettingsCurrencyConfig, AppSettingsConnectorConfig, AppData } from './types';
+import { Employee, PayrollRun, BankTransaction, JournalEntry, FixedAsset, MaintenanceWorkOrder, AppSettingsCurrencyConfig, AppSettingsConnectorConfig, AppData, TradedGoodsItem, TradedGoodsItemFormState, TradedGoodsReceipt, TradedGoodsReceiptFormState } from './types';
+import { TradedGoodsPage } from './pages/TradedGoods/TradedGoodsPage';
+import { createDefaultJobPipeline, summarisePipeline, describePipelinePosition } from './utils/jobPipeline';
+// Phase 95 — SMETA safety registers.
+import { IncidentRegisterPage } from './pages/IncidentRegister/IncidentRegisterPage';
+import { DrillRegisterPage } from './pages/DrillRegister/DrillRegisterPage';
+import { ToolboxTalksPage } from './pages/ToolboxTalks/ToolboxTalksPage';
+import { SheCommitteePage } from './pages/SheCommittee/SheCommitteePage';
+import { AuditProgrammesPage, createInitialAuditProgrammeForm } from './pages/AuditProgrammes/AuditProgrammesPage';
+import { VisitorApprovalsPage } from './pages/VisitorApprovals/VisitorApprovalsPage';
+import { AdminHubPage } from './pages/AdminHub/AdminHubPage';
+import { InboxPage } from './pages/Inbox/InboxPage';
+import { applyLeaveDecision, applyClaimDecision, loadInboxState, produceAllEvents, saveInboxState, type InboxEventState } from './utils/inbox';
+import type { IncidentEntry, IncidentFormState, DrillEntry, DrillFormState, ToolboxTalkEntry, ToolboxTalkFormState, SheMeetingEntry, SheMeetingFormState, AuditProgramme } from './types';
 import { SuppliersPage } from './pages/Suppliers/SuppliersPage';
 import { WasteLogPage } from './pages/WasteLog/WasteLogPage';
 import {
@@ -187,6 +204,9 @@ import {
   CleaningLogFilters,
   CleaningLogFormState,
   FactoryArea,
+  findVisitorBooking,
+  getAreaSafety,
+  AreaSafety,
   CustomerComplaint,
   CustomerComplaintFilters,
   CustomerComplaintFormState,
@@ -381,7 +401,9 @@ function recomputeBillFromPayments(b: SupplierBill): SupplierBill {
 }
 
 const VIEW_ORDER: View[] = [
+  'inbox',
   'dashboard',
+  'adminHub',
   'salesDesk',
   'leads',
   'calculator',
@@ -402,6 +424,7 @@ const VIEW_ORDER: View[] = [
   'clients',
   'pricing',
   'finishedStock',
+  'tradedGoods',
   'spares',
   'materials',
   'production',
@@ -422,7 +445,18 @@ const VIEW_ORDER: View[] = [
   'fixedAssets',
   'currencies',
   'maintenance',
-  'osConnector',
+  // Phase 95 — SMETA safety registers.
+  'incidentRegister',
+  'drillRegister',
+  'toolboxTalks',
+  'sheCommittee',
+  // Phase 103.2 — Audit programmes register.
+  'auditProgrammes',
+  // Phase 107.3 — Visitor approval requests page (audit + list).
+  'visitorApprovals',
+  // Phase 103.7 — OS Connector / API access lives inside Settings → API access
+  // tab now. The standalone route still works (so any deep link or bookmark
+  // resolves) but it's no longer in the sidebar.
 ];
 const createInitialJobForm = (): JobFormState => ({
   jobDate: getToday(),
@@ -502,6 +536,8 @@ const createInitialJobForm = (): JobFormState => ({
   assignedMachineId: '',
   changeoverChecklist: buildBlankChangeoverChecklist(),
   qcPlan: buildBlankQcPlan(),
+  // Phase 94 — seed the production pipeline with the default stages.
+  pipelineStages: createDefaultJobPipeline(),
 });
 
 const createInitialPaperRateForm = (): PaperRateFormState => ({
@@ -584,6 +620,7 @@ const createInitialLeadForm = (): LeadFormState => ({
   phone: '',
   email: '',
   source: 'WhatsApp',
+  sourceDetail: '',
   assignedTo: '',
   productId: '',
   requestedQuantity: '',
@@ -596,6 +633,11 @@ const createInitialLeadForm = (): LeadFormState => ({
   activities: [],
   lostReason: '',
   estimatedValue: '',
+  // Phase 99 — multi-item + onboarding form tracking.
+  items: [],
+  onboardingFormReceived: false,
+  onboardingFormReceivedDate: '',
+  onboardingFormNote: '',
 });
 
 const createInitialArtworkForm = (): ArtworkFormState => ({
@@ -657,6 +699,73 @@ const createInitialCalculatorQuoteForm = (): CalculatorQuoteFormState => ({
   printMethod: 'Auto',
   colors: '0',
   customMarginPercent: '',
+});
+
+/** Phase 95 — SMETA safety register initial form factories. */
+const createInitialIncidentForm = (): IncidentFormState => ({
+  incidentNumber: '', incidentDate: getToday(), incidentTime: '', incidentType: 'Near miss', severity: 'Low',
+  personEmployeeId: '', personName: '', personRole: '', isContractor: false,
+  bodyPartAffected: '', location: '', description: '', immediateAction: '',
+  treatmentGiven: '', treatedByName: '', firstAiderEmployeeId: '',
+  witnessName: '', rootCause: '', correctiveAction: '', linkedNcrId: '',
+  iodSubmitted: false, iodReference: '', daysLost: '0', returnToWorkDate: '',
+  closedAt: '', closedByName: '', reporterName: '', reporterSignatureUrl: '',
+  photoUrls: [], notes: '',
+});
+const createInitialDrillForm = (): DrillFormState => ({
+  drillNumber: '', drillDate: getToday(), drillType: 'Fire', scenario: '',
+  alarmRaisedTime: '', evacuationCompleteTime: '',
+  headcountExpected: '', headcountAtMuster: '', missingPersons: '',
+  fireMarshalName: '', fireMarshalSignatureUrl: '',
+  observations: '', lessonsLearned: '', outcome: 'Successful',
+  photoUrls: [], notes: '',
+});
+const createInitialToolboxTalkForm = (): ToolboxTalkFormState => ({
+  talkNumber: '', talkDate: getToday(), topic: '', keyPoints: '', discussion: '',
+  facilitatorName: '', facilitatorSignatureUrl: '', durationMinutes: '15',
+  attendees: [], photoUrls: [], notes: '',
+});
+const createInitialSheMeetingForm = (): SheMeetingFormState => ({
+  meetingNumber: '', meetingDate: getToday(), meetingTime: '',
+  chairpersonName: '', scribeName: '',
+  attendees: [], agenda: '', minutes: '', actionItems: [],
+  nextMeetingDate: '', photoUrls: [], notes: '',
+});
+
+/** Phase 93 — Traded Goods initial form states. */
+const createInitialTradedGoodsItemForm = (): TradedGoodsItemFormState => ({
+  itemCode: '',
+  name: '',
+  description: '',
+  defaultSupplierId: '',
+  sizeSpec: '',
+  defaultUnitCost: '',
+  defaultMarkupPercent: '10',
+  defaultSellPrice: '',
+  unitLabel: 'unit',
+  active: true,
+  notes: '',
+  photoUrls: [],
+});
+
+const createInitialTradedGoodsReceiptForm = (): TradedGoodsReceiptFormState => ({
+  receiptNumber: '',
+  receivedDate: getToday(),
+  supplierInvoiceReference: '',
+  itemId: '',
+  supplierId: '',
+  countryOfOrigin: '',
+  quantityReceived: '',
+  unitLabel: 'unit',
+  unitCost: '',
+  markupPercent: '10',
+  sellPrice: '',
+  status: 'In stock',
+  clientId: '',
+  jobId: '',
+  storageLocation: '',
+  notes: '',
+  photoUrls: [],
 });
 
 const createInitialFinishedStockForm = (): FinishedGoodsStockFormState => ({
@@ -1002,6 +1111,10 @@ const createInitialPpeForm = (): PpeIssueFormState => ({
   notes: '',
   items: [],
   employeeSignatureDataUrl: '',
+  // Phase 98 — defaults to 'Issue' so existing flows keep working.
+  transactionType: 'Issue',
+  requiredByDate: '',
+  returnCondition: 'Good',
 });
 
 const createInitialPestForm = (): PestControlFormState => ({
@@ -1076,6 +1189,8 @@ const createInitialFirstAidEntryForm = (): FirstAidEntryFormState => ({
   photoUrls: [],
   signatureDataUrl: '',
   notes: '',
+  // Phase 98 — dressings used from the first aid box.
+  dressingsUsed: [],
 });
 const createInitialFirstAiderForm = (): DesignatedFirstAiderFormState => ({
   employeeId: '',
@@ -1119,6 +1234,7 @@ const createInitialVisitorForm = (): VisitorLogFormState => ({
   timeOut: '',
   hygieneAcknowledged: false,
   ppeIssued: '',
+  ppeIssuedItems: [],
   enteredFoodContactArea: false,
   notes: '',
   phoneNumber: '',
@@ -1268,6 +1384,10 @@ const buildSettingsForm = (settings: AppSettings): AppSettingsFormState => ({
     defaultReviewCadenceDays: String(settings.stockHolding.defaultReviewCadenceDays),
     defaultAgreementTermsText: settings.stockHolding.defaultAgreementTermsText,
   },
+  standardMarginPercent:
+    settings.standardMarginPercent !== undefined && settings.standardMarginPercent !== null
+      ? String(settings.standardMarginPercent)
+      : '',
 });
 
 const createInitialProductionSpecForm = (): ProductionSpecFormState => ({
@@ -1549,6 +1669,47 @@ function App() {
   const [stockEditingId, setStockEditingId] = useState<string | null>(null);
   const [stockMessage, setStockMessage] = useState('');
   const [stockFilters, setStockFilters] = useState<FinishedGoodsStockFilters>({ search: '', client: '', status: '', product: '' });
+
+  // Phase 102 — Inbox state (read / snoozed / dismissed) per event id.
+  // localStorage-backed so it survives refresh without needing a Supabase
+  // table. Cheap, sufficient for now; can graduate later.
+  const [inboxState, setInboxStateMap] = useState<Record<string, InboxEventState>>(() => loadInboxState());
+  function setInboxEvent(id: string, next: InboxEventState | null) {
+    setInboxStateMap((current) => {
+      const copy = { ...current };
+      if (next === null) delete copy[id];
+      else copy[id] = next;
+      saveInboxState(copy);
+      return copy;
+    });
+  }
+
+  // Phase 95 — SMETA safety register state.
+  const [incidentForm, setIncidentForm] = useState(createInitialIncidentForm);
+  const [incidentEditingId, setIncidentEditingId] = useState<string | null>(null);
+  const [incidentMessage, setIncidentMessage] = useState('');
+  const [drillForm, setDrillForm] = useState(createInitialDrillForm);
+  const [drillEditingId, setDrillEditingId] = useState<string | null>(null);
+  const [drillMessage, setDrillMessage] = useState('');
+  const [toolboxTalkForm, setToolboxTalkForm] = useState(createInitialToolboxTalkForm);
+  const [toolboxTalkEditingId, setToolboxTalkEditingId] = useState<string | null>(null);
+  const [toolboxTalkMessage, setToolboxTalkMessage] = useState('');
+  const [sheMeetingForm, setSheMeetingForm] = useState(createInitialSheMeetingForm);
+  const [sheMeetingEditingId, setSheMeetingEditingId] = useState<string | null>(null);
+  const [sheMeetingMessage, setSheMeetingMessage] = useState('');
+
+  // Phase 103.2 — Audit Programmes state.
+  const [auditProgrammeForm, setAuditProgrammeForm] = useState(createInitialAuditProgrammeForm);
+  const [auditProgrammeEditingId, setAuditProgrammeEditingId] = useState<string | null>(null);
+  const [auditProgrammeMessage, setAuditProgrammeMessage] = useState('');
+
+  // Phase 93 — Traded Goods state.
+  const [tradedGoodsItemForm, setTradedGoodsItemForm] = useState(createInitialTradedGoodsItemForm);
+  const [tradedGoodsItemEditingId, setTradedGoodsItemEditingId] = useState<string | null>(null);
+  const [tradedGoodsItemMessage, setTradedGoodsItemMessage] = useState('');
+  const [tradedGoodsReceiptForm, setTradedGoodsReceiptForm] = useState(createInitialTradedGoodsReceiptForm);
+  const [tradedGoodsReceiptEditingId, setTradedGoodsReceiptEditingId] = useState<string | null>(null);
+  const [tradedGoodsReceiptMessage, setTradedGoodsReceiptMessage] = useState('');
 
   const [spareForm, setSpareForm] = useState(createInitialSpareForm);
   const [spareEditingId, setSpareEditingId] = useState<string | null>(null);
@@ -1861,6 +2022,11 @@ function App() {
   const [productionSpecFilters, setProductionSpecFilters] = useState<ProductionSpecFilters>({ search: '', client: '', status: '', product: '' });
   const [settingsForm, setSettingsForm] = useState<AppSettingsFormState>(() => buildSettingsForm(data.appSettings));
   const [settingsMessage, setSettingsMessage] = useState('');
+  // Phase 103.7.1 — requested initial tab when Settings is opened from
+  // the account menu (e.g. "API access"). Cleared once SettingsPage
+  // honours it so a subsequent click on Account & settings opens the
+  // default 'account' tab as expected.
+  const [settingsRequestedTab, setSettingsRequestedTab] = useState<'apiAccess' | undefined>(undefined);
   const settingsHydratedAt = useRef<string>('');
 
   // Reload the form state when Supabase responds with a fresh settings row, but
@@ -1893,7 +2059,12 @@ function App() {
       // covers the unified incident view (Foreign Object Found / Pest Evidence
       // are NCR subtypes). Foreign Object Register + Pest Control Register
       // remain as separate menu items for BRCGS compliance.
-      const filtered: View[] = perms.filter((p): p is View => p !== 'contaminationControl');
+      // Phase 103.7: osConnector ('API access') moved into Settings → API
+      // access tab. The view route still resolves so bookmarks work, but it's
+      // hidden from the sidebar so there's one place admins go for it.
+      const filtered: View[] = perms.filter((p): p is View =>
+        p !== 'contaminationControl' && p !== 'osConnector',
+      );
       return filtered
         .sort((left, right) => VIEW_ORDER.indexOf(left) - VIEW_ORDER.indexOf(right))
         .map((permission) => ({ key: permission, label: VIEW_LABELS[permission] }));
@@ -2148,6 +2319,17 @@ function App() {
           { label: 'Dispatched', value: dispatched },
         ]);
       }
+      case 'tradedGoods': {
+        const receipts = data.tradedGoodsReceipts ?? [];
+        const onHand = receipts.filter((r) => r.quantityAvailable > 0).length;
+        const soldOut = receipts.filter((r) => r.quantityAvailable === 0).length;
+        const pinned = receipts.filter((r) => r.clientId).length;
+        return renderChips([
+          { label: 'Batches on hand', value: onHand },
+          { label: 'Sold out', value: soldOut },
+          { label: 'Pinned to job', value: pinned, tone: pinned > 0 ? 'warn' : undefined },
+        ]);
+      }
       case 'spares': {
         const total = data.spareParts.length;
         const lowStock = data.spareParts.filter((s) => s.reorderLevel > 0 && s.quantityOnHand <= s.reorderLevel).length;
@@ -2278,6 +2460,61 @@ function App() {
       setDashboardMonth(monthOptions[0]);
     }
   }, [dashboardMonth, data.dispatchRecords, data.finishedGoodsStock, data.jobs, data.materialReceipts, data.paperLogs, data.productionLogs, data.wasteEntries, loading, monthOptions]);
+
+  /* ─── Phase 106.3 — Auto-escalate stale visitor approval requests ────
+   *
+   * Runs every 30 seconds while the dashboard is open. Walks active
+   * VisitorAreaApprovalRequests and bumps any that have been pending
+   * longer than the configured escalation window (default 5 min from
+   * appSettings.visitorApprovalEscalationMinutes) to the current
+   * approver's backup. If no backup is configured the request stays
+   * put — admin override is the safety valve.
+   *
+   * Pure-state design: autoEscalateStaleRequests is pure so the only
+   * side effect is the setData call; the function returns the same
+   * array reference when nothing changes, but we always replace the
+   * field since React's strict equality on arrays would skip the no-op
+   * render anyway. */
+  useEffect(() => {
+    const thresholdMinutes = data.appSettings?.visitorApprovalEscalationMinutes ?? 5;
+    function sweep() {
+      const next = autoEscalateStaleRequests(
+        data.visitorAreaApprovalRequests ?? [],
+        data.employees ?? [],
+        thresholdMinutes,
+      );
+      // Cheap dirty check — only setData when at least one request
+      // actually changed, so we don't fire spurious re-renders + Supabase
+      // syncs every 30s.
+      const before = data.visitorAreaApprovalRequests ?? [];
+      const changed = next.some((r, i) => r !== before[i]);
+      if (!changed) return;
+      setData((current) => ({ ...current, visitorAreaApprovalRequests: next }));
+
+      /* Phase 106.5 — when an escalation actually happens, notify the
+       * new approver via the dispatcher with 'critical' priority. That
+       * fans out to every registered channel (Inbox + Email + SMS +
+       * WhatsApp + Push + Company App as they come online) so an
+       * escalated request can't sit unseen. */
+      next.forEach((req, i) => {
+        if (req === before[i]) return; // unchanged
+        if (req.status !== 'escalated') return;
+        const approver = (data.employees ?? []).find((e) => e.id === req.currentApproverEmployeeId);
+        if (!approver) return;
+        const payload = notificationFromApprovalRequest(
+          req,
+          recipientFromEmployee(approver),
+          'critical',
+        );
+        void dispatchNotification(payload);
+      });
+    }
+    // Run once on mount/state change so a freshly-loaded page catches up
+    // immediately, then on a 30s cadence while open.
+    sweep();
+    const id = window.setInterval(sweep, 30_000);
+    return () => window.clearInterval(id);
+  }, [data.visitorAreaApprovalRequests, data.employees, data.appSettings?.visitorApprovalEscalationMinutes]);
 
   const filteredSuppliers = useMemo(() => data.suppliers.filter((supplier) => {
     const contactValues = supplier.contacts.flatMap((contact) => [contact.fullName, contact.role, contact.email, contact.phone]);
@@ -3047,15 +3284,316 @@ function App() {
       currencyConfig: data.appSettings.currencyConfig,
       // Connector config is edited from the Aman OS Connector page — preserve it.
       connectorConfig: data.appSettings.connectorConfig,
+      // Phase 92 — company-wide standard margin %.
+      standardMarginPercent: numeric(
+        settingsForm.standardMarginPercent,
+        data.appSettings.standardMarginPercent ?? 35,
+      ),
       updatedAt: new Date().toISOString(),
       updatedBy: profile?.fullName || profile?.email || data.appSettings.updatedBy,
     };
     setData((current) => ({ ...current, appSettings: next }));
     setSettingsMessage('Settings saved.');
+    toast.success('Settings saved');
   }
   function resetPaperRateEditor() { setPaperRateForm(createInitialPaperRateForm()); setPaperRateEditingId(null); setPaperRateMessage(''); }
   function resetCostProfileEditor() { setCostProfileForm(createInitialCostProfileForm()); setCostProfileEditingId(null); setCostProfileMessage(''); }
   function resetStockEditor() { setStockForm(createInitialFinishedStockForm()); setStockEditingId(null); setStockMessage(''); }
+  // Phase 93 — Traded Goods reset helpers.
+  function resetTradedGoodsItemEditor() {
+    setTradedGoodsItemForm(createInitialTradedGoodsItemForm());
+    setTradedGoodsItemEditingId(null);
+    setTradedGoodsItemMessage('');
+  }
+  function resetTradedGoodsReceiptEditor() {
+    setTradedGoodsReceiptForm(createInitialTradedGoodsReceiptForm());
+    setTradedGoodsReceiptEditingId(null);
+    setTradedGoodsReceiptMessage('');
+  }
+
+  /* ─── Phase 95: SMETA safety register handlers ─────────────────────── */
+  function resetIncidentEditor() { setIncidentForm(createInitialIncidentForm()); setIncidentEditingId(null); setIncidentMessage(''); }
+  function resetDrillEditor() { setDrillForm(createInitialDrillForm()); setDrillEditingId(null); setDrillMessage(''); }
+  function resetToolboxTalkEditor() { setToolboxTalkForm(createInitialToolboxTalkForm()); setToolboxTalkEditingId(null); setToolboxTalkMessage(''); }
+  function resetSheMeetingEditor() { setSheMeetingForm(createInitialSheMeetingForm()); setSheMeetingEditingId(null); setSheMeetingMessage(''); }
+
+  function handleSaveIncident() {
+    if (!incidentForm.personName.trim() || !incidentForm.description.trim()) {
+      setIncidentMessage('Person name and description are required.');
+      return;
+    }
+    const existing = data.incidentEntries ?? [];
+    const incidentNumber = incidentForm.incidentNumber.trim()
+      || generateCode('INC', existing.map((e) => e.incidentNumber), incidentForm.incidentDate);
+    const nowIso = new Date().toISOString();
+    const payload: IncidentEntry = {
+      id: incidentEditingId || incidentNumber,
+      incidentNumber,
+      createdAt: incidentEditingId ? existing.find((e) => e.id === incidentEditingId)?.createdAt ?? nowIso : nowIso,
+      incidentDate: incidentForm.incidentDate,
+      incidentTime: incidentForm.incidentTime,
+      incidentType: incidentForm.incidentType,
+      severity: incidentForm.severity,
+      personEmployeeId: incidentForm.personEmployeeId || undefined,
+      personName: incidentForm.personName.trim(),
+      personRole: incidentForm.personRole.trim(),
+      isContractor: incidentForm.isContractor,
+      bodyPartAffected: incidentForm.bodyPartAffected.trim(),
+      location: incidentForm.location.trim(),
+      description: incidentForm.description.trim(),
+      immediateAction: incidentForm.immediateAction.trim(),
+      treatmentGiven: incidentForm.treatmentGiven.trim(),
+      treatedByName: incidentForm.treatedByName.trim(),
+      firstAiderEmployeeId: incidentForm.firstAiderEmployeeId || undefined,
+      witnessName: incidentForm.witnessName.trim(),
+      rootCause: incidentForm.rootCause.trim(),
+      correctiveAction: incidentForm.correctiveAction.trim(),
+      linkedNcrId: incidentForm.linkedNcrId || undefined,
+      iodSubmitted: incidentForm.iodSubmitted,
+      iodReference: incidentForm.iodReference.trim(),
+      daysLost: Number(incidentForm.daysLost) || 0,
+      returnToWorkDate: incidentForm.returnToWorkDate,
+      closedAt: incidentForm.closedAt,
+      closedByName: incidentForm.closedByName.trim(),
+      reporterName: incidentForm.reporterName.trim(),
+      reporterSignatureUrl: incidentForm.reporterSignatureUrl,
+      photoUrls: incidentForm.photoUrls,
+      notes: incidentForm.notes.trim(),
+    };
+    setData((current) => {
+      const list = current.incidentEntries ?? [];
+      const next = incidentEditingId
+        ? list.map((e) => (e.id === incidentEditingId ? payload : e))
+        : [payload, ...list];
+      return { ...current, incidentEntries: next };
+    });
+    setIncidentMessage(incidentEditingId ? 'Incident updated.' : 'Incident logged.');
+    resetIncidentEditor();
+  }
+  function editIncident(entry: IncidentEntry) {
+    setIncidentEditingId(entry.id);
+    setIncidentMessage('');
+    setIncidentForm({
+      incidentNumber: entry.incidentNumber, incidentDate: entry.incidentDate, incidentTime: entry.incidentTime,
+      incidentType: entry.incidentType, severity: entry.severity,
+      personEmployeeId: entry.personEmployeeId ?? '', personName: entry.personName, personRole: entry.personRole, isContractor: entry.isContractor,
+      bodyPartAffected: entry.bodyPartAffected, location: entry.location,
+      description: entry.description, immediateAction: entry.immediateAction,
+      treatmentGiven: entry.treatmentGiven, treatedByName: entry.treatedByName, firstAiderEmployeeId: entry.firstAiderEmployeeId ?? '',
+      witnessName: entry.witnessName, rootCause: entry.rootCause, correctiveAction: entry.correctiveAction, linkedNcrId: entry.linkedNcrId ?? '',
+      iodSubmitted: entry.iodSubmitted, iodReference: entry.iodReference, daysLost: String(entry.daysLost), returnToWorkDate: entry.returnToWorkDate,
+      closedAt: entry.closedAt, closedByName: entry.closedByName,
+      reporterName: entry.reporterName, reporterSignatureUrl: entry.reporterSignatureUrl,
+      photoUrls: entry.photoUrls, notes: entry.notes,
+    });
+  }
+  function handleDeleteCurrentIncident() {
+    if (!incidentEditingId) return;
+    setData((current) => ({ ...current, incidentEntries: (current.incidentEntries ?? []).filter((e) => e.id !== incidentEditingId) }));
+    resetIncidentEditor();
+  }
+
+  function handleSaveDrill() {
+    if (!drillForm.scenario.trim()) { setDrillMessage('Scenario is required.'); return; }
+    const existing = data.drillEntries ?? [];
+    const drillNumber = drillForm.drillNumber.trim() || generateCode('DRL', existing.map((e) => e.drillNumber), drillForm.drillDate);
+    const nowIso = new Date().toISOString();
+    // Compute total minutes from alarm → muster.
+    let totalMinutes = 0;
+    if (drillForm.alarmRaisedTime && drillForm.evacuationCompleteTime) {
+      const [h1, m1] = drillForm.alarmRaisedTime.split(':').map(Number);
+      const [h2, m2] = drillForm.evacuationCompleteTime.split(':').map(Number);
+      totalMinutes = Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1));
+    }
+    const payload: DrillEntry = {
+      id: drillEditingId || drillNumber,
+      drillNumber,
+      createdAt: drillEditingId ? existing.find((e) => e.id === drillEditingId)?.createdAt ?? nowIso : nowIso,
+      drillDate: drillForm.drillDate, drillType: drillForm.drillType, scenario: drillForm.scenario.trim(),
+      alarmRaisedTime: drillForm.alarmRaisedTime, evacuationCompleteTime: drillForm.evacuationCompleteTime,
+      totalMinutes,
+      headcountExpected: Number(drillForm.headcountExpected) || 0,
+      headcountAtMuster: Number(drillForm.headcountAtMuster) || 0,
+      missingPersons: drillForm.missingPersons.trim(),
+      fireMarshalName: drillForm.fireMarshalName.trim(), fireMarshalSignatureUrl: drillForm.fireMarshalSignatureUrl,
+      observations: drillForm.observations.trim(), lessonsLearned: drillForm.lessonsLearned.trim(), outcome: drillForm.outcome,
+      photoUrls: drillForm.photoUrls, notes: drillForm.notes.trim(),
+    };
+    setData((current) => {
+      const list = current.drillEntries ?? [];
+      const next = drillEditingId ? list.map((e) => e.id === drillEditingId ? payload : e) : [payload, ...list];
+      return { ...current, drillEntries: next };
+    });
+    setDrillMessage(drillEditingId ? 'Drill updated.' : 'Drill logged.');
+    resetDrillEditor();
+  }
+  function editDrill(entry: DrillEntry) {
+    setDrillEditingId(entry.id); setDrillMessage('');
+    setDrillForm({
+      drillNumber: entry.drillNumber, drillDate: entry.drillDate, drillType: entry.drillType, scenario: entry.scenario,
+      alarmRaisedTime: entry.alarmRaisedTime, evacuationCompleteTime: entry.evacuationCompleteTime,
+      headcountExpected: String(entry.headcountExpected), headcountAtMuster: String(entry.headcountAtMuster),
+      missingPersons: entry.missingPersons,
+      fireMarshalName: entry.fireMarshalName, fireMarshalSignatureUrl: entry.fireMarshalSignatureUrl,
+      observations: entry.observations, lessonsLearned: entry.lessonsLearned, outcome: entry.outcome,
+      photoUrls: entry.photoUrls, notes: entry.notes,
+    });
+  }
+  function handleDeleteCurrentDrill() {
+    if (!drillEditingId) return;
+    setData((current) => ({ ...current, drillEntries: (current.drillEntries ?? []).filter((e) => e.id !== drillEditingId) }));
+    resetDrillEditor();
+  }
+
+  function handleSaveToolboxTalk() {
+    if (!toolboxTalkForm.topic.trim()) { setToolboxTalkMessage('Topic is required.'); return; }
+    const existing = data.toolboxTalkEntries ?? [];
+    const talkNumber = toolboxTalkForm.talkNumber.trim() || generateCode('TBT', existing.map((e) => e.talkNumber), toolboxTalkForm.talkDate);
+    const nowIso = new Date().toISOString();
+    const payload: ToolboxTalkEntry = {
+      id: toolboxTalkEditingId || talkNumber,
+      talkNumber,
+      createdAt: toolboxTalkEditingId ? existing.find((e) => e.id === toolboxTalkEditingId)?.createdAt ?? nowIso : nowIso,
+      talkDate: toolboxTalkForm.talkDate, topic: toolboxTalkForm.topic.trim(),
+      keyPoints: toolboxTalkForm.keyPoints.trim(), discussion: toolboxTalkForm.discussion.trim(),
+      facilitatorName: toolboxTalkForm.facilitatorName.trim(), facilitatorSignatureUrl: toolboxTalkForm.facilitatorSignatureUrl,
+      durationMinutes: Number(toolboxTalkForm.durationMinutes) || 0,
+      attendees: toolboxTalkForm.attendees,
+      photoUrls: toolboxTalkForm.photoUrls, notes: toolboxTalkForm.notes.trim(),
+    };
+    setData((current) => {
+      const list = current.toolboxTalkEntries ?? [];
+      const next = toolboxTalkEditingId ? list.map((e) => e.id === toolboxTalkEditingId ? payload : e) : [payload, ...list];
+      return { ...current, toolboxTalkEntries: next };
+    });
+    setToolboxTalkMessage(toolboxTalkEditingId ? 'Talk updated.' : 'Talk logged.');
+    resetToolboxTalkEditor();
+  }
+  function editToolboxTalk(entry: ToolboxTalkEntry) {
+    setToolboxTalkEditingId(entry.id); setToolboxTalkMessage('');
+    setToolboxTalkForm({
+      talkNumber: entry.talkNumber, talkDate: entry.talkDate, topic: entry.topic,
+      keyPoints: entry.keyPoints, discussion: entry.discussion,
+      facilitatorName: entry.facilitatorName, facilitatorSignatureUrl: entry.facilitatorSignatureUrl,
+      durationMinutes: String(entry.durationMinutes),
+      attendees: entry.attendees, photoUrls: entry.photoUrls, notes: entry.notes,
+    });
+  }
+  function handleDeleteCurrentToolboxTalk() {
+    if (!toolboxTalkEditingId) return;
+    setData((current) => ({ ...current, toolboxTalkEntries: (current.toolboxTalkEntries ?? []).filter((e) => e.id !== toolboxTalkEditingId) }));
+    resetToolboxTalkEditor();
+  }
+
+  function handleSaveSheMeeting() {
+    if (!sheMeetingForm.meetingDate) { setSheMeetingMessage('Meeting date is required.'); return; }
+    const existing = data.sheMeetingEntries ?? [];
+    const meetingNumber = sheMeetingForm.meetingNumber.trim() || generateCode('SHE', existing.map((e) => e.meetingNumber), sheMeetingForm.meetingDate);
+    const nowIso = new Date().toISOString();
+    const payload: SheMeetingEntry = {
+      id: sheMeetingEditingId || meetingNumber,
+      meetingNumber,
+      createdAt: sheMeetingEditingId ? existing.find((e) => e.id === sheMeetingEditingId)?.createdAt ?? nowIso : nowIso,
+      meetingDate: sheMeetingForm.meetingDate, meetingTime: sheMeetingForm.meetingTime,
+      chairpersonName: sheMeetingForm.chairpersonName.trim(), scribeName: sheMeetingForm.scribeName.trim(),
+      attendees: sheMeetingForm.attendees, agenda: sheMeetingForm.agenda.trim(), minutes: sheMeetingForm.minutes.trim(),
+      actionItems: sheMeetingForm.actionItems, nextMeetingDate: sheMeetingForm.nextMeetingDate,
+      photoUrls: sheMeetingForm.photoUrls, notes: sheMeetingForm.notes.trim(),
+    };
+    setData((current) => {
+      const list = current.sheMeetingEntries ?? [];
+      const next = sheMeetingEditingId ? list.map((e) => e.id === sheMeetingEditingId ? payload : e) : [payload, ...list];
+      return { ...current, sheMeetingEntries: next };
+    });
+    setSheMeetingMessage(sheMeetingEditingId ? 'Meeting updated.' : 'Meeting logged.');
+    resetSheMeetingEditor();
+  }
+  function editSheMeeting(entry: SheMeetingEntry) {
+    setSheMeetingEditingId(entry.id); setSheMeetingMessage('');
+    setSheMeetingForm({
+      meetingNumber: entry.meetingNumber, meetingDate: entry.meetingDate, meetingTime: entry.meetingTime,
+      chairpersonName: entry.chairpersonName, scribeName: entry.scribeName,
+      attendees: entry.attendees, agenda: entry.agenda, minutes: entry.minutes,
+      actionItems: entry.actionItems, nextMeetingDate: entry.nextMeetingDate,
+      photoUrls: entry.photoUrls, notes: entry.notes,
+    });
+  }
+  function handleDeleteCurrentSheMeeting() {
+    if (!sheMeetingEditingId) return;
+    setData((current) => ({ ...current, sheMeetingEntries: (current.sheMeetingEntries ?? []).filter((e) => e.id !== sheMeetingEditingId) }));
+    resetSheMeetingEditor();
+  }
+
+  /* ─── Phase 103.2: Audit Programmes handlers ───────────────────────── */
+  function resetAuditProgrammeEditor() {
+    setAuditProgrammeForm(createInitialAuditProgrammeForm());
+    setAuditProgrammeEditingId(null);
+    setAuditProgrammeMessage('');
+  }
+
+  function handleSaveAuditProgramme() {
+    if (!auditProgrammeForm.name.trim()) {
+      setAuditProgrammeMessage('Programme name is required.');
+      return;
+    }
+    const existing = data.auditProgrammes ?? [];
+    const nowIso = new Date().toISOString();
+    const id = auditProgrammeEditingId || `AP-${Date.now()}`;
+    const payload: AuditProgramme = {
+      id,
+      code: auditProgrammeForm.code.trim(),
+      name: auditProgrammeForm.name.trim(),
+      auditingBody: auditProgrammeForm.auditingBody.trim(),
+      contactEmail: auditProgrammeForm.contactEmail.trim(),
+      lastAuditedDate: auditProgrammeForm.lastAuditedDate,
+      cadenceMonths: Number(auditProgrammeForm.cadenceMonths) || 12,
+      nextDueDateOverride: auditProgrammeForm.nextDueDateOverride || undefined,
+      notes: auditProgrammeForm.notes.trim(),
+      status: auditProgrammeForm.status,
+      certificateUrl: auditProgrammeForm.certificateUrl.trim(),
+      certificateExpiryDate: auditProgrammeForm.certificateExpiryDate,
+      createdAt: auditProgrammeEditingId
+        ? existing.find((p) => p.id === auditProgrammeEditingId)?.createdAt ?? nowIso
+        : nowIso,
+      updatedAt: nowIso,
+    };
+    setData((current) => {
+      const list = current.auditProgrammes ?? [];
+      const next = auditProgrammeEditingId
+        ? list.map((p) => (p.id === auditProgrammeEditingId ? payload : p))
+        : [payload, ...list];
+      return { ...current, auditProgrammes: next };
+    });
+    setAuditProgrammeMessage(auditProgrammeEditingId ? 'Programme updated.' : 'Programme added.');
+    resetAuditProgrammeEditor();
+  }
+
+  function editAuditProgramme(p: AuditProgramme) {
+    setAuditProgrammeEditingId(p.id);
+    setAuditProgrammeMessage('');
+    setAuditProgrammeForm({
+      code: p.code,
+      name: p.name,
+      auditingBody: p.auditingBody,
+      contactEmail: p.contactEmail,
+      lastAuditedDate: p.lastAuditedDate,
+      cadenceMonths: String(p.cadenceMonths || 12),
+      nextDueDateOverride: p.nextDueDateOverride ?? '',
+      notes: p.notes,
+      status: p.status,
+      certificateUrl: p.certificateUrl,
+      certificateExpiryDate: p.certificateExpiryDate,
+    });
+  }
+
+  function handleDeleteCurrentAuditProgramme() {
+    if (!auditProgrammeEditingId) return;
+    setData((current) => ({
+      ...current,
+      auditProgrammes: (current.auditProgrammes ?? []).filter((p) => p.id !== auditProgrammeEditingId),
+    }));
+    resetAuditProgrammeEditor();
+  }
   function resetSpareEditor() { setSpareForm(createInitialSpareForm()); setSpareEditingId(null); setSpareMessage(''); }
   function resetTierEditor() { setTierForm(createInitialPricingTierForm()); setTierEditingId(null); setTierMessage(''); }
   function resetClientEditor() { setClientForm(createInitialClientForm()); setClientEditingId(null); setClientMessage(''); }
@@ -3352,10 +3890,14 @@ function App() {
       pricingTiers: data.pricingTiers,
       paperRates: data.paperRates,
       costProfiles: data.costProfiles,
+      standardMarginPercent: data.appSettings.standardMarginPercent,
     });
 
     const baseNumber = generateCode('QTE', data.quoteEstimates.map((q) => q.quoteNumber), state.shared.quoteDate);
     const created: import('./types').QuoteEstimate[] = [];
+    // Phase 118.1 — single batch id shared by every row from this save.
+    // The Quotes page uses it to re-stitch the multi-line quote later.
+    const batchId = `cqb-${Date.now().toString(36)}`;
 
     state.lines.forEach((line, idx) => {
       const result = computation.lines[idx];
@@ -3406,6 +3948,14 @@ function App() {
         totalQuote: result.lineTotal,
         status: 'Quoted',
         notes: [state.shared.notes, line.description].filter(Boolean).join('\n'),
+        // Phase 118.1 — frozen snapshot of THIS line + the shared header.
+        // Storing per-row (not just on row A) means deleting / cancelling
+        // a single row never breaks re-stitching the survivors.
+        calculatorBatchId: batchId,
+        calculatorSnapshot: {
+          shared: state.shared,
+          lines: [line],
+        },
       });
     });
 
@@ -3433,6 +3983,113 @@ function App() {
   }
 
   /**
+   * Phase 118.2 — Append the current calculator lines to an existing
+   * calculator-sourced quote batch.
+   *
+   * Use case: client called back asking "can you also quote 2000 of the
+   * carrier bag?" — instead of starting a new quote, the salesperson
+   * loads the existing quote's batch and adds the new line. The Quotes
+   * list grows one more row (e.g. QTE-260530-D), the batch's print
+   * stitcher picks it up automatically.
+   *
+   * Constraints:
+   *   - target batch must exist
+   *   - new rows MUST use the target batch's shared header (we keep
+   *     calculator's current shared but route it through the batch's id
+   *     for grouping). Anything contradictory (different client, etc.)
+   *     should be caught by the caller — the picker only shows quotes
+   *     for the calculator's currently-selected client.
+   *   - quote numbers continue from the last sibling alphabetically.
+   */
+  async function handleAppendCalculatorToQuote(
+    state: import('./types').CalculatorState,
+    targetBatchId: string,
+  ): Promise<{ quoteNumbers: string[] }> {
+    const siblings = data.quoteEstimates
+      .filter((q) => q.calculatorBatchId === targetBatchId)
+      .sort((a, b) => a.quoteNumber.localeCompare(b.quoteNumber));
+    if (siblings.length === 0) {
+      throw new Error('Target quote batch not found');
+    }
+    const baseQuoteNumber = siblings[0].quoteNumber.replace(/-[A-Z]$/, '');
+    const lastLetter = siblings
+      .map((q) => q.quoteNumber.match(/-([A-Z])$/)?.[1])
+      .filter((c): c is string => Boolean(c))
+      .sort()
+      .pop();
+    // First-ever letter for a single-line batch about to grow is 'B'.
+    let nextLetterCode = lastLetter ? lastLetter.charCodeAt(0) + 1 : 'B'.charCodeAt(0);
+
+    const computation = computeQuote(state, {
+      clients: data.clients,
+      pricingTiers: data.pricingTiers,
+      paperRates: data.paperRates,
+      costProfiles: data.costProfiles,
+      standardMarginPercent: data.appSettings.standardMarginPercent,
+    });
+
+    const created: import('./types').QuoteEstimate[] = [];
+    state.lines.forEach((line, idx) => {
+      const result = computation.lines[idx];
+      const product = line.productId ? productsById.get(line.productId) : undefined;
+      const sharedPaperRate = state.shared.paperRateId ? paperRatesById.get(state.shared.paperRateId) : undefined;
+      const sharedProfile = state.shared.costProfileId ? costProfilesById.get(state.shared.costProfileId) : undefined;
+      const paperRate = line.paperRateIdOverride ? paperRatesById.get(line.paperRateIdOverride) : sharedPaperRate;
+      const profile = line.costProfileIdOverride ? costProfilesById.get(line.costProfileIdOverride) : sharedProfile;
+      const pricingTier = state.shared.pricingTierId ? tiersById.get(state.shared.pricingTierId) : undefined;
+      const sizeSpec = [line.bagWidthMm, line.bagHeightMm, line.gussetMm].filter(Boolean).join('x');
+      const letter = String.fromCharCode(nextLetterCode++);
+      const quoteNumber = `${baseQuoteNumber}-${letter}`;
+      // Promote the batch's first sibling to use -A if it was numberless.
+      // (Skipped here — keep originals intact; the rest just continue.)
+      created.push({
+        id: quoteNumber,
+        quoteNumber,
+        quickbooksEstimateNumber: '',
+        createdAt: new Date().toISOString(),
+        quoteDate: siblings[0].quoteDate, // inherit batch date for consistency
+        linkedLeadId: siblings[0].linkedLeadId,
+        linkedLeadNumber: siblings[0].linkedLeadNumber,
+        salesOwnerName: state.shared.salesOwnerName || siblings[0].salesOwnerName,
+        clientId: siblings[0].clientId,
+        clientName: siblings[0].clientName,
+        productId: product?.id ?? '',
+        productName: line.productName || product?.name || '',
+        pricingTierId: pricingTier?.id ?? siblings[0].pricingTierId ?? '',
+        pricingTierName: pricingTier?.name ?? siblings[0].pricingTierName ?? '',
+        paperRateId: paperRate?.id ?? '',
+        paperRateName: paperRate?.name ?? '',
+        costProfileId: profile?.id ?? '',
+        costProfileName: profile?.name ?? '',
+        quantity: Number(line.quantity || 0),
+        sizeSpec,
+        handleType: line.handleType,
+        printMethod: result.resolvedPrintMethod,
+        colors: Number(line.colors || 0),
+        unitCost: result.unitCost,
+        quotedUnitPrice: result.quotedUnitPrice,
+        totalQuote: result.lineTotal,
+        status: 'Quoted',
+        notes: line.description,
+        calculatorBatchId: targetBatchId,
+        calculatorSnapshot: {
+          // Re-use the batch's shared header (date, client, sales owner)
+          // so the stitcher always rebuilds the same shared header.
+          shared: siblings[0].calculatorSnapshot?.shared ?? state.shared,
+          lines: [line],
+        },
+      });
+    });
+
+    setData((current) => ({
+      ...current,
+      quoteEstimates: [...created, ...current.quoteEstimates],
+    }));
+    setCalculatorState(emptyCalculatorState(getToday()));
+    return { quoteNumbers: created.map((q) => q.quoteNumber) };
+  }
+
+  /**
    * Phase 86 — same prefill but routed to the Invoice form instead of the
    * Quote register. Use this for direct-bill clients who skip the formal
    * quote step. Accounts confirms + posts on the Invoice page.
@@ -3445,6 +4102,7 @@ function App() {
       pricingTiers: data.pricingTiers,
       paperRates: data.paperRates,
       costProfiles: data.costProfiles,
+      standardMarginPercent: data.appSettings.standardMarginPercent,
     });
     const billingAddress = [
       client.billingAddressLine1,
@@ -3503,6 +4161,11 @@ function App() {
     const client = leadForm.clientId ? clientsById.get(leadForm.clientId) : undefined;
     const product = leadForm.productId ? productsById.get(leadForm.productId) : undefined;
     const quote = leadForm.linkedQuoteId ? data.quoteEstimates.find((item) => item.id === leadForm.linkedQuoteId) : undefined;
+    // Phase 99 — if the user added multi-item rows, sync the legacy single-
+    // product fields off the first row so existing pipeline reports keep
+    // showing something sensible.
+    const firstItem = leadForm.items.length > 0 ? leadForm.items[0] : null;
+    const totalItemValue = leadForm.items.reduce((s, i) => s + (Number(i.estimatedValue) || 0), 0);
     const payload = {
       enquiryDate: leadForm.enquiryDate,
       clientId: client?.id ?? '',
@@ -3512,10 +4175,11 @@ function App() {
       phone: leadForm.phone,
       email: leadForm.email,
       source: leadForm.source,
+      sourceDetail: leadForm.sourceDetail.trim() || undefined,
       assignedTo: leadForm.assignedTo,
-      productId: product?.id ?? '',
-      productName: product?.name ?? '',
-      requestedQuantity: Number(leadForm.requestedQuantity || 0),
+      productId: firstItem ? firstItem.productId : (product?.id ?? ''),
+      productName: firstItem ? firstItem.productName : (product?.name ?? ''),
+      requestedQuantity: firstItem ? firstItem.requestedQuantity : Number(leadForm.requestedQuantity || 0),
       dueDate: leadForm.dueDate,
       status: leadForm.status,
       quickbooksEstimateNumber: leadForm.quickbooksEstimateNumber.trim(),
@@ -3525,7 +4189,13 @@ function App() {
       nextFollowUpDate: leadForm.nextFollowUpDate,
       activities: leadForm.activities ?? [],
       lostReason: leadForm.lostReason,
-      estimatedValue: Number(leadForm.estimatedValue || 0),
+      // If user typed multi-item rows, prefer the sum; otherwise the manual estimate.
+      estimatedValue: totalItemValue > 0 ? totalItemValue : Number(leadForm.estimatedValue || 0),
+      // Phase 99 — new fields.
+      items: leadForm.items.length > 0 ? leadForm.items : undefined,
+      onboardingFormReceived: leadForm.onboardingFormReceived,
+      onboardingFormReceivedDate: leadForm.onboardingFormReceivedDate || undefined,
+      onboardingFormNote: leadForm.onboardingFormNote.trim() || undefined,
     };
     if (leadEditingId) {
       setData((current) => ({ ...current, leads: current.leads.map((lead) => lead.id === leadEditingId ? { ...lead, ...payload } : lead) }));
@@ -4438,6 +5108,8 @@ function App() {
       stereoToolCode: jobForm.stereoToolId
         ? (data.tooling ?? []).find((t) => t.id === jobForm.stereoToolId)?.code
         : base.stereoToolCode,
+      // Phase 94 — persist the pipeline stage tracker.
+      pipelineStages: jobForm.pipelineStages ?? base.pipelineStages,
     });
 
     setJobMessage('');
@@ -4623,6 +5295,7 @@ function App() {
             assignedMachineId: jobForm.assignedMachineId,
             changeoverChecklist: jobForm.changeoverChecklist,
             qcPlan: jobForm.qcPlan,
+            pipelineStages: jobForm.pipelineStages ?? job.pipelineStages,
           } : job),
         };
       });
@@ -4737,6 +5410,9 @@ function App() {
         assignedMachineId: jobForm.assignedMachineId,
         changeoverChecklist: jobForm.changeoverChecklist,
         qcPlan: jobForm.qcPlan,
+        // Phase 94 — new job inherits the form's pipeline stages, falling
+        // back to the default when blank.
+        pipelineStages: jobForm.pipelineStages ?? createDefaultJobPipeline(),
       };
 
       const nextMaterialOrders = [...data.materialOrderRequests];
@@ -4989,6 +5665,189 @@ function App() {
       return;
     }
     handleDeleteFinishedStock(item);
+  }
+
+  /* ─── Phase 93: Traded Goods handlers ───────────────────────────────────
+   * Two related concepts:
+   *  - Item  = catalogue entry (master). Saves to tradedGoodsItems[].
+   *  - Receipt = a purchase batch. Saves to tradedGoodsReceipts[].
+   * Auto-codes follow the same `PREFIX-YYYYMM-NNN` pattern as the rest of
+   * the app so they group naturally in lists and reports. */
+
+  function handleSaveTradedGoodsItem() {
+    const form = tradedGoodsItemForm;
+    if (!form.name.trim()) {
+      setTradedGoodsItemMessage('Name is required.');
+      return;
+    }
+    const supplier = form.defaultSupplierId ? suppliersById.get(form.defaultSupplierId) : undefined;
+    const existing = data.tradedGoodsItems ?? [];
+    const itemCode = form.itemCode.trim()
+      || generateCode('TGI', existing.map((i) => i.itemCode), getToday());
+    const nowIso = new Date().toISOString();
+    const sellPrice = Number(form.defaultSellPrice) > 0 ? Number(form.defaultSellPrice) : 0;
+    const payload: TradedGoodsItem = {
+      id: tradedGoodsItemEditingId || itemCode,
+      itemCode,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      defaultSupplierId: supplier?.id ?? '',
+      defaultSupplierName: supplier?.name ?? '',
+      sizeSpec: form.sizeSpec.trim() || undefined,
+      defaultUnitCost: Number(form.defaultUnitCost) || 0,
+      defaultMarkupPercent: Number(form.defaultMarkupPercent) || 0,
+      defaultSellPrice: sellPrice > 0 ? sellPrice : undefined,
+      unitLabel: form.unitLabel.trim() || 'unit',
+      active: form.active,
+      notes: form.notes.trim(),
+      photoUrls: form.photoUrls,
+      createdAt: tradedGoodsItemEditingId
+        ? existing.find((i) => i.id === tradedGoodsItemEditingId)?.createdAt ?? nowIso
+        : nowIso,
+      updatedAt: nowIso,
+    };
+    setData((current) => {
+      const list = current.tradedGoodsItems ?? [];
+      const next = tradedGoodsItemEditingId
+        ? list.map((i) => (i.id === tradedGoodsItemEditingId ? payload : i))
+        : [payload, ...list];
+      return { ...current, tradedGoodsItems: next };
+    });
+    setTradedGoodsItemMessage(tradedGoodsItemEditingId ? 'Item updated.' : 'Item added.');
+    resetTradedGoodsItemEditor();
+  }
+
+  function editTradedGoodsItem(item: TradedGoodsItem) {
+    setTradedGoodsItemEditingId(item.id);
+    setTradedGoodsItemMessage('');
+    setTradedGoodsItemForm({
+      itemCode: item.itemCode,
+      name: item.name,
+      description: item.description,
+      defaultSupplierId: item.defaultSupplierId,
+      sizeSpec: item.sizeSpec ?? '',
+      defaultUnitCost: String(item.defaultUnitCost || ''),
+      defaultMarkupPercent: String(item.defaultMarkupPercent || ''),
+      defaultSellPrice: item.defaultSellPrice ? String(item.defaultSellPrice) : '',
+      unitLabel: item.unitLabel,
+      active: item.active !== false,
+      notes: item.notes,
+      photoUrls: item.photoUrls ?? [],
+    });
+  }
+
+  function handleDeleteCurrentTradedGoodsItem() {
+    if (!tradedGoodsItemEditingId) return;
+    setData((current) => ({
+      ...current,
+      tradedGoodsItems: (current.tradedGoodsItems ?? []).filter((i) => i.id !== tradedGoodsItemEditingId),
+    }));
+    resetTradedGoodsItemEditor();
+  }
+
+  function handleSaveTradedGoodsReceipt() {
+    const form = tradedGoodsReceiptForm;
+    if (!form.itemId || !form.supplierId || !form.quantityReceived) {
+      setTradedGoodsReceiptMessage('Item, supplier, and quantity are required.');
+      return;
+    }
+    const items = data.tradedGoodsItems ?? [];
+    const item = items.find((i) => i.id === form.itemId);
+    if (!item) {
+      setTradedGoodsReceiptMessage('Selected item no longer exists.');
+      return;
+    }
+    const supplier = suppliersById.get(form.supplierId);
+    const client = form.clientId ? clientsById.get(form.clientId) : undefined;
+    const job = form.jobId ? data.jobs.find((j) => j.id === form.jobId) : undefined;
+    const existing = data.tradedGoodsReceipts ?? [];
+    const receiptNumber = form.receiptNumber.trim()
+      || generateCode('TRG', existing.map((r) => r.receiptNumber), form.receivedDate);
+    const nowIso = new Date().toISOString();
+
+    // Editing: preserve any qty already consumed from this batch by carrying
+    // over (quantityReceived - quantityAvailable) as the "sold" delta.
+    let quantityAvailable = Number(form.quantityReceived) || 0;
+    let createdAt = nowIso;
+    if (tradedGoodsReceiptEditingId) {
+      const prior = existing.find((r) => r.id === tradedGoodsReceiptEditingId);
+      if (prior) {
+        const sold = Math.max(0, prior.quantityReceived - prior.quantityAvailable);
+        quantityAvailable = Math.max(0, (Number(form.quantityReceived) || 0) - sold);
+        createdAt = prior.createdAt;
+      }
+    }
+
+    const payload: TradedGoodsReceipt = {
+      id: tradedGoodsReceiptEditingId || receiptNumber,
+      receiptNumber,
+      receivedDate: form.receivedDate,
+      supplierInvoiceReference: form.supplierInvoiceReference.trim(),
+      itemId: item.id,
+      itemName: item.name,
+      itemCode: item.itemCode,
+      supplierId: supplier?.id ?? '',
+      supplierName: supplier?.name ?? '',
+      countryOfOrigin: form.countryOfOrigin.trim() || undefined,
+      quantityReceived: Number(form.quantityReceived) || 0,
+      quantityAvailable,
+      unitLabel: form.unitLabel.trim() || item.unitLabel || 'unit',
+      unitCost: Number(form.unitCost) || 0,
+      markupPercent: Number(form.markupPercent) || 0,
+      sellPrice: Number(form.sellPrice) || 0,
+      status: form.status,
+      clientId: client?.id,
+      clientName: client?.name,
+      jobId: job?.id,
+      jobNumber: job?.jobNumber,
+      storageLocation: form.storageLocation.trim() || undefined,
+      notes: form.notes.trim(),
+      photoUrls: form.photoUrls,
+      createdAt,
+      updatedAt: nowIso,
+    };
+    setData((current) => {
+      const list = current.tradedGoodsReceipts ?? [];
+      const next = tradedGoodsReceiptEditingId
+        ? list.map((r) => (r.id === tradedGoodsReceiptEditingId ? payload : r))
+        : [payload, ...list];
+      return { ...current, tradedGoodsReceipts: next };
+    });
+    setTradedGoodsReceiptMessage(tradedGoodsReceiptEditingId ? 'Receipt updated.' : 'Receipt logged.');
+    resetTradedGoodsReceiptEditor();
+  }
+
+  function editTradedGoodsReceipt(receipt: TradedGoodsReceipt) {
+    setTradedGoodsReceiptEditingId(receipt.id);
+    setTradedGoodsReceiptMessage('');
+    setTradedGoodsReceiptForm({
+      receiptNumber: receipt.receiptNumber,
+      receivedDate: receipt.receivedDate,
+      supplierInvoiceReference: receipt.supplierInvoiceReference,
+      itemId: receipt.itemId,
+      supplierId: receipt.supplierId,
+      countryOfOrigin: receipt.countryOfOrigin ?? '',
+      quantityReceived: String(receipt.quantityReceived),
+      unitLabel: receipt.unitLabel,
+      unitCost: String(receipt.unitCost),
+      markupPercent: String(receipt.markupPercent || ''),
+      sellPrice: String(receipt.sellPrice),
+      status: receipt.status,
+      clientId: receipt.clientId ?? '',
+      jobId: receipt.jobId ?? '',
+      storageLocation: receipt.storageLocation ?? '',
+      notes: receipt.notes,
+      photoUrls: receipt.photoUrls ?? [],
+    });
+  }
+
+  function handleDeleteCurrentTradedGoodsReceipt() {
+    if (!tradedGoodsReceiptEditingId) return;
+    setData((current) => ({
+      ...current,
+      tradedGoodsReceipts: (current.tradedGoodsReceipts ?? []).filter((r) => r.id !== tradedGoodsReceiptEditingId),
+    }));
+    resetTradedGoodsReceiptEditor();
   }
 
   function handleSaveSparePart() {
@@ -6644,6 +7503,9 @@ function App() {
       photoUrls: job.photoUrls ?? [],
       dieToolId: job.dieToolId || '',
       stereoToolId: job.stereoToolId || '',
+      // Phase 94 — load pipeline stages; ensurePipelineShape inside the
+      // tracker tops up any missing default items so old jobs don't break.
+      pipelineStages: job.pipelineStages,
     });
     setView('jobs');
   }
@@ -6789,6 +7651,9 @@ function App() {
       // Fresh checklist + fresh QC plan — these are per-run, not per-product.
       changeoverChecklist: buildBlankChangeoverChecklist(),
       qcPlan: buildBlankQcPlan(),
+      // Phase 94 — duplicate gets a fresh blank pipeline; the old job's
+      // progress isn't relevant for the new run.
+      pipelineStages: createDefaultJobPipeline(),
     });
     setJobMessage('Duplicate loaded. Saving will create a new job number.');
     setView('jobs');
@@ -7503,6 +8368,10 @@ function App() {
       returnDate: r.returnDate, replacementDueDate: r.replacementDueDate, notes: r.notes,
       items,
       employeeSignatureDataUrl: r.employeeSignatureDataUrl ?? '',
+      // Phase 98 — lifecycle fields. Legacy rows default to 'Issue'.
+      transactionType: r.transactionType ?? 'Issue',
+      requiredByDate: r.requiredByDate ?? '',
+      returnCondition: r.returnCondition ?? 'Good',
     });
     setView('ppeControl');
   }
@@ -7533,6 +8402,10 @@ function App() {
         notes: ppeForm.notes,
         items,
         employeeSignatureDataUrl: ppeForm.employeeSignatureDataUrl || undefined,
+        // Phase 98 — PPE lifecycle.
+        transactionType: ppeForm.transactionType,
+        requiredByDate: ppeForm.requiredByDate || undefined,
+        returnCondition: ppeForm.transactionType === 'Return' ? ppeForm.returnCondition : undefined,
       };
       if (ppeEditingId) {
         return { ...current, ppeIssueRecords: current.ppeIssueRecords.map((r) => r.id === ppeEditingId ? { ...r, ...payload } : r) };
@@ -8839,6 +9712,8 @@ function App() {
       followUpRequired: e.followUpRequired, followUpNotes: e.followUpNotes, resolvedDate: e.resolvedDate,
       witnessName: e.witnessName, photoUrls: e.photoUrls ?? [],
       signatureDataUrl: e.signatureDataUrl ?? '', notes: e.notes,
+      // Phase 98 — dressings used. Legacy rows: empty array.
+      dressingsUsed: e.dressingsUsed ?? [],
     });
   }
   function editFirstAider(a: DesignatedFirstAider) {
@@ -8935,7 +9810,11 @@ function App() {
       visitDate: r.visitDate, visitorName: r.visitorName, visitorType: r.visitorType,
       company: r.company, hostName: r.hostName, purpose: r.purpose,
       areasVisited: [...r.areasVisited], timeIn: r.timeIn, timeOut: r.timeOut,
-      hygieneAcknowledged: r.hygieneAcknowledged, ppeIssued: r.ppeIssued,
+      hygieneAcknowledged: r.hygieneAcknowledged,
+      ppeIssued: r.ppeIssued,
+      // Phase 105 — hydrate the multi-select from the typed list if present,
+      // else fall back to splitting the comma-joined legacy string.
+      ppeIssuedItems: r.ppeIssuedItems ?? (r.ppeIssued ? r.ppeIssued.split(/\s*,\s*/).filter(Boolean) as any : []),
       enteredFoodContactArea: r.enteredFoodContactArea, notes: r.notes,
       phoneNumber: r.phoneNumber ?? '',
       vehicleRegistration: r.vehicleRegistration ?? '',
@@ -8960,7 +9839,12 @@ function App() {
         timeIn: visitorForm.timeIn,
         timeOut: visitorForm.timeOut,
         hygieneAcknowledged: visitorForm.hygieneAcknowledged,
-        ppeIssued: visitorForm.ppeIssued.trim(),
+        // Phase 105 — persist both: typed multi-select array and the legacy
+        // comma-joined string so reports/exports don't break.
+        ppeIssuedItems: visitorForm.ppeIssuedItems,
+        ppeIssued: (visitorForm.ppeIssuedItems && visitorForm.ppeIssuedItems.length > 0)
+          ? visitorForm.ppeIssuedItems.join(', ')
+          : visitorForm.ppeIssued.trim(),
         enteredFoodContactArea: visitorForm.enteredFoodContactArea,
         notes: visitorForm.notes,
       };
@@ -9008,24 +9892,117 @@ function App() {
       ),
     }));
   }
-  /** Reception confirms a kiosk check-in: assigns PPE + allowed areas and stamps verification. */
+  /** Reception confirms a kiosk check-in: assigns PPE + allowed areas and stamps verification.
+   *  Phase 106.2 — if any ticked area is restricted, an approval request is created instead
+   *  of granting access directly. Safe areas pass through immediately.
+   *  Phase 106.4 — if a pre-approved booking matches the visitor name+date, areas covered
+   *  by the booking are granted immediately even if they're restricted. Anything BEYOND
+   *  the booking's allowed list still needs host approval. */
   function handleVerifyVisitor(id: string, payload: { ppeIssued: string; areasVisited: FactoryArea[] }) {
     const actor = profile?.fullName || profile?.email || 'Reception';
-    setData((current) => ({
-      ...current,
-      visitorLogEntries: current.visitorLogEntries.map((v) =>
+    const policy = data.appSettings?.visitorAreaPolicy;
+    const visitor = data.visitorLogEntries.find((v) => v.id === id);
+    // Phase 106.4 — try to find a pre-approval booking for this visitor.
+    const matchingBooking = visitor
+      ? findVisitorBooking(data.visitorBookings ?? [], visitor.visitorName, visitor.visitDate)
+      : undefined;
+    const bookingAreas = new Set(matchingBooking?.allowedAreas ?? []);
+
+    const safeAreas = payload.areasVisited.filter((a) => getAreaSafety(a, policy) === 'safe');
+    // Restricted areas split into 2 buckets:
+    //   - covered by booking → granted immediately, no host approval needed
+    //   - NOT covered by booking → standard approval flow
+    const restrictedAll = payload.areasVisited.filter((a) => getAreaSafety(a, policy) === 'restricted');
+    const restrictedPreApproved = restrictedAll.filter((a) => bookingAreas.has(a));
+    const restrictedNeedsApproval = restrictedAll.filter((a) => !bookingAreas.has(a));
+
+    // Try to find the host employee record so we can store their id (drives
+    // inbox filtering + later escalation routing).
+    const hostEmployee = visitor
+      ? data.employees.find((e) => `${e.firstName} ${e.lastName}`.trim().toLowerCase() === (visitor.hostName || '').toLowerCase())
+      : undefined;
+    setData((current) => {
+      const verifiedAt = new Date().toISOString();
+      const grantedAreas = [...safeAreas, ...restrictedPreApproved];
+      const updatedVisitor = current.visitorLogEntries.map((v) =>
         v.id === id
           ? {
               ...v,
               ppeIssued: payload.ppeIssued,
-              areasVisited: payload.areasVisited,
+              // Reception grants safe areas immediately + any booking-covered
+              // restricted areas. Areas needing approval land on the request
+              // and only get added once host approves.
+              areasVisited: grantedAreas,
               staffVerified: true,
               verifiedByName: actor,
-              verifiedAt: new Date().toISOString(),
+              verifiedAt,
             }
           : v,
-      ),
-    }));
+      );
+      let approvalRequests = current.visitorAreaApprovalRequests ?? [];
+      if (restrictedNeedsApproval.length > 0 && visitor) {
+        const request = createApprovalRequest({
+          id: `var-${Date.now().toString(36)}`,
+          visitorLogEntryId: id,
+          visitorName: visitor.visitorName,
+          visitorCompany: visitor.company || '',
+          hostEmployeeId: hostEmployee?.id ?? '',
+          hostName: visitor.hostName || (hostEmployee ? `${hostEmployee.firstName} ${hostEmployee.lastName}`.trim() : 'Host TBD'),
+          restrictedAreas: restrictedNeedsApproval,
+          requestNote: visitor.purpose || '',
+          receptionistName: actor,
+          // Phase 106.3 — supply host + employee directory so the request
+          // is auto-routed to a delegate / backup when host is unavailable.
+          hostEmployee,
+          allEmployees: data.employees,
+        });
+        // Mark the request as partially-satisfied by a booking so the
+        // audit trail links the two.
+        if (matchingBooking) request.satisfiedByBookingId = matchingBooking.id;
+        approvalRequests = [request, ...approvalRequests];
+
+        /* Phase 106.5 — dispatch the notification through the
+         * notification layer. The current approver might be the host
+         * or (if routing kicked in) the backup — either way, find that
+         * employee and build a recipient from them. The dispatcher
+         * falls back to inbox-only when email/SMS/etc providers aren't
+         * registered yet, so this is safe to fire today. */
+        const approverEmployee = data.employees.find((e) => e.id === request.currentApproverEmployeeId);
+        if (approverEmployee) {
+          const payload = notificationFromApprovalRequest(
+            request,
+            recipientFromEmployee(approverEmployee),
+            'important',
+          );
+          // Fire-and-forget — never block the save on a network call.
+          void dispatchNotification(payload);
+        }
+
+        toast.info(
+          hostEmployee
+            ? `Sent approval request to ${hostEmployee.firstName} ${hostEmployee.lastName} for ${restrictedNeedsApproval.length} additional restricted area(s).`
+            : `Approval request created — assign a host so it routes to them.`,
+        );
+      }
+      // Update the matching booking — flip to 'active' on first check-in,
+      // record the visitor log entry id so the chain is traceable.
+      const updatedBookings = matchingBooking
+        ? (current.visitorBookings ?? []).map((b) => b.id === matchingBooking.id
+            ? { ...b, status: 'active' as const, checkedInAt: verifiedAt, visitorLogEntryId: id }
+            : b)
+        : current.visitorBookings;
+      if (matchingBooking) {
+        toast.success(
+          `Pre-approved booking from ${matchingBooking.hostName} matched — ${restrictedPreApproved.length} restricted area(s) granted automatically.`,
+        );
+      }
+      return {
+        ...current,
+        visitorLogEntries: updatedVisitor,
+        visitorAreaApprovalRequests: approvalRequests,
+        visitorBookings: updatedBookings,
+      };
+    });
   }
 
   // ----- Phase 5.6: SOPs -----
@@ -9342,6 +10319,7 @@ function App() {
       phone: lead.phone,
       email: lead.email,
       source: lead.source,
+      sourceDetail: lead.sourceDetail ?? '',
       assignedTo: lead.assignedTo,
       productId: lead.productId,
       requestedQuantity: String(lead.requestedQuantity),
@@ -9354,6 +10332,11 @@ function App() {
       activities: lead.activities ? [...lead.activities] : [],
       lostReason: lead.lostReason ?? '',
       estimatedValue: String(lead.estimatedValue ?? ''),
+      // Phase 99 — multi-item + onboarding flags.
+      items: lead.items ? [...lead.items] : [],
+      onboardingFormReceived: lead.onboardingFormReceived ?? false,
+      onboardingFormReceivedDate: lead.onboardingFormReceivedDate ?? '',
+      onboardingFormNote: lead.onboardingFormNote ?? '',
     });
     setView('leads');
   }
@@ -10080,6 +11063,7 @@ function App() {
       topbarAction={topbarAction}
       topbarSummary={topbarSummary}
       onOpenSearch={() => setPaletteOpen(true)}
+      onOpenApiAccess={() => { setSettingsRequestedTab('apiAccess'); setView('settings'); }}
       kioskMode={profile?.role === 'driver'}
     >
       {loading && (
@@ -10241,6 +11225,31 @@ function App() {
               editLead(lead);
             }
           }}
+          // Phase 100 — Attention strip click-through. Each handler
+          // switches to the right page and pre-filters where possible.
+          onJumpToOpenJobs={() => {
+            setJobFilters({ search: '', month: '', status: '', customer: '', fsc: 'all' });
+            setView('jobs');
+          }}
+          onJumpToAwaitingArtwork={() => {
+            setJobFilters({ search: '', month: '', status: 'Awaiting Artwork', customer: '', fsc: 'all' });
+            setView('jobs');
+          }}
+          onJumpToOverdueJobs={() => {
+            // Status filter doesn't directly express "overdue", so we land
+            // on the full list and the user can spot due-date cells in red.
+            // Future: add an overdue toggle to JobFilters.
+            setJobFilters({ search: '', month: '', status: '', customer: '', fsc: 'all' });
+            setView('jobs');
+          }}
+          onJumpToOverCreditClients={() => {
+            setClientFilters({ search: '', clientType: '', active: '' });
+            setView('clients');
+          }}
+          onJumpToOnHoldClients={() => {
+            setClientFilters({ search: '', clientType: '', active: '' });
+            setView('clients');
+          }}
         />
       )}
 
@@ -10281,16 +11290,47 @@ function App() {
       {view === 'calculator' && (
         <CalculatorPage
           canViewInternalCosts={canViewInternalCalculatorCosts}
-          canEditPricing={profile?.role === 'admin'}
+          canEditPricing={profile?.role === 'admin' || profile?.pricingEditor === true}
           clients={data.clients}
           products={data.products}
           pricingTiers={data.pricingTiers}
           paperRates={data.paperRates}
           costProfiles={data.costProfiles}
+          standardMarginPercent={data.appSettings.standardMarginPercent}
           leads={data.leads}
           state={calculatorState}
           setState={setCalculatorState}
           onSaveAsQuote={handleSaveCalculatorAsQuote}
+          onAppendToQuote={handleAppendCalculatorToQuote}
+          /* Phase 118.2 — collapse all calculator-sourced quote rows into
+             one entry per batch, only show batches whose status is still
+             quotable (not invoiced / not lost). Filters by client are done
+             inside the calculator. Sorts newest first. */
+          existingQuoteBatches={(() => {
+            const grouped = new Map<string, { batchId: string; baseNumber: string; clientId: string; clientName: string; createdAt: string; lineCount: number; latestStatus: string }>();
+            data.quoteEstimates.forEach((q) => {
+              if (!q.calculatorBatchId) return;
+              const existing = grouped.get(q.calculatorBatchId);
+              const baseNumber = q.quoteNumber.replace(/-[A-Z]$/, '');
+              if (existing) {
+                existing.lineCount += 1;
+                if (q.createdAt > existing.createdAt) existing.createdAt = q.createdAt;
+              } else {
+                grouped.set(q.calculatorBatchId, {
+                  batchId: q.calculatorBatchId,
+                  baseNumber,
+                  clientId: q.clientId,
+                  clientName: q.clientName,
+                  createdAt: q.createdAt,
+                  lineCount: 1,
+                  latestStatus: q.status,
+                });
+              }
+            });
+            return Array.from(grouped.values())
+              .filter((b) => b.latestStatus !== 'Invoiced' && b.latestStatus !== 'Lost')
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          })()}
           onSaveAsInvoice={handleSaveCalculatorAsInvoice}
           company={data.appSettings.company}
           defaultFooterLines={data.appSettings.templates.invoiceFooterLines}
@@ -10424,6 +11464,70 @@ function App() {
           accountEmail={profile?.email || 'No email stored'}
           accountRole={profile?.role || 'ops'}
           onSignOut={handleSignOut}
+          /* Phase 103.7 — API Access tab inside Settings (same handlers as
+             the standalone /osConnector route still does). */
+          apiAccessData={data}
+          apiAccessConnectorConfig={data.appSettings.connectorConfig}
+          apiAccessToday={getToday()}
+          onApiAccessSaveConfig={(config: AppSettingsConnectorConfig) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                connectorConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+          }}
+          onApiAccessPublishNow={async () => {
+            const stamped: AppData = {
+              ...data,
+              appSettings: { ...data.appSettings, connectorConfig: { ...data.appSettings.connectorConfig, lastPublishedAt: new Date().toISOString() } },
+            };
+            await publishConnectorFeed(stamped);
+            setData((current) => ({
+              ...current,
+              appSettings: { ...current.appSettings, connectorConfig: { ...current.appSettings.connectorConfig, lastPublishedAt: stamped.appSettings.connectorConfig.lastPublishedAt } },
+            }));
+          }}
+          /* Phase 107.1 — Visitor Access tab handlers. Both write
+             straight to appSettings so the reception verify panel +
+             escalation interval pick up the change immediately. */
+          onSetAreaSafety={(area, safety) => {
+            setData((current) => {
+              const nextPolicy = { ...(current.appSettings.visitorAreaPolicy ?? {}) } as Partial<Record<FactoryArea, AreaSafety>>;
+              nextPolicy[area] = safety;
+              return {
+                ...current,
+                appSettings: {
+                  ...current.appSettings,
+                  visitorAreaPolicy: nextPolicy,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+                },
+              };
+            });
+            toast.success(`${area} → ${safety}`);
+          }}
+          onSetEscalationMinutes={(minutes) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                visitorApprovalEscalationMinutes: minutes,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success(`Escalation timer set to ${minutes} minute${minutes === 1 ? '' : 's'}`);
+          }}
+          /* Phase 103.7.1 — Honour the requested tab from the account
+             menu ("API access"). SettingsPage clears it via the
+             onInitialTabHandled callback so the next visit defaults
+             back to 'account'. */
+          initialTab={settingsRequestedTab}
+          onInitialTabHandled={() => setSettingsRequestedTab(undefined)}
         />
       )}
 
@@ -10716,6 +11820,21 @@ function App() {
           currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
           companies={(data.companies ?? []).map((c) => ({ id: c.id, name: c.name, roles: c.roles }))}
           onConvertToCompany={handleConvertClientToCompany}
+          // Phase 94 — live production pipeline strip on the Client profile.
+          jobs={data.jobs.map((j) => ({
+            id: j.id,
+            jobNumber: j.jobNumber,
+            clientId: j.clientId,
+            productName: j.productName,
+            pipelineStages: j.pipelineStages,
+          }))}
+          onOpenJob={(jobId) => {
+            const job = data.jobs.find((j) => j.id === jobId);
+            if (job) {
+              editJob(job);
+              setView('jobs');
+            }
+          }}
         />
       )}
 
@@ -10764,6 +11883,33 @@ function App() {
           )}
           onCreateDelivery={handleCreateDeliveryFromFGStock}
           onCreateInvoice={handleCreateInvoiceFromFGStock}
+        />
+      )}
+
+      {view === 'tradedGoods' && (
+        <TradedGoodsPage
+          tradedGoodsItems={data.tradedGoodsItems ?? []}
+          itemForm={tradedGoodsItemForm}
+          setItemForm={setTradedGoodsItemForm}
+          itemEditingId={tradedGoodsItemEditingId}
+          itemMessage={tradedGoodsItemMessage}
+          onSaveItem={handleSaveTradedGoodsItem}
+          onResetItem={resetTradedGoodsItemEditor}
+          onEditItem={editTradedGoodsItem}
+          onDeleteItem={handleDeleteCurrentTradedGoodsItem}
+          tradedGoodsReceipts={data.tradedGoodsReceipts ?? []}
+          receiptForm={tradedGoodsReceiptForm}
+          setReceiptForm={setTradedGoodsReceiptForm}
+          receiptEditingId={tradedGoodsReceiptEditingId}
+          receiptMessage={tradedGoodsReceiptMessage}
+          onSaveReceipt={handleSaveTradedGoodsReceipt}
+          onResetReceipt={resetTradedGoodsReceiptEditor}
+          onEditReceipt={editTradedGoodsReceipt}
+          onDeleteReceipt={handleDeleteCurrentTradedGoodsReceipt}
+          suppliers={data.suppliers}
+          clients={data.clients}
+          jobs={data.jobs}
+          canEditPricing={profile?.role === 'admin' || profile?.pricingEditor === true}
         />
       )}
 
@@ -11006,6 +12152,7 @@ function App() {
           deliveryNotes={data.deliveryNotes}
           uploaderName={profile?.fullName || profile?.email || ''}
           currentUserRole={profile?.role || 'ops'}
+          viewerPartnerScopes={profile?.accountType === 'external_partner' ? profile?.partnerScope : undefined}
           onUploadFile={(file, docId) => uploadDocumentFile(file, docId)}
           onSave={(doc: DocumentRecord) => {
             setData((current) => {
@@ -11201,6 +12348,14 @@ function App() {
               },
             }));
           }}
+          // Phase 98.3 — SARS Correspondence panel wiring.
+          uploaderName={profile?.fullName || profile?.email || ''}
+          onSaveDocument={(doc) => setData((cur) => {
+            const exists = cur.documents.some((d) => d.id === doc.id);
+            return { ...cur, documents: exists ? cur.documents.map((d) => d.id === doc.id ? doc : d) : [doc, ...cur.documents] };
+          })}
+          onDeleteDocument={(id) => setData((cur) => ({ ...cur, documents: cur.documents.filter((d) => d.id !== id) }))}
+          onUploadDocumentFile={(file, docId) => uploadDocumentFile(file, docId)}
         />
       )}
 
@@ -11243,6 +12398,17 @@ function App() {
           onDelete={(id: string) => {
             setData((current) => ({ ...current, employees: current.employees.filter((e) => e.id !== id) }));
           }}
+          // Phase 96 — HR documents wiring. Reuses the existing Doc Vault
+          // file upload + save/delete handlers so HR docs flow into the
+          // same `documents` collection as everything else.
+          documents={data.documents ?? []}
+          uploaderName={profile?.fullName || profile?.email || ''}
+          onSaveDocument={(doc) => setData((cur) => {
+            const exists = cur.documents.some((d) => d.id === doc.id);
+            return { ...cur, documents: exists ? cur.documents.map((d) => d.id === doc.id ? doc : d) : [doc, ...cur.documents] };
+          })}
+          onDeleteDocument={(id) => setData((cur) => ({ ...cur, documents: cur.documents.filter((d) => d.id !== id) }))}
+          onUploadDocumentFile={(file, docId) => uploadDocumentFile(file, docId)}
           companyName={data.appSettings.company?.legalName || data.appSettings.company?.name}
           companyUifReference={data.appSettings.company?.vatNumber}
         />
@@ -11889,6 +13055,61 @@ function App() {
             // Defer to next tick so React commits the form state first.
             setTimeout(() => handleSaveLeaveRequest(), 0);
           }}
+          onUpdateAvailability={(payload) => {
+            // Phase 106.3 — persist availability + delegate choice straight
+            // back to the Employee row. The visitor approval router reads
+            // these on the next request without any sync delay.
+            setData((current) => ({
+              ...current,
+              employees: current.employees.map((e) => e.id === payload.employeeId
+                ? {
+                    ...e,
+                    availabilityStatus: payload.availabilityStatus,
+                    delegateApprovalToEmployeeId: payload.delegateApprovalToEmployeeId,
+                  }
+                : e),
+            }));
+            toast.success(`Availability set to ${payload.availabilityStatus}`);
+          }}
+          // Phase 106.4 — Visitor pre-bookings. Pull this user's bookings
+          // and wire create/cancel handlers.
+          myVisitorBookings={(data.visitorBookings ?? []).filter((b) => b.hostEmployeeId === profile?.linkedEmployeeId)}
+          onCreateVisitorBooking={(payload) => {
+            setData((current) => ({
+              ...current,
+              visitorBookings: [
+                {
+                  id: `vbk-${Date.now().toString(36)}`,
+                  visitorName: payload.visitorName,
+                  visitorCompany: payload.visitorCompany,
+                  visitorEmail: payload.visitorEmail,
+                  visitorPhone: payload.visitorPhone,
+                  hostEmployeeId: payload.hostEmployeeId,
+                  hostName: payload.hostName,
+                  visitDate: payload.visitDate,
+                  startTime: payload.startTime,
+                  endTime: payload.endTime,
+                  allowedAreas: payload.allowedAreas,
+                  purpose: payload.purpose,
+                  notes: payload.notes,
+                  status: 'created',
+                  createdAt: new Date().toISOString(),
+                  createdByName: profile?.fullName || profile?.email || 'Host',
+                },
+                ...(current.visitorBookings ?? []),
+              ],
+            }));
+            toast.success(`Booking created for ${payload.visitorName} on ${payload.visitDate}`);
+          }}
+          onCancelVisitorBooking={(bookingId) => {
+            setData((current) => ({
+              ...current,
+              visitorBookings: (current.visitorBookings ?? []).map((b) => b.id === bookingId
+                ? { ...b, status: 'cancelled' as const }
+                : b),
+            }));
+            toast.info('Booking cancelled');
+          }}
         />
       )}
 
@@ -12246,6 +13467,201 @@ function App() {
         />
       )}
 
+      {/* Phase 102 — Activity Inbox. Unified feed of "what's happening" across
+          the business. Inline approve/decline for leave + claims; snooze /
+          dismiss for everything else. */}
+      {view === 'inbox' && (
+        <InboxPage
+          events={produceAllEvents(data)}
+          state={inboxState}
+          setState={setInboxEvent}
+          allowedCategories={profile?.inboxCategories}
+          markAllSeen={(ids) => {
+            setInboxStateMap((current) => {
+              const copy = { ...current };
+              for (const id of ids) {
+                if (!copy[id] || copy[id].status === 'unread') copy[id] = { status: 'seen' };
+              }
+              saveInboxState(copy);
+              return copy;
+            });
+          }}
+          onAction={(action, event) => {
+            if (action.type === 'open' && action.targetView) {
+              setView(action.targetView as View);
+              return;
+            }
+            if (action.type === 'approve-leave' || action.type === 'decline-leave') {
+              const req = (data.leaveRequests ?? []).find((r) => r.id === action.entityId);
+              if (!req) return;
+              const decision = action.type === 'approve-leave' ? 'Approved' : 'Declined';
+              const updated = applyLeaveDecision(req, decision, profile?.fullName || profile?.email || 'Admin');
+              setData((cur) => ({
+                ...cur,
+                leaveRequests: (cur.leaveRequests ?? []).map((r) => r.id === updated.id ? updated : r),
+              }));
+              return;
+            }
+            if (action.type === 'approve-claim' || action.type === 'decline-claim') {
+              const claim = (data.expenseClaims ?? []).find((c) => c.id === action.entityId);
+              if (!claim) return;
+              const decision = action.type === 'approve-claim' ? 'Approved' : 'Declined';
+              const updated = applyClaimDecision(claim, decision, profile?.fullName || profile?.email || 'Admin');
+              setData((cur) => ({
+                ...cur,
+                expenseClaims: (cur.expenseClaims ?? []).map((c) => c.id === updated.id ? updated : c),
+              }));
+              return;
+            }
+
+            /* Phase 106.2 — Visitor area approval actions.
+             *
+             * approve-all / decline / keep-reception apply immediately and
+             * fire toasts so the host knows the decision landed. The
+             * approve-some / delegate variants open a small picker which
+             * isn't implemented in this turn — they fall through and surface
+             * a toast directing the user to open the Visitor Log to choose
+             * the subset / new approver.
+             *
+             * approve-all also writes the granted areas onto the linked
+             * VisitorLogEntry so reception can see what the visitor is now
+             * cleared for without bouncing back into the request record. */
+            if (
+              action.type === 'visitor-approve-all' ||
+              action.type === 'visitor-decline' ||
+              action.type === 'visitor-keep-reception'
+            ) {
+              const req = (data.visitorAreaApprovalRequests ?? []).find((r) => r.id === action.entityId);
+              if (!req) return;
+              const decisionMap: Record<string, 'approve-all' | 'decline' | 'keep-reception'> = {
+                'visitor-approve-all':    'approve-all',
+                'visitor-decline':        'decline',
+                'visitor-keep-reception': 'keep-reception',
+              };
+              const decision = decisionMap[action.type];
+              const actorName = profile?.fullName || profile?.email || 'Approver';
+              const linkedEmployeeId = profile?.linkedEmployeeId;
+              const updated = applyVisitorApprovalDecision(req, decision, actorName, {
+                actorEmployeeId: linkedEmployeeId,
+              });
+              setData((cur) => ({
+                ...cur,
+                visitorAreaApprovalRequests: (cur.visitorAreaApprovalRequests ?? []).map((r) =>
+                  r.id === updated.id ? updated : r,
+                ),
+                // If approved-all, merge the granted areas into the visitor's
+                // areasVisited so reception sees the access level update.
+                visitorLogEntries: decision === 'approve-all'
+                  ? cur.visitorLogEntries.map((v) => v.id === req.visitorLogEntryId
+                      ? { ...v, areasVisited: Array.from(new Set([...v.areasVisited, ...updated.approvedAreas])) }
+                      : v)
+                  : cur.visitorLogEntries,
+              }));
+              const label = decision === 'approve-all'
+                ? `Approved ${req.requestedAreas.length} area(s) for ${req.visitorName}.`
+                : decision === 'decline'
+                  ? `Declined visitor access for ${req.visitorName}.`
+                  : `Kept ${req.visitorName} at reception.`;
+              toast.success(label);
+              return;
+            }
+            if (action.type === 'visitor-approve-some' || action.type === 'visitor-delegate') {
+              toast.info(
+                action.type === 'visitor-approve-some'
+                  ? 'Open the Visitor Log to pick which areas to approve.'
+                  : 'Open the Visitor Log to delegate this request.',
+              );
+              setView('visitorLog');
+              return;
+            }
+
+            // suppress unused 'event' lint without breaking linkage
+            void event;
+          }}
+        />
+      )}
+
+      {/* Phase 101 — Admin Hub. Admin-role landing page for the admin chores. */}
+      {view === 'adminHub' && (
+        <AdminHubPage
+          data={data}
+          profile={profile}
+          goTo={(next) => setView(next)}
+        />
+      )}
+
+      {/* Phase 95 — SMETA safety registers. */}
+      {view === 'incidentRegister' && (
+        <IncidentRegisterPage
+          entries={data.incidentEntries ?? []}
+          form={incidentForm}
+          setForm={setIncidentForm}
+          editingId={incidentEditingId}
+          message={incidentMessage}
+          onSave={handleSaveIncident}
+          onReset={resetIncidentEditor}
+          onEdit={editIncident}
+          onDelete={handleDeleteCurrentIncident}
+          employees={data.employees ?? []}
+          firstAiders={data.firstAidAiders ?? []}
+        />
+      )}
+      {view === 'drillRegister' && (
+        <DrillRegisterPage
+          entries={data.drillEntries ?? []}
+          form={drillForm}
+          setForm={setDrillForm}
+          editingId={drillEditingId}
+          message={drillMessage}
+          onSave={handleSaveDrill}
+          onReset={resetDrillEditor}
+          onEdit={editDrill}
+          onDelete={handleDeleteCurrentDrill}
+        />
+      )}
+      {view === 'toolboxTalks' && (
+        <ToolboxTalksPage
+          entries={data.toolboxTalkEntries ?? []}
+          form={toolboxTalkForm}
+          setForm={setToolboxTalkForm}
+          editingId={toolboxTalkEditingId}
+          message={toolboxTalkMessage}
+          onSave={handleSaveToolboxTalk}
+          onReset={resetToolboxTalkEditor}
+          onEdit={editToolboxTalk}
+          onDelete={handleDeleteCurrentToolboxTalk}
+          employees={data.employees ?? []}
+        />
+      )}
+      {view === 'sheCommittee' && (
+        <SheCommitteePage
+          entries={data.sheMeetingEntries ?? []}
+          form={sheMeetingForm}
+          setForm={setSheMeetingForm}
+          editingId={sheMeetingEditingId}
+          message={sheMeetingMessage}
+          onSave={handleSaveSheMeeting}
+          onReset={resetSheMeetingEditor}
+          onEdit={editSheMeeting}
+          onDelete={handleDeleteCurrentSheMeeting}
+          employees={data.employees ?? []}
+        />
+      )}
+
+      {view === 'auditProgrammes' && (
+        <AuditProgrammesPage
+          programmes={data.auditProgrammes ?? []}
+          form={auditProgrammeForm}
+          setForm={setAuditProgrammeForm}
+          editingId={auditProgrammeEditingId}
+          message={auditProgrammeMessage}
+          onSave={handleSaveAuditProgramme}
+          onReset={resetAuditProgrammeEditor}
+          onEdit={editAuditProgramme}
+          onDelete={handleDeleteCurrentAuditProgramme}
+        />
+      )}
+
       {view === 'visitorLog' && (
         <VisitorLogPage
           records={data.visitorLogEntries}
@@ -12259,6 +13675,25 @@ function App() {
           onReset={resetVisitorEditor}
           onEdit={editVisitor}
           onVerify={handleVerifyVisitor}
+          areaPolicy={data.appSettings?.visitorAreaPolicy}
+        />
+      )}
+
+      {view === 'visitorApprovals' && (
+        <VisitorApprovalsPage
+          requests={data.visitorAreaApprovalRequests ?? []}
+          employees={data.employees}
+          currentEmployeeId={profile?.linkedEmployeeId}
+          currentUserName={profile?.fullName || profile?.email || 'Admin'}
+          onUpdateRequest={(updated) => {
+            setData((current) => ({
+              ...current,
+              visitorAreaApprovalRequests: (current.visitorAreaApprovalRequests ?? []).map((r) =>
+                r.id === updated.id ? updated : r,
+              ),
+            }));
+            toast.success('Approval request updated');
+          }}
         />
       )}
 
@@ -12475,15 +13910,61 @@ function App() {
         onClose={() => setFoodSafeCertificateJob(null)}
       />
     ) : null}
-    {quotePrintTarget ? (
-      <QuotePrint
-        quote={quotePrintTarget}
-        client={data.clients.find((c) => c.id === quotePrintTarget.clientId)}
-        company={data.appSettings.company}
-        termsAndConditions={data.appSettings.templates.termsAndConditions}
-        onClose={() => setQuotePrintTarget(null)}
-      />
-    ) : null}
+    {quotePrintTarget ? (() => {
+      /* Phase 118.1 — branch the printer based on quote source.
+       *
+       * If the target quote has a calculatorBatchId, gather every sibling
+       * row from the same batch, concat their per-row snapshot lines in
+       * quoteNumber order (so -A, -B, -C come back in the original
+       * sequence), recompute the priced rollup via the calculator
+       * engine, and render through CalculatorQuotePrint — the same
+       * multi-line layout the customer saw originally.
+       *
+       * Single-line quotes (no batchId) fall through to the original
+       * QuotePrint. Legacy quotes saved before Phase 118.1 also fall
+       * through cleanly because their batchId / snapshot are undefined. */
+      const siblings = quotePrintTarget.calculatorBatchId
+        ? data.quoteEstimates
+            .filter((q) => q.calculatorBatchId === quotePrintTarget.calculatorBatchId)
+            .sort((a, b) => a.quoteNumber.localeCompare(b.quoteNumber))
+        : [];
+      const canStitch = siblings.length > 0 && siblings.every((q) => q.calculatorSnapshot);
+      if (canStitch) {
+        const stitched = {
+          shared: siblings[0]!.calculatorSnapshot!.shared,
+          lines: siblings.flatMap((q) => q.calculatorSnapshot?.lines ?? []),
+        };
+        const computation = computeQuote(stitched, {
+          clients: data.clients,
+          pricingTiers: data.pricingTiers,
+          paperRates: data.paperRates,
+          costProfiles: data.costProfiles,
+          standardMarginPercent: data.appSettings.standardMarginPercent,
+        });
+        return (
+          <CalculatorQuotePrint
+            lines={stitched.lines}
+            results={computation.lines}
+            rollup={computation.rollup}
+            client={data.clients.find((c) => c.id === quotePrintTarget.clientId)}
+            company={data.appSettings.company}
+            preparedBy={quotePrintTarget.salesOwnerName || profile?.fullName || ''}
+            today={quotePrintTarget.quoteDate}
+            defaultFooterLines={data.appSettings.templates.invoiceFooterLines}
+            onClose={() => setQuotePrintTarget(null)}
+          />
+        );
+      }
+      return (
+        <QuotePrint
+          quote={quotePrintTarget}
+          client={data.clients.find((c) => c.id === quotePrintTarget.clientId)}
+          company={data.appSettings.company}
+          termsAndConditions={data.appSettings.templates.termsAndConditions}
+          onClose={() => setQuotePrintTarget(null)}
+        />
+      );
+    })() : null}
     {jobCardPrintTarget ? (
       <JobCardPrint
         job={jobCardPrintTarget}

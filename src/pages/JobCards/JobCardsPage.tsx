@@ -9,6 +9,7 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { BulkActionsBar } from '../../components/BulkActionsBar';
 import { HistoryDrawerTarget } from '../../components/HistoryDrawer';
 import { EditFormGuard } from '../../components/EditFormGuard';
+import { JobPipelineTracker } from '../../components/JobPipelineTracker';
 import { SavedViewsBar } from '../../components/SavedViewsBar';
 import { SavedView, useSavedViews } from '../../hooks/useSavedViews';
 import { downloadCsv } from '../../utils/csvExport';
@@ -641,6 +642,17 @@ export function JobCardsPage(props: JobCardsPageProps) {
           <label className="full-span"><span>Packing / supply notes</span><textarea value={jobForm.packingNotes} onChange={(event) => setJobForm({ ...jobForm, packingNotes: event.target.value })} /></label>
           <label className="full-span"><span>Quality / issue notes</span><textarea value={jobForm.qualityNotes} onChange={(event) => setJobForm({ ...jobForm, qualityNotes: event.target.value })} /></label>
           <label className="full-span"><span>Notes</span><textarea value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} /></label>
+          {/* Phase 94 — Production-stage pipeline tracker. Sits on the form
+              so production / sales can update stage progress in one place
+              while editing the job. The data lives on jobForm.pipelineStages
+              and gets persisted with the rest of the job. */}
+          <div className="full-span" style={{ marginTop: 8 }}>
+            <JobPipelineTracker
+              stages={jobForm.pipelineStages}
+              onChange={(next) => setJobForm({ ...jobForm, pipelineStages: next })}
+              actingUserName={currentUser?.name}
+            />
+          </div>
           {/* Phase 62 — Tooling pickers. Sales filters by the job's client
               first ('this client already owns these'), then falls back to
               generic dies if none match. */}

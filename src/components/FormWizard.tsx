@@ -1,4 +1,25 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { toast } from './Toast';
+
+/**
+ * Phase 104 — Heuristic classifier for save messages into a toast tone.
+ *
+ * Every form in the app already sets a `message` like 'Saved.', 'Updated.',
+ * 'Failed to save xyz', etc. Instead of rewiring every save handler to fire
+ * a toast explicitly, the FormWizard watches its `message` prop and pops a
+ * toast whenever it changes. We classify by keyword so success/error/warn
+ * each get the right styling.
+ */
+function classifyMessage(text: string): 'success' | 'error' | 'warning' | null {
+  const lower = text.trim().toLowerCase();
+  if (!lower) return null;
+  if (/fail|error|invalid|missing|required|cannot|denied|forbid/.test(lower)) return 'error';
+  if (/warn|caution|already/.test(lower)) return 'warning';
+  if (/save|updat|delet|created|added|logged|recorded|approve|reject|submit|sent|posted|publish|reset|clos/.test(lower)) return 'success';
+  // Default to a neutral info-style success on anything else, so the user
+  // always gets feedback when the form sets a message.
+  return 'success';
+}
 
 /**
  * A single section of a FormWizard.
@@ -62,6 +83,23 @@ export function FormWizard({
       setActiveKey(sections[0]?.key ?? '');
     }
   }, [sections, activeKey]);
+
+  /* ─── Phase 104 — pop a global toast whenever the message changes ─────
+   * Every form in the app already sets a save-confirmation message; this
+   * surfaces it as a top-right toast in addition to the inline strip so
+   * the user always gets clear, visible feedback without having to look
+   * for it on the page. We track the last-fired message in a ref so the
+   * same message doesn't double-fire on re-render. */
+  const lastMessageRef = useRef<string>('');
+  useEffect(() => {
+    const text = (message ?? '').trim();
+    if (!text || text === lastMessageRef.current) return;
+    lastMessageRef.current = text;
+    const tone = classifyMessage(text);
+    if (tone === 'error') toast.error(text);
+    else if (tone === 'warning') toast.warning(text);
+    else if (tone === 'success') toast.success(text);
+  }, [message]);
 
   const activeSections = sections.filter((section) => section.contextActive !== false);
   const completeCount = activeSections.filter(

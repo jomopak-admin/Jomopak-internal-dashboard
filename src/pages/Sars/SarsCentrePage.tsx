@@ -12,7 +12,7 @@
  * for the user is: "what's due, when, and are the numbers ready."
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
@@ -41,6 +41,11 @@ interface SarsCentrePageProps {
   today: string;
   onSaveFiling: (filing: SarsFiling) => void;
   onSaveConfig: (config: AppSettingsSarsConfig) => void;
+  // Phase 98.3 — SARS Correspondence panel wiring.
+  uploaderName?: string;
+  onSaveDocument?: (doc: DocumentRecord) => void;
+  onDeleteDocument?: (id: string) => void;
+  onUploadDocumentFile?: (file: File, docId: string) => Promise<{ storagePath: string; signedUrl: string } | null>;
 }
 
 /** EMP201 = PAYE + UIF (both sides) + SDL across payroll runs for a month. */
@@ -129,6 +134,10 @@ export function SarsCentrePage({
   today,
   onSaveFiling,
   onSaveConfig,
+  uploaderName = '',
+  onSaveDocument,
+  onDeleteDocument,
+  onUploadDocumentFile,
 }: SarsCentrePageProps) {
   const [mode, setMode] = useState<'overview' | 'worksheet'>('overview');
   const [draft, setDraft] = useState<SarsFiling | null>(null);
@@ -421,6 +430,121 @@ export function SarsCentrePage({
           </table>
         )}
       </section>
+
+      {/* Phase 98.3 — SARS Correspondence panel. PDFs go into Supabase
+          Storage; only metadata sits in the documents table. Retention
+          is 5 years (SARS rule) — controlled by the category default. */}
+      {onSaveDocument && onDeleteDocument && onUploadDocumentFile ? (
+        <SarsCorrespondencePanel
+          documents={documents}
+          uploaderName={uploaderName}
+          onSave={onSaveDocument}
+          onDelete={onDeleteDocument}
+          onUploadFile={onUploadDocumentFile}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/* ─── SARS Correspondence panel ────────────────────────────────────── */
+function SarsCorrespondencePanel(props: {
+  documents: DocumentRecord[];
+  uploaderName: string;
+  onSave: (doc: DocumentRecord) => void;
+  onDelete: (id: string) => void;
+  onUploadFile: (file: File, docId: string) => Promise<{ storagePath: string; signedUrl: string } | null>;
+}) {
+  const { documents, uploaderName, onSave, onDelete, onUploadFile } = props;
+  const [title, setTitle] = useState('');
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const items = documents.filter((d) => d.ownerType === 'sars');
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setMessage('');
+    try {
+      const docId = `SARS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const result = await onUploadFile(file, docId);
+      const doc: DocumentRecord = {
+        id: docId,
+        createdAt: new Date().toISOString(),
+        ownerType: 'sars',
+        ownerId: 'sars',
+        ownerName: 'SARS',
+        category: 'SARS Correspondence',
+        title: title.trim() || file.name,
+        fileName: file.name,
+        fileMimeType: file.type,
+        fileSizeBytes: file.size,
+        fileUrl: result?.signedUrl ?? '',
+        storagePath: result?.storagePath ?? '',
+        issueDate,
+        expiryDate: '',
+        uploadedByName: uploaderName,
+        notes,
+        retentionDays: 5 * 365,
+      };
+      onSave(doc);
+      setMessage('Uploaded.');
+      setTitle(''); setNotes('');
+      if (fileRef.current) fileRef.current.value = '';
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <h3 className="sars-section-h">SARS Correspondence</h3>
+      <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+        Letters, notices, assessments, objections. PDFs persist in Supabase Storage.
+        Retention 5 years per SARS rules.
+      </p>
+      <div style={{ marginTop: 10, padding: 10, background: 'var(--jp-paper-2, #faf8f4)', borderRadius: 8 }}>
+        <div className="form-grid">
+          <label><span>Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ITA34 assessment — 2026 tax year" /></label>
+          <label><span>Issue date</span><input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} /></label>
+          <label className="full-span"><span>Notes</span><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context" /></label>
+        </div>
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <input ref={fileRef} type="file" onChange={handleUpload} disabled={uploading} accept="application/pdf,image/*,.doc,.docx" />
+          {uploading ? <span className="muted" style={{ fontSize: 12 }}>Uploading…</span> : null}
+        </div>
+        {message ? <p style={{ marginTop: 6, fontSize: 12, color: message.includes('fail') ? '#b22b2b' : '#2e6f3e' }}>{message}</p> : null}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>No SARS correspondence on file yet.</p>
+      ) : (
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table className="data-table">
+            <thead><tr><th>Title</th><th>Issued</th><th>Size</th><th /></tr></thead>
+            <tbody>
+              {items.map((d) => (
+                <tr key={d.id}>
+                  <td>
+                    <a href={d.fileUrl} target="_blank" rel="noreferrer">{d.title || d.fileName}</a>
+                    {d.notes ? <div className="table-subtext">{d.notes}</div> : null}
+                  </td>
+                  <td>{d.issueDate || '—'}</td>
+                  <td>{Math.round((d.fileSizeBytes || 0) / 1024)} KB</td>
+                  <td>
+                    <button type="button" className="ghost-button" onClick={() => onDelete(d.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
