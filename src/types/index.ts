@@ -67,6 +67,7 @@ export type View =
   | 'bankRec'
   | 'generalLedger'
   | 'financialStatements'
+  | 'financialProjections'
   | 'fixedAssets'
   | 'currencies'
   | 'maintenance'
@@ -217,6 +218,7 @@ export const VIEW_LABELS: Record<View, string> = {
   bankRec: 'Bank Reconciliation',
   generalLedger: 'General Ledger',
   financialStatements: 'Financial Statements',
+  financialProjections: 'Financial Projections',
   fixedAssets: 'Fixed Assets',
   currencies: 'Currencies & FX',
   maintenance: 'Maintenance',
@@ -348,6 +350,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'bankRec',
     'generalLedger',
     'financialStatements',
+    'financialProjections',
     'fixedAssets',
     'currencies',
     'myPortal',
@@ -537,6 +540,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'bankRec',
     'generalLedger',
     'financialStatements',
+    'financialProjections',
     'fixedAssets',
     'currencies',
     'agedDebtors',
@@ -5711,6 +5715,75 @@ export interface AppSettingsCompany {
   logoUrl: string;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 109.1 — Accounting standard.
+ *
+ * Two flavours covered:
+ *
+ *   - 'IFRS'    — International Financial Reporting Standards. The default
+ *                 for South African private + public companies, harmonised
+ *                 with the Companies Act 2008. South Africa actually
+ *                 mandates IFRS for listed entities (JSE) and IFRS for
+ *                 SMEs is the safe choice for unlisted Pty (Ltd)s. Locks
+ *                 inventory to FIFO / Weighted Average; capitalises all
+ *                 leases > 12 months (IFRS 16); straight-line depreciation
+ *                 is the default expected unless useful-life justification
+ *                 says otherwise.
+ *
+ *   - 'US_GAAP' — US Generally Accepted Accounting Principles. Used by
+ *                 US-incorporated entities and any subsidiary that
+ *                 reports up to a US parent. Allows LIFO inventory
+ *                 (banned under IFRS); ASC 842 lease treatment
+ *                 (operating + finance distinction retained); straight-
+ *                 line OR accelerated (declining balance, MACRS) depn.
+ *
+ * Switching the flag does NOT retroactively restate existing journals —
+ * it only changes go-forward defaults (depreciation method picker on new
+ * fixed assets, inventory valuation default, projection engine
+ * assumptions). The accounting department still has to actually re-state
+ * if you change standards mid-year. The flag is a guard rail, not a
+ * legal binding. ────────────────────────────────────────────────────────*/
+export type AccountingStandard = 'IFRS' | 'US_GAAP';
+
+export const ACCOUNTING_STANDARDS: Array<{
+  key: AccountingStandard;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: 'IFRS',
+    label: 'IFRS',
+    description:
+      'International Financial Reporting Standards. Default for South African and most non-US entities. FIFO or weighted-average inventory only (no LIFO). Single income-statement format allowed. Operating leases capitalised under IFRS 16.',
+  },
+  {
+    key: 'US_GAAP',
+    label: 'US GAAP',
+    description:
+      'US Generally Accepted Accounting Principles. Required for US-incorporated entities. Allows LIFO inventory. Multi-step income statement. ASC 842 distinguishes operating vs finance leases. Allows accelerated depreciation (MACRS).',
+  },
+];
+
+/** Inventory valuation methods, gated by standard. */
+export type InventoryValuationMethod = 'FIFO' | 'Weighted Average' | 'LIFO' | 'Specific Identification';
+
+/** What inventory methods are allowed under each standard. The Fixed
+ *  Assets / inventory pages should validate against this — LIFO is
+ *  prohibited under IFRS, so a switch from US GAAP to IFRS forces the
+ *  user to confirm a re-valuation pass on any LIFO inventory. */
+export const INVENTORY_METHODS_BY_STANDARD: Record<AccountingStandard, InventoryValuationMethod[]> = {
+  IFRS:    ['FIFO', 'Weighted Average', 'Specific Identification'],
+  US_GAAP: ['FIFO', 'Weighted Average', 'LIFO', 'Specific Identification'],
+};
+
+/** Depreciation methods allowed under each standard. Both standards
+ *  permit straight-line; only US GAAP cleanly permits MACRS / accelerated
+ *  for tax-aligned reporting. */
+export const DEPRECIATION_METHODS_BY_STANDARD: Record<AccountingStandard, string[]> = {
+  IFRS:    ['Straight-line', 'Diminishing balance', 'Units of production'],
+  US_GAAP: ['Straight-line', 'Diminishing balance', 'Units of production', 'MACRS / Accelerated'],
+};
+
 /**
  * Default footer copy + payment terms that appear on each printable doc when
  * the per-doc override field is left blank. Editable from Settings → Templates.
@@ -5799,6 +5872,19 @@ export interface AppSettings {
   /** Phase 106.3 — Minutes the system waits for host approval before
    *  auto-escalating to the backup approver. Default 5. */
   visitorApprovalEscalationMinutes?: number;
+  /** Phase 109.1 — Accounting standard the dashboard reports under.
+   *  Drives downstream behaviour:
+   *    - IFRS:      straight-line depreciation default, FIFO/weighted-avg
+   *                 inventory only (no LIFO), capitalises operating
+   *                 leases, single-step income statement allowed.
+   *    - US_GAAP:   straight-line OR accelerated depreciation allowed,
+   *                 FIFO / LIFO / weighted-avg inventory, ASC 842
+   *                 lease treatment, multi-step income statement.
+   *
+   *  Defaults to 'IFRS' on a fresh install (South Africa uses IFRS for
+   *  public companies, IFRS for SMEs for private — both align with the
+   *  Companies Act). Change in Settings → Accounting. */
+  accountingStandard?: AccountingStandard;
   /** Last-write metadata, surfaced in the UI so admins can see who changed what. */
   updatedAt: string;
   updatedBy: string;
@@ -6756,6 +6842,9 @@ export interface AppData {
   expenseClaims: ExpenseClaim[];
   companies: Company[];
   appSettings: AppSettings;
+  /** Phase 109.2 — Financial projection scenarios (3, 6, 12, 36-month forecasts
+   *  of P&L, Balance Sheet, Cash Flow). Optional so legacy state loads. */
+  financialProjections?: FinancialProjection[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -8462,3 +8551,689 @@ export function buildDefaultChartOfAccounts(): LedgerAccount[] {
   }));
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 109.2 — Financial Projections.
+ *
+ * A FinancialProjection is one named scenario (e.g. "Base case FY26", "If
+ * we land the QSR contract", "Recession"). Each scenario carries a set of
+ * assumptions and an opening balance sheet. The engine then projects N
+ * periods of Income Statement, Balance Sheet, and Cash Flow.
+ *
+ * The model is monthly under the hood (cash flow needs that resolution),
+ * but the UI can roll up to quarterly or annual views.
+ *
+ * Design principles:
+ *  1. Pure function: computeProjection() is deterministic — given the same
+ *     scenario, you always get the same numbers. No DB calls.
+ *  2. Articulation: the three statements ARTICULATE — net income flows to
+ *     retained earnings on the balance sheet, the balance sheet movements
+ *     reconcile to the cash flow statement.
+ *  3. Standard-aware: depreciation methods and inventory valuation
+ *     respect the AccountingStandard set in AppSettings.
+ *  4. Growth modelled as month-over-month %. Annual growth is split.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type ProjectionPeriodKind = 'month' | 'quarter' | 'year';
+
+/** What the scenario costs are driven by. "Percent of revenue" is the
+ *  simplest model (most realistic for a small manufacturer). "Fixed amount"
+ *  is for things like rent and insurance. */
+export type ProjectionCostDriver = 'percentRevenue' | 'fixedMonthly' | 'perUnit';
+
+/** A single line on the assumption sheet. Each line generates an expense
+ *  in the P&L for every period of the projection. */
+export interface ProjectionCostLine {
+  id: string;
+  /** Display label, e.g. "Paper", "Salaries", "Rent". */
+  label: string;
+  /** Maps to a Chart of Accounts code (5000-range = COGS, 6000-range = Overheads). */
+  accountCode?: string;
+  driver: ProjectionCostDriver;
+  /** Drives the value. For percentRevenue: 0–100. For fixedMonthly: ZAR. For perUnit: ZAR per produced unit. */
+  amount: number;
+  /** Optional inflation rate (annual %) — applied to fixedMonthly lines. */
+  inflationPercent?: number;
+  /** Optional one-off month (1-indexed) the cost kicks in — useful for new hires. */
+  startMonth?: number;
+}
+
+/** Capital expenditure plan (new machine, building expansion, etc.). */
+export interface ProjectionCapexItem {
+  id: string;
+  label: string;
+  /** ZAR amount of the spend. */
+  amount: number;
+  /** 1-indexed month within the projection when the cash leaves. */
+  month: number;
+  /** Useful life in years — drives the depreciation schedule. */
+  usefulLifeYears: number;
+  /** Default 'Straight Line'. Engine ignores method that's not allowed under
+   *  the active accounting standard. */
+  depreciationMethod?: string;
+}
+
+/** Funding events — new loan drawdown, equity injection. */
+export interface ProjectionFundingItem {
+  id: string;
+  label: string;
+  kind: 'loan' | 'equity' | 'grant';
+  amount: number;
+  /** 1-indexed month within the projection when the cash arrives. */
+  month: number;
+  /** For loans: annual interest rate %, monthly repayment ZAR. */
+  interestRatePercent?: number;
+  monthlyRepayment?: number;
+}
+
+/** Opening Balance Sheet — what the business looks like on day 0 of the
+ *  projection. Drives the starting balances on the projected Balance Sheet. */
+export interface ProjectionOpeningBalances {
+  cash: number;
+  accountsReceivable: number;
+  inventory: number;
+  otherCurrentAssets: number;
+  ppe: number;
+  accumulatedDepreciation: number;
+  otherNonCurrentAssets: number;
+  accountsPayable: number;
+  shortTermDebt: number;
+  otherCurrentLiabilities: number;
+  longTermDebt: number;
+  otherNonCurrentLiabilities: number;
+  shareCapital: number;
+  retainedEarnings: number;
+}
+
+export function emptyOpeningBalances(): ProjectionOpeningBalances {
+  return {
+    cash: 0,
+    accountsReceivable: 0,
+    inventory: 0,
+    otherCurrentAssets: 0,
+    ppe: 0,
+    accumulatedDepreciation: 0,
+    otherNonCurrentAssets: 0,
+    accountsPayable: 0,
+    shortTermDebt: 0,
+    otherCurrentLiabilities: 0,
+    longTermDebt: 0,
+    otherNonCurrentLiabilities: 0,
+    shareCapital: 0,
+    retainedEarnings: 0,
+  };
+}
+
+/** Revenue assumption block. */
+export interface ProjectionRevenueAssumptions {
+  /** Opening monthly revenue (ZAR). */
+  baselineMonthlyRevenue: number;
+  /** Annual growth %, distributed monthly (1 + g/100)^(1/12) – 1. */
+  annualGrowthPercent: number;
+  /** Average gross margin %, used to derive a default COGS line if no
+   *  specific COGS cost lines are supplied. */
+  grossMarginPercent: number;
+  /** Optional units sold per month, baseline. Drives perUnit cost lines. */
+  baselineUnitsPerMonth?: number;
+}
+
+/** Working-capital assumption block — drives the indirect cash flow. */
+export interface ProjectionWorkingCapitalAssumptions {
+  /** Days Sales Outstanding — average collection time. Drives AR. */
+  dso: number;
+  /** Days Payables Outstanding — average payment time. Drives AP. */
+  dpo: number;
+  /** Days Inventory Outstanding — average days of stock on hand. Drives Inventory. */
+  dio: number;
+}
+
+/** Tax assumption block — South Africa default is 27% corporate tax. */
+export interface ProjectionTaxAssumptions {
+  corporateTaxRatePercent: number;
+  /** VAT is netted out (revenue is ex-VAT), but recorded for cash flow. */
+  vatRatePercent: number;
+}
+
+/** The full scenario. Persisted on AppData.financialProjections. */
+export interface FinancialProjection {
+  id: string;
+  name: string;
+  description?: string;
+  /** Date the scenario was created. */
+  createdAt: string;
+  createdBy?: string;
+  /** Optional last-edited stamp. */
+  updatedAt?: string;
+  /** Scenario tag for compare view — Base / Optimistic / Pessimistic / Custom. */
+  scenarioKind?: 'base' | 'optimistic' | 'pessimistic' | 'custom';
+  /** Number of months to project (3, 6, 12, 24, 36). */
+  horizonMonths: number;
+  /** First month of the projection — usually "next month after today". ISO yyyy-mm-01. */
+  startMonth: string;
+  /** Which accounting standard the projection is presented in. Defaults to
+   *  AppSettings.accountingStandard when omitted. */
+  accountingStandard?: AccountingStandard;
+  revenue: ProjectionRevenueAssumptions;
+  workingCapital: ProjectionWorkingCapitalAssumptions;
+  tax: ProjectionTaxAssumptions;
+  /** Cost lines — depreciation/interest are auto-generated by the engine. */
+  costLines: ProjectionCostLine[];
+  capex: ProjectionCapexItem[];
+  funding: ProjectionFundingItem[];
+  opening: ProjectionOpeningBalances;
+  /** Inventory valuation method — defaults to FIFO. Used in disclosure. */
+  inventoryMethod?: InventoryValuationMethod;
+}
+
+/* ----------------- Computed output structures (engine result) ---------------- */
+
+/** Income Statement (Profit & Loss) for one period. */
+export interface ProjectedIncomeStatement {
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  operatingExpenses: number;
+  depreciationAmortisation: number;
+  ebit: number;
+  interestExpense: number;
+  ebt: number;
+  tax: number;
+  netIncome: number;
+  /** Line-level breakdown for the printable view. */
+  costBreakdown: Array<{ label: string; amount: number; accountCode?: string }>;
+}
+
+/** Balance Sheet at end of one period. */
+export interface ProjectedBalanceSheet {
+  cash: number;
+  accountsReceivable: number;
+  inventory: number;
+  otherCurrentAssets: number;
+  totalCurrentAssets: number;
+  ppe: number;
+  accumulatedDepreciation: number;
+  netPpe: number;
+  otherNonCurrentAssets: number;
+  totalNonCurrentAssets: number;
+  totalAssets: number;
+  accountsPayable: number;
+  shortTermDebt: number;
+  otherCurrentLiabilities: number;
+  totalCurrentLiabilities: number;
+  longTermDebt: number;
+  otherNonCurrentLiabilities: number;
+  totalNonCurrentLiabilities: number;
+  totalLiabilities: number;
+  shareCapital: number;
+  retainedEarnings: number;
+  totalEquity: number;
+  totalLiabilitiesAndEquity: number;
+  /** Articulation check — should be ~0. */
+  balanceCheck: number;
+}
+
+/** Cash Flow Statement (indirect method) for one period. */
+export interface ProjectedCashFlow {
+  netIncome: number;
+  depreciationAmortisation: number;
+  changeInAR: number;
+  changeInInventory: number;
+  changeInAP: number;
+  changeInOtherWC: number;
+  cashFromOperations: number;
+  capex: number;
+  cashFromInvesting: number;
+  loanDrawdown: number;
+  equityInjection: number;
+  loanRepayment: number;
+  cashFromFinancing: number;
+  netCashChange: number;
+  openingCash: number;
+  closingCash: number;
+}
+
+/** One period's worth of all three statements, plus the timestamp. */
+export interface ProjectedPeriod {
+  /** ISO yyyy-mm-01 of the period. */
+  periodStart: string;
+  /** Display label, e.g. "Jun 2026". */
+  label: string;
+  incomeStatement: ProjectedIncomeStatement;
+  balanceSheet: ProjectedBalanceSheet;
+  cashFlow: ProjectedCashFlow;
+}
+
+/** Total result from running the engine on one scenario. */
+export interface ProjectionResult {
+  scenarioId: string;
+  scenarioName: string;
+  accountingStandard: AccountingStandard;
+  inventoryMethod: InventoryValuationMethod;
+  periods: ProjectedPeriod[];
+  /** Roll-up totals for the headline tiles. */
+  totals: {
+    revenue: number;
+    cogs: number;
+    grossProfit: number;
+    operatingExpenses: number;
+    netIncome: number;
+    closingCash: number;
+    /** Smallest closing-cash value over the horizon — flags going-concern risk. */
+    minClosingCash: number;
+    /** First period where closing cash goes negative, or null. */
+    cashRunwayBreakMonth: string | null;
+  };
+  /** Articulation diagnostic — biggest |balanceCheck| across periods. */
+  worstBalanceDelta: number;
+}
+
+/* ------------------- Helpers: empty scenario + sample seed ------------------- */
+
+export function emptyFinancialProjection(overrides?: Partial<FinancialProjection>): FinancialProjection {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const isoStart = nextMonth.toISOString().slice(0, 10);
+  return {
+    id: `proj-${Date.now()}`,
+    name: 'New scenario',
+    createdAt: now.toISOString(),
+    scenarioKind: 'base',
+    horizonMonths: 12,
+    startMonth: isoStart,
+    revenue: {
+      baselineMonthlyRevenue: 0,
+      annualGrowthPercent: 0,
+      grossMarginPercent: 30,
+    },
+    workingCapital: { dso: 45, dpo: 30, dio: 30 },
+    tax: { corporateTaxRatePercent: 27, vatRatePercent: 15 },
+    costLines: [],
+    capex: [],
+    funding: [],
+    opening: emptyOpeningBalances(),
+    inventoryMethod: 'FIFO',
+    ...overrides,
+  };
+}
+
+/* ----------------------- The engine: computeProjection ----------------------- */
+
+/** Format a yyyy-mm-01 start date plus offset N months back to ISO date. */
+function addMonthsISO(isoStart: string, monthsToAdd: number): string {
+  const [y, m] = isoStart.split('-').map(Number);
+  const d = new Date(y, m - 1 + monthsToAdd, 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function monthLabel(isoStart: string): string {
+  const [y, m] = isoStart.split('-').map(Number);
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' });
+}
+
+/** Convert annual growth % to monthly compound rate. */
+function annualToMonthlyRate(annualPercent: number): number {
+  return Math.pow(1 + annualPercent / 100, 1 / 12) - 1;
+}
+
+/**
+ * Pure projection engine. Given a scenario, produces N periods of
+ * articulated financial statements.
+ *
+ * Tested via the Financial Projections page; no DB calls.
+ */
+export function computeProjection(
+  scenario: FinancialProjection,
+  defaultStandard: AccountingStandard = 'IFRS',
+): ProjectionResult {
+  const standard = scenario.accountingStandard ?? defaultStandard;
+  const inventoryMethod = scenario.inventoryMethod ?? 'FIFO';
+  const monthlyRevGrowth = annualToMonthlyRate(scenario.revenue.annualGrowthPercent);
+
+  // Build depreciation schedule from opening PPE plus capex.
+  // For simplicity: straight-line on a 10-year default useful life for opening
+  // PPE; each capex item respects its own usefulLifeYears.
+  const openingPpeNet = scenario.opening.ppe - scenario.opening.accumulatedDepreciation;
+  const openingDepPerMonth = openingPpeNet > 0 ? openingPpeNet / (10 * 12) : 0;
+
+  // Track running balances.
+  let cash = scenario.opening.cash;
+  let ar = scenario.opening.accountsReceivable;
+  let inventory = scenario.opening.inventory;
+  let otherCA = scenario.opening.otherCurrentAssets;
+  let ppe = scenario.opening.ppe;
+  let accDep = scenario.opening.accumulatedDepreciation;
+  let otherNCA = scenario.opening.otherNonCurrentAssets;
+  let ap = scenario.opening.accountsPayable;
+  let stDebt = scenario.opening.shortTermDebt;
+  let otherCL = scenario.opening.otherCurrentLiabilities;
+  let ltDebt = scenario.opening.longTermDebt;
+  let otherNCL = scenario.opening.otherNonCurrentLiabilities;
+  let shareCap = scenario.opening.shareCapital;
+  let retainedEarnings = scenario.opening.retainedEarnings;
+
+  const periods: ProjectedPeriod[] = [];
+  let minClosingCash = cash;
+  let cashRunwayBreakMonth: string | null = null;
+  let worstBalanceDelta = 0;
+
+  for (let i = 0; i < scenario.horizonMonths; i++) {
+    const periodStart = addMonthsISO(scenario.startMonth, i);
+    const label = monthLabel(periodStart);
+
+    // ----------- Revenue -----------
+    const revenue = scenario.revenue.baselineMonthlyRevenue * Math.pow(1 + monthlyRevGrowth, i);
+
+    // ----------- COGS -----------
+    // If no costLine with accountCode 5xxx provided, derive from gross margin.
+    const explicitCogs = scenario.costLines
+      .filter((c) => c.accountCode?.startsWith('5'))
+      .reduce(
+        (sum, c) => sum + costLineAmount(c, revenue, scenario.revenue.baselineUnitsPerMonth ?? 0, i),
+        0,
+      );
+    const cogs =
+      explicitCogs > 0
+        ? explicitCogs
+        : revenue * (1 - scenario.revenue.grossMarginPercent / 100);
+    const grossProfit = revenue - cogs;
+
+    // ----------- Operating expenses -----------
+    const opexLines = scenario.costLines.filter((c) => !c.accountCode?.startsWith('5'));
+    const opexBreakdown = opexLines.map((c) => ({
+      label: c.label,
+      amount: costLineAmount(c, revenue, scenario.revenue.baselineUnitsPerMonth ?? 0, i),
+      accountCode: c.accountCode,
+    }));
+    const operatingExpenses = opexBreakdown.reduce((sum, l) => sum + l.amount, 0);
+
+    // ----------- Capex landing this period -----------
+    const capexThisMonth = scenario.capex
+      .filter((c) => c.month === i + 1)
+      .reduce((sum, c) => sum + c.amount, 0);
+    ppe += capexThisMonth;
+
+    // ----------- Depreciation -----------
+    const newCapexDep = scenario.capex
+      .filter((c) => c.month <= i + 1)
+      .reduce((sum, c) => {
+        const monthsSinceLanded = i + 1 - c.month;
+        if (monthsSinceLanded < 0) return sum;
+        const monthlyDep = c.amount / (c.usefulLifeYears * 12);
+        return sum + monthlyDep;
+      }, 0);
+    const depreciationAmortisation = openingDepPerMonth + newCapexDep;
+    accDep += depreciationAmortisation;
+
+    // ----------- Funding events landing this period -----------
+    const fundingThisMonth = scenario.funding.filter((f) => f.month === i + 1);
+    const loanDrawdown = fundingThisMonth
+      .filter((f) => f.kind === 'loan')
+      .reduce((sum, f) => sum + f.amount, 0);
+    const equityInjection = fundingThisMonth
+      .filter((f) => f.kind === 'equity' || f.kind === 'grant')
+      .reduce((sum, f) => sum + f.amount, 0);
+    ltDebt += loanDrawdown;
+    shareCap += equityInjection;
+
+    // ----------- Interest expense -----------
+    const interestExpense = scenario.funding
+      .filter((f) => f.kind === 'loan' && f.month <= i + 1 && f.interestRatePercent)
+      .reduce((sum, f) => sum + (f.amount * (f.interestRatePercent ?? 0)) / 100 / 12, 0);
+
+    // ----------- Loan repayments -----------
+    const loanRepayment = scenario.funding
+      .filter((f) => f.kind === 'loan' && f.month <= i + 1 && f.monthlyRepayment)
+      .reduce((sum, f) => sum + (f.monthlyRepayment ?? 0), 0);
+    ltDebt = Math.max(0, ltDebt - loanRepayment);
+
+    // ----------- P&L roll-up -----------
+    const ebit = grossProfit - operatingExpenses - depreciationAmortisation;
+    const ebt = ebit - interestExpense;
+    const tax = ebt > 0 ? ebt * (scenario.tax.corporateTaxRatePercent / 100) : 0;
+    const netIncome = ebt - tax;
+
+    // ----------- Working capital movements -----------
+    const newAr = (revenue * scenario.workingCapital.dso) / 30;
+    const newInventory = (cogs * scenario.workingCapital.dio) / 30;
+    const newAp = (cogs * scenario.workingCapital.dpo) / 30;
+    const changeInAR = newAr - ar;
+    const changeInInventory = newInventory - inventory;
+    const changeInAP = newAp - ap;
+    ar = newAr;
+    inventory = newInventory;
+    ap = newAp;
+
+    // ----------- Indirect cash flow -----------
+    const cashFromOperations =
+      netIncome + depreciationAmortisation - changeInAR - changeInInventory + changeInAP;
+    const cashFromInvesting = -capexThisMonth;
+    const cashFromFinancing = loanDrawdown + equityInjection - loanRepayment;
+    const netCashChange = cashFromOperations + cashFromInvesting + cashFromFinancing;
+    const openingCash = cash;
+    cash += netCashChange;
+
+    // ----------- Equity articulation -----------
+    retainedEarnings += netIncome;
+
+    // ----------- Build statements -----------
+    const incomeStatement: ProjectedIncomeStatement = {
+      revenue,
+      cogs,
+      grossProfit,
+      operatingExpenses,
+      depreciationAmortisation,
+      ebit,
+      interestExpense,
+      ebt,
+      tax,
+      netIncome,
+      costBreakdown: [
+        { label: 'COGS', amount: cogs, accountCode: '5000' },
+        ...opexBreakdown,
+        { label: 'Depreciation & amortisation', amount: depreciationAmortisation, accountCode: '6500' },
+        { label: 'Interest expense', amount: interestExpense, accountCode: '6600' },
+      ],
+    };
+
+    const totalCurrentAssets = cash + ar + inventory + otherCA;
+    const netPpe = ppe - accDep;
+    const totalNonCurrentAssets = netPpe + otherNCA;
+    const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
+    const totalCurrentLiabilities = ap + stDebt + otherCL;
+    const totalNonCurrentLiabilities = ltDebt + otherNCL;
+    const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
+    const totalEquity = shareCap + retainedEarnings;
+    const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
+    const balanceCheck = totalAssets - totalLiabilitiesAndEquity;
+
+    if (Math.abs(balanceCheck) > Math.abs(worstBalanceDelta)) {
+      worstBalanceDelta = balanceCheck;
+    }
+    if (cash < minClosingCash) minClosingCash = cash;
+    if (cash < 0 && !cashRunwayBreakMonth) cashRunwayBreakMonth = periodStart;
+
+    const balanceSheet: ProjectedBalanceSheet = {
+      cash,
+      accountsReceivable: ar,
+      inventory,
+      otherCurrentAssets: otherCA,
+      totalCurrentAssets,
+      ppe,
+      accumulatedDepreciation: accDep,
+      netPpe,
+      otherNonCurrentAssets: otherNCA,
+      totalNonCurrentAssets,
+      totalAssets,
+      accountsPayable: ap,
+      shortTermDebt: stDebt,
+      otherCurrentLiabilities: otherCL,
+      totalCurrentLiabilities,
+      longTermDebt: ltDebt,
+      otherNonCurrentLiabilities: otherNCL,
+      totalNonCurrentLiabilities,
+      totalLiabilities,
+      shareCapital: shareCap,
+      retainedEarnings,
+      totalEquity,
+      totalLiabilitiesAndEquity,
+      balanceCheck,
+    };
+
+    const cashFlow: ProjectedCashFlow = {
+      netIncome,
+      depreciationAmortisation,
+      changeInAR,
+      changeInInventory,
+      changeInAP,
+      changeInOtherWC: 0,
+      cashFromOperations,
+      capex: -capexThisMonth,
+      cashFromInvesting,
+      loanDrawdown,
+      equityInjection,
+      loanRepayment,
+      cashFromFinancing,
+      netCashChange,
+      openingCash,
+      closingCash: cash,
+    };
+
+    periods.push({ periodStart, label, incomeStatement, balanceSheet, cashFlow });
+  }
+
+  // Roll up totals.
+  const totals = periods.reduce(
+    (acc, p) => ({
+      revenue: acc.revenue + p.incomeStatement.revenue,
+      cogs: acc.cogs + p.incomeStatement.cogs,
+      grossProfit: acc.grossProfit + p.incomeStatement.grossProfit,
+      operatingExpenses: acc.operatingExpenses + p.incomeStatement.operatingExpenses,
+      netIncome: acc.netIncome + p.incomeStatement.netIncome,
+    }),
+    { revenue: 0, cogs: 0, grossProfit: 0, operatingExpenses: 0, netIncome: 0 },
+  );
+
+  return {
+    scenarioId: scenario.id,
+    scenarioName: scenario.name,
+    accountingStandard: standard,
+    inventoryMethod,
+    periods,
+    totals: {
+      ...totals,
+      closingCash: cash,
+      minClosingCash,
+      cashRunwayBreakMonth,
+    },
+    worstBalanceDelta,
+  };
+}
+
+/** Compute one cost line's amount for a given period. */
+function costLineAmount(
+  line: ProjectionCostLine,
+  revenueThisMonth: number,
+  unitsThisMonth: number,
+  monthIndex: number,
+): number {
+  if (line.startMonth && monthIndex + 1 < line.startMonth) return 0;
+  if (line.driver === 'percentRevenue') return revenueThisMonth * (line.amount / 100);
+  if (line.driver === 'perUnit') return unitsThisMonth * line.amount;
+  // fixedMonthly with inflation
+  const inflation = line.inflationPercent ? Math.pow(1 + line.inflationPercent / 100, monthIndex / 12) : 1;
+  return line.amount * inflation;
+}
+
+/** Group monthly periods into quarterly or annual rollups for the UI. */
+export function rollUpPeriods(periods: ProjectedPeriod[], kind: ProjectionPeriodKind): ProjectedPeriod[] {
+  if (kind === 'month') return periods;
+  const chunkSize = kind === 'quarter' ? 3 : 12;
+  const chunks: ProjectedPeriod[] = [];
+  for (let i = 0; i < periods.length; i += chunkSize) {
+    const slice = periods.slice(i, i + chunkSize);
+    if (slice.length === 0) continue;
+    const last = slice[slice.length - 1];
+    const first = slice[0];
+    // P&L sums; Balance Sheet is the END of the period; Cash flow sums.
+    const sumPL = slice.reduce(
+      (acc, p) => ({
+        revenue: acc.revenue + p.incomeStatement.revenue,
+        cogs: acc.cogs + p.incomeStatement.cogs,
+        grossProfit: acc.grossProfit + p.incomeStatement.grossProfit,
+        operatingExpenses: acc.operatingExpenses + p.incomeStatement.operatingExpenses,
+        depreciationAmortisation:
+          acc.depreciationAmortisation + p.incomeStatement.depreciationAmortisation,
+        ebit: acc.ebit + p.incomeStatement.ebit,
+        interestExpense: acc.interestExpense + p.incomeStatement.interestExpense,
+        ebt: acc.ebt + p.incomeStatement.ebt,
+        tax: acc.tax + p.incomeStatement.tax,
+        netIncome: acc.netIncome + p.incomeStatement.netIncome,
+      }),
+      {
+        revenue: 0,
+        cogs: 0,
+        grossProfit: 0,
+        operatingExpenses: 0,
+        depreciationAmortisation: 0,
+        ebit: 0,
+        interestExpense: 0,
+        ebt: 0,
+        tax: 0,
+        netIncome: 0,
+      },
+    );
+    const sumCF = slice.reduce(
+      (acc, p) => ({
+        netIncome: acc.netIncome + p.cashFlow.netIncome,
+        depreciationAmortisation: acc.depreciationAmortisation + p.cashFlow.depreciationAmortisation,
+        changeInAR: acc.changeInAR + p.cashFlow.changeInAR,
+        changeInInventory: acc.changeInInventory + p.cashFlow.changeInInventory,
+        changeInAP: acc.changeInAP + p.cashFlow.changeInAP,
+        changeInOtherWC: acc.changeInOtherWC + p.cashFlow.changeInOtherWC,
+        cashFromOperations: acc.cashFromOperations + p.cashFlow.cashFromOperations,
+        capex: acc.capex + p.cashFlow.capex,
+        cashFromInvesting: acc.cashFromInvesting + p.cashFlow.cashFromInvesting,
+        loanDrawdown: acc.loanDrawdown + p.cashFlow.loanDrawdown,
+        equityInjection: acc.equityInjection + p.cashFlow.equityInjection,
+        loanRepayment: acc.loanRepayment + p.cashFlow.loanRepayment,
+        cashFromFinancing: acc.cashFromFinancing + p.cashFlow.cashFromFinancing,
+        netCashChange: acc.netCashChange + p.cashFlow.netCashChange,
+      }),
+      {
+        netIncome: 0,
+        depreciationAmortisation: 0,
+        changeInAR: 0,
+        changeInInventory: 0,
+        changeInAP: 0,
+        changeInOtherWC: 0,
+        cashFromOperations: 0,
+        capex: 0,
+        cashFromInvesting: 0,
+        loanDrawdown: 0,
+        equityInjection: 0,
+        loanRepayment: 0,
+        cashFromFinancing: 0,
+        netCashChange: 0,
+      },
+    );
+    chunks.push({
+      periodStart: first.periodStart,
+      label:
+        kind === 'quarter'
+          ? `${first.label.split(' ')[0]}–${last.label}`
+          : last.label.split(' ')[1] ?? last.label,
+      incomeStatement: {
+        ...sumPL,
+        costBreakdown: last.incomeStatement.costBreakdown,
+      },
+      // Balance sheet = end of last period in chunk.
+      balanceSheet: last.balanceSheet,
+      cashFlow: {
+        ...sumCF,
+        openingCash: first.cashFlow.openingCash,
+        closingCash: last.cashFlow.closingCash,
+      },
+    });
+  }
+  return chunks;
+}

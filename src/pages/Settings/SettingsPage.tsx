@@ -1,6 +1,8 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  ACCOUNTING_STANDARDS,
+  AccountingStandard,
   AppData,
   AppSettings,
   AppSettingsCompany,
@@ -8,8 +10,10 @@ import {
   AppSettingsFormState,
   AreaSafety,
   DEFAULT_AREA_SAFETY,
+  DEPRECIATION_METHODS_BY_STANDARD,
   FACTORY_AREAS,
   FactoryArea,
+  INVENTORY_METHODS_BY_STANDARD,
   getAreaSafety,
 } from '../../types';
 import { supabase } from '../../utils/supabase';
@@ -44,7 +48,7 @@ function formatSavedAt(iso: string): string {
   });
 }
 
-type SettingsTab = 'account' | 'branding' | 'templates' | 'pricing' | 'stockHolding' | 'permissions' | 'visitorAccess' | 'apiAccess' | 'access';
+type SettingsTab = 'account' | 'branding' | 'templates' | 'pricing' | 'stockHolding' | 'permissions' | 'accounting' | 'visitorAccess' | 'apiAccess' | 'access';
 
 const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
   { key: 'account', label: 'Account', subtitle: 'Your signed-in account and sign out.' },
@@ -53,6 +57,7 @@ const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
   { key: 'pricing', label: 'Pricing', subtitle: 'Company-wide standard margin used by the calculator when no override is set.' },
   { key: 'stockHolding', label: 'Stock-holding', subtitle: 'Default storage days, review cadence, and agreement wording.' },
   { key: 'permissions', label: 'Permissions', subtitle: 'Per-user view-level access. Replaces the old standalone Permissions page.' },
+  { key: 'accounting', label: 'Accounting', subtitle: 'Accounting standard (IFRS / US GAAP). Drives depreciation, inventory valuation, and lease treatment defaults.' },
   { key: 'visitorAccess', label: 'Visitor access', subtitle: 'Which areas reception can grant without host approval, and how long until an unanswered request escalates.' },
   { key: 'apiAccess', label: 'API access', subtitle: 'Secure read-only API for connecting JomoPak to other systems (Aman OS, dashboards, website). You control what’s shared.' },
   { key: 'access', label: 'Page access', subtitle: 'Which roles can open this Settings page at all.' },
@@ -82,6 +87,10 @@ interface SettingsPageProps {
    *  auto-escalation timer. Both write straight back to AppSettings. */
   onSetAreaSafety?: (area: FactoryArea, safety: AreaSafety) => void;
   onSetEscalationMinutes?: (minutes: number) => void;
+  /** Phase 109.1 — Accounting tab handler. Switches the reporting
+   *  standard. Downstream pages (fixed assets, inventory, projections)
+   *  read settings.accountingStandard for their default validation. */
+  onSetAccountingStandard?: (standard: AccountingStandard) => void;
   /** Phase 103.7.1 — when the page is opened from the account-menu
    *  "API access" entry, this seeds the active tab. Tabs are still
    *  clickable normally; this just changes the initial selection. */
@@ -97,6 +106,7 @@ export function SettingsPage(props: SettingsPageProps) {
     accountName, accountEmail, accountRole, onSignOut,
     apiAccessData, apiAccessConnectorConfig, apiAccessToday, onApiAccessSaveConfig, onApiAccessPublishNow,
     onSetAreaSafety, onSetEscalationMinutes,
+    onSetAccountingStandard,
     initialTab, onInitialTabHandled,
   } = props;
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? 'account');
@@ -194,6 +204,11 @@ export function SettingsPage(props: SettingsPageProps) {
             escalationMinutes={settings.visitorApprovalEscalationMinutes ?? 5}
             onSetAreaSafety={onSetAreaSafety}
             onSetEscalationMinutes={onSetEscalationMinutes}
+          />
+        ) : activeTab === 'accounting' ? (
+          <AccountingTab
+            current={settings.accountingStandard ?? 'IFRS'}
+            onChange={onSetAccountingStandard}
           />
         ) : (
           <AccessTab />
@@ -758,6 +773,145 @@ function VisitorAccessTab({ policy, escalationMinutes, onSetAreaSafety, onSetEsc
           finance, and admin areas.
         </p>
         {grouped.restricted.map((a) => rowFor(a, 'restricted'))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------- Accounting tab -------------------------------- */
+/*  Phase 109.1 — Accounting standard switcher.
+ *  Lets the finance team flip the reporting standard between IFRS and US GAAP.
+ *  Switching does NOT rewrite historical journals — it changes the defaults that
+ *  Fixed Assets (depreciation method), Inventory (valuation method),
+ *  Financial Statements (presentation), and Financial Projections (assumptions)
+ *  read at render time.
+ *  Persisted on AppSettings.accountingStandard (jsonb settings row).
+ */
+
+interface AccountingTabProps {
+  current: AccountingStandard;
+  onChange?: (standard: AccountingStandard) => void;
+}
+
+function AccountingTab({ current, onChange }: AccountingTabProps) {
+  const inventoryAllowed = INVENTORY_METHODS_BY_STANDARD[current];
+  const depreciationAllowed = DEPRECIATION_METHODS_BY_STANDARD[current];
+
+  return (
+    <div className="settings-accounting-tab">
+      <div className="settings-preview-block" style={{ marginBottom: '1rem' }}>
+        <p className="eyebrow">Reporting standard</p>
+        <p>
+          Choose the accounting standard your financial statements and
+          projections will follow. This drives default depreciation methods,
+          inventory valuation rules, lease treatment, and revenue recognition
+          guidance throughout the dashboard.
+        </p>
+      </div>
+
+      <div
+        className="settings-standards-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: '0.75rem',
+          marginBottom: '1.25rem',
+        }}
+      >
+        {ACCOUNTING_STANDARDS.map((entry) => {
+          const isActive = entry.key === current;
+          return (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => {
+                if (!isActive) onChange?.(entry.key);
+              }}
+              className={isActive ? 'standard-card is-active' : 'standard-card'}
+              style={{
+                textAlign: 'left',
+                padding: '1rem',
+                border: isActive
+                  ? '2px solid var(--accent, #1f7a4d)'
+                  : '1px solid var(--border, #d8dde3)',
+                borderRadius: '0.5rem',
+                background: isActive ? 'var(--accent-bg, #f0f8f3)' : 'var(--card-bg, #fff)',
+                cursor: isActive ? 'default' : 'pointer',
+                transition: 'all 120ms ease',
+              }}
+              aria-pressed={isActive}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                <strong style={{ fontSize: '1rem' }}>{entry.label}</strong>
+                {isActive ? (
+                  <span className="success-pill" style={{ fontSize: '0.75rem' }}>
+                    Active
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--muted, #5b6b7a)' }}>
+                {entry.description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="settings-preview-list">
+        <div className="settings-preview-block">
+          <p className="eyebrow">What changes when you switch</p>
+          <p>
+            Existing journals, invoices, and bills are <strong>not rewritten</strong>. The
+            switch only changes the validation defaults shown to new entries and the
+            captions on the printable Income Statement, Balance Sheet, and Cash Flow.
+          </p>
+        </div>
+
+        <div className="settings-preview-block">
+          <p className="eyebrow">Inventory valuation methods allowed</p>
+          <p>
+            {inventoryAllowed.join(', ')}.
+            {current === 'IFRS'
+              ? ' IFRS (IAS 2) prohibits LIFO.'
+              : ' US GAAP permits LIFO; if used, an LIFO reserve is required.'}
+          </p>
+        </div>
+
+        <div className="settings-preview-block">
+          <p className="eyebrow">Depreciation methods available</p>
+          <p>
+            {depreciationAllowed.join(', ')}.
+            {current === 'US_GAAP'
+              ? ' MACRS is only used for US tax reporting, not book accounting.'
+              : ''}
+          </p>
+        </div>
+
+        <div className="settings-preview-block">
+          <p className="eyebrow">Other defaults driven by this setting</p>
+          <p>
+            {current === 'IFRS'
+              ? 'Development costs may be capitalised when criteria are met (IAS 38). Investment property uses fair value option (IAS 40). Operating leases > 12 months are on-balance-sheet (IFRS 16).'
+              : 'Development costs are expensed as incurred (ASC 730). Investment property is recorded at cost less depreciation. Operating leases on-balance-sheet under ASC 842 but with dual lease classification.'}
+          </p>
+        </div>
+
+        <div className="settings-preview-block">
+          <p className="eyebrow">Where this is used</p>
+          <p>
+            Fixed Assets &gt; new asset form (depreciation method dropdown).
+            Finished Stock &gt; valuation method.
+            Financial Statements &gt; statement captions and disclosures.
+            Financial Projections &gt; assumption defaults.
+          </p>
+        </div>
       </div>
     </div>
   );

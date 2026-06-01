@@ -116,6 +116,7 @@ import { PayrollPage } from './pages/Payroll/PayrollPage';
 import { BankReconciliationPage } from './pages/Sars/BankReconciliationPage';
 import { GeneralLedgerPage } from './pages/Sars/GeneralLedgerPage';
 import { FinancialStatementsPage } from './pages/Sars/FinancialStatementsPage';
+import { FinancialProjectionsPage } from './pages/FinancialProjections/FinancialProjectionsPage';
 import { FixedAssetsPage } from './pages/Sars/FixedAssetsPage';
 import { MaintenancePage } from './pages/Maintenance/MaintenancePage';
 import { CurrenciesPage } from './pages/Sars/CurrenciesPage';
@@ -11522,6 +11523,22 @@ function App() {
             }));
             toast.success(`Escalation timer set to ${minutes} minute${minutes === 1 ? '' : 's'}`);
           }}
+          /* Phase 109.1 — Accounting standard switcher (IFRS vs US GAAP).
+             Writes settings.accountingStandard. Does NOT rewrite past
+             journals — only changes the defaults shown to new entries
+             and the captions on printable financial statements. */
+          onSetAccountingStandard={(standard) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                accountingStandard: standard,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success(`Reporting standard switched to ${standard === 'IFRS' ? 'IFRS' : 'US GAAP'}`);
+          }}
           /* Phase 103.7.1 — Honour the requested tab from the account
              menu ("API access"). SettingsPage clears it via the
              onInitialTabHandled callback so the next visit defaults
@@ -12677,6 +12694,48 @@ function App() {
           ledgerAccounts={data.ledgerAccounts}
           sarsConfig={data.appSettings.sarsConfig}
           today={getToday()}
+        />
+      )}
+
+      {/* Phase 109.3 — Financial Projections page. The page reads
+          AppData.financialProjections, calls computeProjection() to render
+          the projected statements, and writes any edits back via the
+          onSave handler below. */}
+      {view === 'financialProjections' && (
+        <FinancialProjectionsPage
+          projections={data.financialProjections ?? []}
+          defaultStandard={data.appSettings.accountingStandard ?? 'IFRS'}
+          onSave={(projection) => {
+            setData((current) => {
+              const list = current.financialProjections ?? [];
+              const idx = list.findIndex((p) => p.id === projection.id);
+              const next = idx >= 0
+                ? list.map((p) => (p.id === projection.id ? projection : p))
+                : [...list, projection];
+              return { ...current, financialProjections: next };
+            });
+          }}
+          onDelete={(id) => {
+            setData((current) => ({
+              ...current,
+              financialProjections: (current.financialProjections ?? []).filter((p) => p.id !== id),
+            }));
+          }}
+          onDuplicate={(sourceId) => {
+            setData((current) => {
+              const list = current.financialProjections ?? [];
+              const src = list.find((p) => p.id === sourceId);
+              if (!src) return current;
+              const clone = {
+                ...src,
+                id: `proj-${Date.now()}`,
+                name: `${src.name} (copy)`,
+                createdAt: new Date().toISOString(),
+                updatedAt: undefined,
+              };
+              return { ...current, financialProjections: [...list, clone] };
+            });
+          }}
         />
       )}
 

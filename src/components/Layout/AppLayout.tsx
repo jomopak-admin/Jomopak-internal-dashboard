@@ -39,7 +39,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   // Existing PaperLog rows remain queryable in the DB for legacy audits.
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'foodSafeMaterials', 'chemicalRegister'] },
   { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'stockMovements', 'labels', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
-  { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
+  { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'financialProjections', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   // HR sits as its own group — leave, loans, claims, warnings, payroll are
   // all HR-ish concerns the admin (currently Aman) does daily.
   { title: 'HR & Payroll', views: ['payroll', 'employees', 'staffLeave', 'staffLeaveApprove', 'staffLoans', 'expenseClaims', 'expenseClaimsApprove', 'irp5Centre', 'staffWarnings', 'notices'] },
