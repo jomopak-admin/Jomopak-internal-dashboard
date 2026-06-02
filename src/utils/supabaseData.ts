@@ -1585,6 +1585,41 @@ export function mapProForma(row: any): any {
   };
 }
 
+/**
+ * Phase 119.3 — Customer deposit mapper. Deposits sit on the balance
+ * sheet as a liability until allocated to a Tax Invoice.
+ */
+export function mapCustomerDeposit(row: any): any {
+  return {
+    id: row.id,
+    depositNumber: row.deposit_number,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    receivedDate: row.received_date,
+    amount: Number(row.amount ?? 0),
+    currency: row.currency ?? 'ZAR',
+    paymentMethod: row.payment_method ?? 'EFT',
+    bankReference: row.bank_reference ?? '',
+    proformaId: row.proforma_id ?? '',
+    proformaNumber: row.proforma_number ?? '',
+    receiptNumber: row.receipt_number ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    quoteId: row.quote_id ?? '',
+    quoteNumber: row.quote_number ?? '',
+    purpose: row.purpose ?? 'jobDeposit',
+    allocations: Array.isArray(row.allocations) ? row.allocations : [],
+    allocatedAmount: Number(row.allocated_amount ?? 0),
+    remainingAmount: Number(row.remaining_amount ?? 0),
+    status: row.status ?? 'Open',
+    capturedByName: row.captured_by_name ?? '',
+    capturedAt: row.captured_at ?? row.created_at,
+    notes: row.notes ?? '',
+  };
+}
+
 function mapProductionSpec(row: any): any {
   return {
     id: row.id,
@@ -2606,6 +2641,7 @@ export async function fetchAppData(): Promise<AppData> {
     plateCosts,
     invoices,
     proformasRows,
+    customerDepositsRows,
     productionSpecs,
     workTickets,
     chemicalRegisterEntries,
@@ -2697,6 +2733,7 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('plate_costs'),
     safeSelect('invoices'),
     safeSelect('pro_formas'),
+    safeSelect('customer_deposits'),
     safeSelect('production_specs'),
     safeSelect('work_tickets'),
     safeSelect('chemical_register_entries'),
@@ -2784,6 +2821,7 @@ export async function fetchAppData(): Promise<AppData> {
     deliveryNotes: deliveryNotes.map(mapDeliveryNote),
     invoices: invoices.map(mapInvoice),
     proformas: proformasRows.map(mapProForma),
+    customerDeposits: customerDepositsRows.map(mapCustomerDeposit),
     productionSpecs: productionSpecs.map(mapProductionSpec),
     paperRates: paperRates.map(mapPaperRate),
     costProfiles: costProfiles.map(mapCostProfile),
@@ -4274,6 +4312,33 @@ export async function syncAppData(data: AppData): Promise<void> {
       amount_invoiced: pf.amountInvoiced,
       amount_still_to_invoice: pf.amountStillToInvoice,
       amount_received_not_yet_invoiced: pf.amountReceivedNotYetInvoiced,
+    }))),
+    // Phase 119.3 — Customer deposit ledger.
+    safeUpsert('customer_deposits', (data.customerDeposits ?? []).map((d) => ({
+      id: d.id,
+      deposit_number: d.depositNumber,
+      client_id: d.clientId || null,
+      client_name: d.clientName,
+      received_date: d.receivedDate,
+      amount: d.amount,
+      currency: d.currency,
+      payment_method: d.paymentMethod,
+      bank_reference: d.bankReference,
+      proforma_id: d.proformaId || null,
+      proforma_number: d.proformaNumber || null,
+      receipt_number: d.receiptNumber,
+      job_id: d.jobId || null,
+      job_number: d.jobNumber || null,
+      quote_id: d.quoteId || null,
+      quote_number: d.quoteNumber || null,
+      purpose: d.purpose,
+      allocations: d.allocations,
+      allocated_amount: d.allocatedAmount,
+      remaining_amount: d.remainingAmount,
+      status: d.status,
+      captured_by_name: d.capturedByName,
+      captured_at: d.capturedAt,
+      notes: d.notes,
     }))),
     safeUpsert('production_specs', data.productionSpecs.map((s) => ({
       id: s.id, spec_number: s.specNumber, created_at: s.createdAt,

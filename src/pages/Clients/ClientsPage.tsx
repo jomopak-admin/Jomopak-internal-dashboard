@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
-import { BrandLogo, Client, ClientFilters, ClientFormState, CUSTOMER_PAYMENT_MODEL_LABELS, CustomerPaymentModel, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
+import { BrandLogo, Client, ClientFilters, ClientFormState, CUSTOMER_PAYMENT_MODEL_LABELS, CustomerDeposit, CustomerPaymentModel, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
 import { formatNumber } from '../../utils/calculations';
 import { describePipelinePosition, summarisePipeline } from '../../utils/jobPipeline';
 import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
@@ -52,6 +52,9 @@ interface ClientsPageProps {
    *  Client form lets the admin pin a specific logo to this client; all
    *  customer-facing documents for this client then use it. */
   brandLogos?: BrandLogo[];
+  /** Phase 119.7 — Customer deposits, so the client register can show
+   *  "they have R X in unallocated deposit balance" inline. */
+  customerDeposits?: CustomerDeposit[];
 }
 
 export function ClientsPage({
@@ -84,6 +87,7 @@ export function ClientsPage({
   jobs = [],
   onOpenJob,
   brandLogos = [],
+  customerDeposits = [],
 }: ClientsPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -190,6 +194,25 @@ export function ClientsPage({
     }
     return max;
   }, [stockHoldingOverviews]);
+
+  /** Phase 119.7 — Deposit rollup per client. Open balance = sum of
+   *  remainingAmount across deposits that aren't Cancelled or Refunded.
+   *  Used by the Client register to show "they have unallocated deposit
+   *  credit sitting on the balance sheet." */
+  const depositsByClient = useMemo(() => {
+    const map = new Map<string, { open: number; count: number; received: number; allocated: number }>();
+    for (const d of customerDeposits) {
+      if (!d.clientId) continue;
+      if (d.status === 'Cancelled' || d.status === 'Refunded') continue;
+      const row = map.get(d.clientId) ?? { open: 0, count: 0, received: 0, allocated: 0 };
+      row.open += d.remainingAmount;
+      row.received += d.amount;
+      row.allocated += d.allocatedAmount;
+      row.count += 1;
+      map.set(d.clientId, row);
+    }
+    return map;
+  }, [customerDeposits]);
 
   const profileMissing: string[] = [];
   if (!clientForm.name.trim()) profileMissing.push('Customer display name');
@@ -716,13 +739,28 @@ export function ClientsPage({
           {filteredClients.length ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Client</th><th>Balance / Limit</th><th>Stock holding</th><th>Delivery notes</th><th>Tooling</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Client</th><th>Balance / Limit</th><th>Deposits</th><th>Stock holding</th><th>Delivery notes</th><th>Tooling</th><th>Portal</th><th>Agreements</th><th>Actions</th></tr></thead>
                 <tbody>{filteredClients.map((client) => {
                   const clientDns = deliveryNotesByClient.get(client.id) || [];
                   return (
                     <tr key={client.id}>
                       <td><strong>{client.name}</strong><CommercialFlags client={client} /><div className="table-subtext">{client.companyName || client.code || 'No company set'}</div></td>
                       <td className={isClientOverCredit(client) ? 'cell-alert' : undefined}>{client.currentBalance} / {client.creditLimit}<div className="table-subtext">{client.paymentTerms || 'Not set'}</div></td>
+                      {/* Phase 119.7 — Deposit balance card. Shows the
+                          unallocated balance — what we still owe in
+                          goods or refund. Quiet "—" when no deposits. */}
+                      <td>
+                        {(() => {
+                          const dep = depositsByClient.get(client.id);
+                          if (!dep || dep.count === 0) return <span className="muted" style={{ fontSize: '0.78rem' }}>—</span>;
+                          return (
+                            <>
+                              <strong style={{ color: dep.open > 0 ? 'var(--jp-orange, #db5a1f)' : undefined }}>R {dep.open.toFixed(2)}</strong>
+                              <div className="table-subtext">{dep.count} deposit{dep.count === 1 ? '' : 's'} · R {dep.received.toFixed(2)} received</div>
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td>{client.stockHoldingEnabled ? `Yes · ${client.depositRequiredPercent}% deposit` : 'No'}<div className="table-subtext">{client.minimumMonthlyReleaseQuantity ? `Min monthly ${client.minimumMonthlyReleaseQuantity} ${client.minimumMonthlyReleaseUnit}` : 'No monthly rule'}</div></td>
                       <td>
                         <strong>{clientDns.length}</strong>

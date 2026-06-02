@@ -32,7 +32,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   { title: 'Admin Hub', views: ['adminHub'] },
   { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reportsHub', 'reports', 'profitability', 'cashFlow'] },
-  { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'proformas', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
+  { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'proformas', 'customerDeposits', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },
   { title: 'Production', views: ['productionSchedule', 'materialRequirements', 'artwork', 'productionSpecs', 'jobs', 'workTicket', 'production', 'cleaningLogs', 'waste', 'machines', 'maintenance', 'dies', 'stereos'] },
   // Phase 75 — 'paper' (Paper Log) removed from sidebar. Production Log is now
   // the single capture point for material consumption + slitting transformation.

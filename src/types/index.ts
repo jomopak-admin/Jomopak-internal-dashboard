@@ -16,6 +16,7 @@ export type View =
   | 'deliveryNotes'
   | 'invoices'
   | 'proformas'
+  | 'customerDeposits'
   | 'productionSpecs'
   | 'machines'
   | 'jobs'
@@ -169,6 +170,7 @@ export const VIEW_LABELS: Record<View, string> = {
   deliveryNotes: 'Delivery Notes',
   invoices: 'Tax Invoices',
   proformas: 'Pro-formas',
+  customerDeposits: 'Customer Deposits',
   productionSpecs: 'Production Specs',
   machines: 'Machines',
   jobs: 'Job Cards',
@@ -1338,8 +1340,10 @@ export interface CustomerDeposit {
   currency: CurrencyCode;
   paymentMethod: string;           // EFT / Card / Cash / Cheque
   bankReference: string;           // for bank-rec matching
-  // Numbering on the documents we issued back to them
-  proformaNumber: string;          // empty if pro-forma not yet generated
+  // Linkage to the originating pro-forma. Both id (stable for the
+  // allocation engine) and number (for human display + bank ref matching).
+  proformaId: string;              // empty if not tied to a specific pro-forma
+  proformaNumber: string;          // empty if not tied to a specific pro-forma
   receiptNumber: string;
   // Earmarking — optional, lets us tie the deposit to a specific work item
   jobId: string;
@@ -8394,6 +8398,25 @@ export interface LeadFormState {
   onboardingFormReceived: boolean;
   onboardingFormReceivedDate: string;
   onboardingFormNote: string;
+}
+
+/**
+ * Phase 119.3 — Form state for capturing a customer deposit. Numeric
+ * fields stay as strings while the user types; we parse on save.
+ */
+export interface CustomerDepositFormState {
+  receivedDate: string;
+  clientId: string;
+  amount: string;
+  currency: CurrencyCode;
+  paymentMethod: string;
+  bankReference: string;
+  proformaId: string;
+  proformaNumber: string;
+  jobId: string;
+  jobNumber: string;
+  purpose: DepositPurpose;
+  notes: string;
 }
 
 export interface QuoteEstimateFormState {

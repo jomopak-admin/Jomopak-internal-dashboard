@@ -98,6 +98,7 @@ import { formToPricingSpec, buildPriceVersionDraft } from './utils/productPricin
 import { ProductionLogsPage } from './pages/ProductionLogs/ProductionLogsPage';
 import { QuotesPage } from './pages/Quotes/QuotesPage';
 import { ProFormasPage } from './pages/ProFormas/ProFormasPage';
+import { CustomerDepositsPage } from './pages/CustomerDeposits/CustomerDepositsPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
@@ -164,6 +165,10 @@ import {
   InvoiceFormState,
   ProForma,
   ProFormaFormState,
+  CustomerDeposit,
+  CustomerDepositFormState,
+  DepositAllocation,
+  DepositPurpose,
   ProductionSpec,
   ProductionSpecFilters,
   ProductionSpecFormState,
@@ -423,6 +428,7 @@ const VIEW_ORDER: View[] = [
   'customerStock',
   'deliveryNotes',
   'proformas',
+  'customerDeposits',
   'invoices',
   'productionSpecs',
   'jobs',
@@ -1404,6 +1410,25 @@ const createInitialProformaForm = (): ProFormaFormState => {
 };
 
 /**
+ * Phase 119.3 — Empty customer deposit form. Defaults to today + EFT
+ * since that's how 95% of factory deposits land in SA.
+ */
+const createInitialDepositForm = (): CustomerDepositFormState => ({
+  receivedDate: getToday(),
+  clientId: '',
+  amount: '',
+  currency: 'ZAR',
+  paymentMethod: 'EFT',
+  bankReference: '',
+  proformaId: '',
+  proformaNumber: '',
+  jobId: '',
+  jobNumber: '',
+  purpose: 'jobDeposit',
+  notes: '',
+});
+
+/**
  * Build the editable form state for Settings → all tabs from a saved AppSettings
  * record. The form keeps numeric / multi-line fields as raw strings so the
  * inputs remain forgiving while the user types; conversion happens on save.
@@ -2089,6 +2114,11 @@ function App() {
   // here so the next Invoice save writes the linkage automatically.
   // Cleared after the save.
   const [pendingProformaParent, setPendingProformaParent] = useState<{ id: string; number: string } | null>(null);
+  // Phase 119.3 — Customer deposit editor state.
+  const [depositForm, setDepositForm] = useState(createInitialDepositForm);
+  const [depositEditingId, setDepositEditingId] = useState<string | null>(null);
+  const [depositMessage, setDepositMessage] = useState('');
+  const [depositFilters, setDepositFilters] = useState<{ search: string; month: string; client: string; status: string }>({ search: '', month: '', client: '', status: '' });
   const [productionSpecForm, setProductionSpecForm] = useState(createInitialProductionSpecForm);
   const [productionSpecEditingId, setProductionSpecEditingId] = useState<string | null>(null);
   const [productionSpecMessage, setProductionSpecMessage] = useState('');
@@ -3316,6 +3346,8 @@ function App() {
   function resetInvoiceEditor() { setInvoiceForm({ ...createInitialInvoiceForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setInvoiceEditingId(null); setInvoiceMessage(''); }
   // Phase 120 — pro-forma editor reset (same default customer note as invoice).
   function resetProformaEditor() { setProformaForm({ ...createInitialProformaForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setProformaEditingId(null); setProformaMessage(''); }
+  // Phase 119.3 — deposit editor reset.
+  function resetDepositEditor() { setDepositForm(createInitialDepositForm()); setDepositEditingId(null); setDepositMessage(''); }
   function resetProductionSpecEditor() { setProductionSpecForm(createInitialProductionSpecForm()); setProductionSpecEditingId(null); setProductionSpecMessage(''); }
   function resetSettingsEditor() {
     setSettingsForm(buildSettingsForm(data.appSettings));
@@ -4845,28 +4877,115 @@ function App() {
             }, ...current.stockChangeLogs];
           }
         }
+        // Phase 119.5 — ALLOCATION ENGINE.
+        //
+        // When the new Tax Invoice was raised from a pro-forma, draw down
+        // any deposits that customer has against that pro-forma, FIFO by
+        // received date. Each consumed deposit becomes an InvoicePayment
+        // on the new invoice (so amountPaid + amountOutstanding reflect
+        // reality) and records a DepositAllocation entry for audit.
+        //
+        // The pro-forma's amountReceivedNotYetInvoiced unwinds in step
+        // with what we consumed, so the running tally stays accurate.
+        let allocatedFromDeposits = 0;
+        let depositPayments: typeof newInvoice.payments = [];
+        let nextDeposits = current.customerDeposits ?? [];
+        if (pendingProformaParent) {
+          const target = newInvoice.totalInclVat;
+          const todayIso = new Date().toISOString();
+          const eligibleDeposits = [...nextDeposits]
+            .filter((d) => d.proformaId === pendingProformaParent.id && d.status !== 'Cancelled' && d.remainingAmount > 0.005)
+            .sort((a, b) => a.receivedDate.localeCompare(b.receivedDate));
+          for (const dep of eligibleDeposits) {
+            if (allocatedFromDeposits >= target - 0.005) break;
+            const need = target - allocatedFromDeposits;
+            const take = Math.min(dep.remainingAmount, need);
+            if (take <= 0.005) continue;
+            const allocation: DepositAllocation = {
+              id: `alloc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+              depositId: dep.id,
+              invoiceId: invoiceNumber,
+              invoiceNumber,
+              deliveryNoteId: '',
+              deliveryNoteNumber: '',
+              appliedAmount: take,
+              appliedAt: todayIso,
+              appliedByName: invActorName,
+              reason: 'autoOnInvoice',
+              isReversal: false,
+              notes: `FIFO allocation against pro-forma ${pendingProformaParent.number}`,
+            };
+            // Stamp the allocation onto a fresh deposit object.
+            nextDeposits = nextDeposits.map((d) => {
+              if (d.id !== dep.id) return d;
+              const nextAlloc = [...d.allocations, allocation];
+              const nextAllocated = d.allocatedAmount + take;
+              const nextRem = Math.max(0, d.amount - nextAllocated);
+              return {
+                ...d,
+                allocations: nextAlloc,
+                allocatedAmount: nextAllocated,
+                remainingAmount: nextRem,
+                status: (nextRem <= 0.005 ? 'Allocated' : 'Open') as typeof d.status,
+              };
+            });
+            // Record a corresponding payment on the invoice. Each deposit
+            // is its own payment entry so the audit trail shows where
+            // each rand of the receipt came from.
+            // Coerce deposit's free-text paymentMethod to the constrained
+            // InvoicePayment.method union — anything outside the four
+            // canonical methods falls back to 'Other'.
+            const knownMethods = ['EFT', 'Cash', 'Card', 'Credit Terms', 'Other'] as const;
+            const method: typeof knownMethods[number] = (knownMethods as readonly string[]).includes(dep.paymentMethod)
+              ? (dep.paymentMethod as typeof knownMethods[number])
+              : 'Other';
+            depositPayments.push({
+              id: `pay-${allocation.id}`,
+              paymentDate: dep.receivedDate,
+              amount: take,
+              method,
+              reference: `Deposit ${dep.depositNumber}${dep.bankReference ? ' · ' + dep.bankReference : ''}`,
+              notes: `Auto-allocated from customer deposit (FIFO)`,
+            });
+            allocatedFromDeposits += take;
+          }
+        }
+        // Apply the deposit-derived payments to the new invoice so the
+        // amountPaid / amountOutstanding numbers reflect the allocation.
+        const finalInvoice = depositPayments.length > 0 ? {
+          ...newInvoice,
+          payments: [...newInvoice.payments, ...depositPayments],
+          amountPaid: newInvoice.amountPaid + allocatedFromDeposits,
+          amountOutstanding: Math.max(0, newInvoice.amountOutstanding - allocatedFromDeposits),
+          status: (newInvoice.amountOutstanding - allocatedFromDeposits) <= 0.005 ? 'Paid' as const : 'Partially Paid' as const,
+        } : newInvoice;
+
         return {
           ...current,
-          invoices: [newInvoice, ...current.invoices],
+          invoices: [finalInvoice, ...current.invoices],
           finishedGoodsStock: nextStock,
           stockChangeLogs: nextLogs,
+          customerDeposits: nextDeposits,
           // Phase 120 — When the new Invoice was raised from a
           // pro-forma, update the parent pro-forma's tracking:
           //  - push the new invoice's id onto linkedInvoiceIds
           //  - bump amountInvoiced by this invoice's totalInclVat
+          //  - drop amountReceivedNotYetInvoiced by what we allocated
           //  - recompute amountStillToInvoice
           //  - flip status: PartiallyPaid (some) / FullyPaid (all)
           proformas: pendingProformaParent
             ? (current.proformas ?? []).map((pf) => {
                 if (pf.id !== pendingProformaParent.id) return pf;
                 const nextLinked = [...pf.linkedInvoiceIds, invoiceNumber];
-                const nextInvoiced = pf.amountInvoiced + newInvoice.totalInclVat;
+                const nextInvoiced = pf.amountInvoiced + finalInvoice.totalInclVat;
                 const nextRemaining = Math.max(0, pf.totalInclVat - nextInvoiced);
+                const nextReceived = Math.max(0, pf.amountReceivedNotYetInvoiced - allocatedFromDeposits);
                 return {
                   ...pf,
                   linkedInvoiceIds: nextLinked,
                   amountInvoiced: nextInvoiced,
                   amountStillToInvoice: nextRemaining,
+                  amountReceivedNotYetInvoiced: nextReceived,
                   status: nextRemaining <= 0.005 ? 'FullyPaid' : 'PartiallyPaid',
                 };
               })
@@ -5253,6 +5372,142 @@ function App() {
     w.document.write(html);
     w.document.close();
     setTimeout(() => w.print(), 300);
+  }
+
+  /**
+   * Phase 119.3 — Save (create or update) a customer deposit.
+   *
+   * A deposit is the cash side of the SARS-aligned chain: pro-forma →
+   * deposit received → Tax Invoice raised. We capture it as a liability
+   * (we owe them stock); the allocation engine inside handleSaveInvoice
+   * draws it down when a Tax Invoice is raised against the parent
+   * pro-forma.
+   *
+   * Lean handler: no VAT calculation, no stock movement. Just persistence
+   * with FIFO-safe denormalised totals.
+   */
+  function handleSaveDeposit() {
+    if (!depositForm.clientId || !depositForm.amount || Number(depositForm.amount) <= 0) {
+      setDepositMessage('Client and a positive amount are required.');
+      return;
+    }
+    const client = data.clients.find((c) => c.id === depositForm.clientId);
+    if (!client) { setDepositMessage('Client not found.'); return; }
+
+    const amount = Number(depositForm.amount);
+    const { actorName } = getActor();
+
+    if (depositEditingId) {
+      setData((current) => ({
+        ...current,
+        customerDeposits: (current.customerDeposits ?? []).map((d) => {
+          if (d.id !== depositEditingId) return d;
+          // Recompute remaining if amount changed. Allocated stays fixed
+          // because it's been applied to invoices already.
+          const nextRemaining = Math.max(0, amount - d.allocatedAmount);
+          return {
+            ...d,
+            receivedDate: depositForm.receivedDate,
+            amount,
+            currency: depositForm.currency,
+            paymentMethod: depositForm.paymentMethod,
+            bankReference: depositForm.bankReference,
+            proformaId: depositForm.proformaId,
+            proformaNumber: depositForm.proformaNumber,
+            jobId: depositForm.jobId,
+            jobNumber: depositForm.jobNumber,
+            purpose: depositForm.purpose,
+            notes: depositForm.notes,
+            remainingAmount: nextRemaining,
+            status: nextRemaining <= 0.005 && d.allocatedAmount > 0 ? 'Allocated' : 'Open',
+          };
+        }),
+      }));
+    } else {
+      const existing = (data.customerDeposits ?? []).map((d) => d.depositNumber);
+      // Custom prefix outside the strict generateCode union — use inline
+      // numbering with the period+sequence pattern.
+      const period = depositForm.receivedDate.replace(/-/g, '').slice(0, 6);
+      const seq = existing.filter((c) => c.startsWith(`DEP-${period}-`)).length + 1;
+      const depositNumber = `DEP-${period}-${String(seq).padStart(3, '0')}`;
+      const newDeposit: CustomerDeposit = {
+        id: depositNumber,
+        depositNumber,
+        clientId: depositForm.clientId,
+        clientName: client.name,
+        receivedDate: depositForm.receivedDate,
+        amount,
+        currency: depositForm.currency,
+        paymentMethod: depositForm.paymentMethod,
+        bankReference: depositForm.bankReference,
+        proformaId: depositForm.proformaId,
+        proformaNumber: depositForm.proformaNumber,
+        receiptNumber: `REC-${period}-${String(seq).padStart(3, '0')}`,
+        jobId: depositForm.jobId,
+        jobNumber: depositForm.jobNumber,
+        quoteId: '',
+        quoteNumber: '',
+        purpose: depositForm.purpose,
+        allocations: [],
+        allocatedAmount: 0,
+        remainingAmount: amount,
+        status: 'Open',
+        capturedByName: actorName,
+        capturedAt: new Date().toISOString(),
+        notes: depositForm.notes,
+      };
+      setData((current) => ({
+        ...current,
+        customerDeposits: [newDeposit, ...(current.customerDeposits ?? [])],
+        // Phase 119.3 — Bump the parent pro-forma's "amount received not
+        // yet invoiced" so the pro-forma list shows that money is in.
+        proformas: depositForm.proformaId
+          ? (current.proformas ?? []).map((pf) => pf.id === depositForm.proformaId
+              ? { ...pf, amountReceivedNotYetInvoiced: pf.amountReceivedNotYetInvoiced + amount }
+              : pf)
+          : current.proformas,
+      }));
+    }
+    resetDepositEditor();
+  }
+
+  /** Phase 119.3 — Hydrate the deposit form for an existing record. */
+  function editDeposit(deposit: CustomerDeposit) {
+    setDepositEditingId(deposit.id);
+    setDepositForm({
+      receivedDate: deposit.receivedDate,
+      clientId: deposit.clientId,
+      amount: String(deposit.amount),
+      currency: deposit.currency,
+      paymentMethod: deposit.paymentMethod,
+      bankReference: deposit.bankReference,
+      proformaId: deposit.proformaId,
+      proformaNumber: deposit.proformaNumber,
+      jobId: deposit.jobId,
+      jobNumber: deposit.jobNumber,
+      purpose: deposit.purpose,
+      notes: deposit.notes,
+    });
+    setView('customerDeposits');
+  }
+
+  /** Phase 119.3 — Void a deposit. Only allowed if no allocations exist
+   *  (already drawn against an invoice). Otherwise admin must reverse
+   *  the allocations first. */
+  function cancelDeposit(deposit: CustomerDeposit) {
+    if (deposit.allocatedAmount > 0.005) return;
+    setData((current) => ({
+      ...current,
+      customerDeposits: (current.customerDeposits ?? []).map((d) => d.id === deposit.id
+        ? { ...d, status: 'Cancelled' as const, remainingAmount: 0 }
+        : d),
+      // Roll back the pro-forma's received-not-yet-invoiced tally.
+      proformas: deposit.proformaId
+        ? (current.proformas ?? []).map((pf) => pf.id === deposit.proformaId
+            ? { ...pf, amountReceivedNotYetInvoiced: Math.max(0, pf.amountReceivedNotYetInvoiced - deposit.amount) }
+            : pf)
+        : current.proformas,
+    }));
   }
 
   function convertProformaToTaxInvoice(proforma: ProForma) {
@@ -12203,6 +12458,25 @@ function App() {
         />
       )}
 
+      {view === 'customerDeposits' && (
+        <CustomerDepositsPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          proformas={data.proformas ?? []}
+          deposits={data.customerDeposits ?? []}
+          depositForm={depositForm}
+          setDepositForm={setDepositForm}
+          depositEditingId={depositEditingId}
+          depositMessage={depositMessage}
+          onSave={handleSaveDeposit}
+          onReset={resetDepositEditor}
+          depositFilters={depositFilters}
+          setDepositFilters={setDepositFilters}
+          onEdit={editDeposit}
+          onCancel={cancelDeposit}
+        />
+      )}
+
       {view === 'artwork' && (
         <ArtworkPage
           jobs={data.jobs}
@@ -12444,6 +12718,9 @@ function App() {
           // Phase 116 — Brand logo library so the Client form can show
           // the per-client logo picker.
           brandLogos={data.appSettings.brandLogos}
+          // Phase 119.7 — Deposit balances per client surface in the
+          // register so finance can see open deposits inline.
+          customerDeposits={data.customerDeposits}
           onOpenJob={(jobId) => {
             const job = data.jobs.find((j) => j.id === jobId);
             if (job) {
