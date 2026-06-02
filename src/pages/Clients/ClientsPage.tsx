@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
-import { BrandLogo, Client, ClientFilters, ClientFormState, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
+import { BrandLogo, Client, ClientFilters, ClientFormState, CUSTOMER_PAYMENT_MODEL_LABELS, CustomerPaymentModel, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
 import { formatNumber } from '../../utils/calculations';
 import { describePipelinePosition, summarisePipeline } from '../../utils/jobPipeline';
 import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
@@ -265,6 +265,39 @@ export function ClientsPage({
                   <option key={logo.id} value={logo.id}>{logo.label}{logo.isDefault ? ' · default' : ''}</option>
                 ))}
               </select>
+            </label>
+          ) : null}
+          {/* Phase 119 — Payment model classification. Tells the system
+              which AR flow this customer runs on (50/50, prepay-then-draw,
+              etc.) so new pro-formas and the dashboard chase logic
+              default to the right behaviour. Sits next to brand pickers
+              because it's a billing-side preference, same shape. */}
+          <label><span>Payment model</span>
+            <select
+              value={clientForm.paymentModel}
+              onChange={(event) => setClientForm({ ...clientForm, paymentModel: event.target.value as CustomerPaymentModel })}
+              title="Drives default pro-forma payment expectation, overdraw gates, and dashboard chase logic for this customer."
+            >
+              {(Object.keys(CUSTOMER_PAYMENT_MODEL_LABELS) as CustomerPaymentModel[]).map((key) => (
+                <option key={key} value={key}>{CUSTOMER_PAYMENT_MODEL_LABELS[key]}</option>
+              ))}
+            </select>
+          </label>
+          {/* Only show the deposit-% input for models where it's actually
+              meaningful — saves the user a confusing blank field on
+              standard / COD customers. */}
+          {clientForm.paymentModel === 'fiftyFifty' || clientForm.paymentModel === 'depositThenDraw' || clientForm.paymentModel === 'prepayThenDraw' ? (
+            <label><span>Default deposit %</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="5"
+                value={clientForm.defaultDepositPercent}
+                onChange={(event) => setClientForm({ ...clientForm, defaultDepositPercent: event.target.value })}
+                placeholder={clientForm.paymentModel === 'fiftyFifty' ? '50' : clientForm.paymentModel === 'prepayThenDraw' ? '100' : '30'}
+                title="Used to pre-fill the deposit amount on new pro-formas for this client. Blank means no default."
+              />
             </label>
           ) : null}
           <label><span>Code</span><input value={clientForm.code} onChange={(event) => setClientForm({ ...clientForm, code: event.target.value })} /></label>

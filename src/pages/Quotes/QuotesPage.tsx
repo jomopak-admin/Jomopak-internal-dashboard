@@ -31,6 +31,12 @@ interface QuotesPageProps {
    * is auto-marked "Converted to Job" on the resulting Job save.
    */
   onConvertToJob?: (quote: QuoteEstimate) => void;
+  /**
+   * Phase 120 — Promote this quote to a Pro-forma invoice. This is the
+   * SARS-compliant "request for payment" doc; a Tax Invoice is raised
+   * later when payment lands. Replaces the old Quote → direct Invoice.
+   */
+  onConvertToProforma?: (quote: QuoteEstimate) => void;
   /** Open the printable quote overlay. */
   onPrint?: (quote: QuoteEstimate) => void;
 }
@@ -54,6 +60,7 @@ export function QuotesPage({
   filteredQuotes,
   onEdit,
   onConvertToJob,
+  onConvertToProforma,
   onPrint,
 }: QuotesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
@@ -296,6 +303,8 @@ export function QuotesPage({
                       <td>
                         <button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button>
                         {onPrint ? <button className="table-button" onClick={() => onPrint(quote)} title="Print quote PDF">Print</button> : null}
+                        {/* Phase 120 — Quote → Pro-forma is the new default. SARS-compliant path: pro-forma first, tax invoice after payment. */}
+                        {onConvertToProforma && quote.status !== 'Lost' ? <button className="table-button table-button-promote" onClick={() => onConvertToProforma(quote)} title="Raise a pro-forma invoice from this quote">→ Pro-forma</button> : null}
                         {onConvertToJob && quote.status !== 'Converted to Job' && quote.status !== 'Lost' ? <button className="table-button table-button-promote" onClick={() => onConvertToJob(quote)} title="Create a job from this quote">→ Job</button> : null}
                       </td>
                     </tr>

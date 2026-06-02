@@ -97,6 +97,7 @@ import { PriceListPage, ClientPriceDraft } from './pages/PriceList/PriceListPage
 import { formToPricingSpec, buildPriceVersionDraft } from './utils/productPricing';
 import { ProductionLogsPage } from './pages/ProductionLogs/ProductionLogsPage';
 import { QuotesPage } from './pages/Quotes/QuotesPage';
+import { ProFormasPage } from './pages/ProFormas/ProFormasPage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
@@ -161,6 +162,8 @@ import {
   Invoice,
   InvoiceFilters,
   InvoiceFormState,
+  ProForma,
+  ProFormaFormState,
   ProductionSpec,
   ProductionSpecFilters,
   ProductionSpecFormState,
@@ -419,6 +422,7 @@ const VIEW_ORDER: View[] = [
   'artwork',
   'customerStock',
   'deliveryNotes',
+  'proformas',
   'invoices',
   'productionSpecs',
   'jobs',
@@ -1368,6 +1372,38 @@ const createInitialInvoiceForm = (): InvoiceFormState => ({
 });
 
 /**
+ * Phase 120 — Empty pro-forma form. Defaults to a 30-day validity (typical
+ * for SA factory pro-formas) and a 50/50 payment expectation that matches
+ * our most common AR flow. Sales picks the client and the rest pre-fills.
+ */
+const createInitialProformaForm = (): ProFormaFormState => {
+  const today = getToday();
+  const validUntil = new Date(today);
+  validUntil.setDate(validUntil.getDate() + 30);
+  return {
+    proformaDate: today,
+    validUntilDate: validUntil.toISOString().slice(0, 10),
+    clientId: '',
+    jobId: '',
+    jobNumber: '',
+    quoteId: '',
+    quoteNumber: '',
+    customerReference: '',
+    termsType: '50% Deposit',
+    termsText: '50% deposit to start production, balance on completion.',
+    notes: '',
+    footerNotes: '',
+    customerNote: '',
+    status: 'Draft',
+    currency: 'ZAR',
+    exchangeRate: '1',
+    lineItems: [],
+    clientVisible: true,
+    paymentExpectation: 'fiftyFifty',
+  };
+};
+
+/**
  * Build the editable form state for Settings → all tabs from a saved AppSettings
  * record. The form keeps numeric / multi-line fields as raw strings so the
  * inputs remain forgiving while the user types; conversion happens on save.
@@ -2042,6 +2078,17 @@ function App() {
   const [invoiceEditingId, setInvoiceEditingId] = useState<string | null>(null);
   const [invoiceMessage, setInvoiceMessage] = useState('');
   const [invoiceFilters, setInvoiceFilters] = useState<InvoiceFilters>({ search: '', month: '', client: '', status: '', stockHolding: '' });
+  // Phase 120 — Pro-forma editor state. Same shape as invoice; pro-forma
+  // is the request for payment that precedes the tax invoice.
+  const [proformaForm, setProformaForm] = useState(createInitialProformaForm);
+  const [proformaEditingId, setProformaEditingId] = useState<string | null>(null);
+  const [proformaMessage, setProformaMessage] = useState('');
+  const [proformaFilters, setProformaFilters] = useState<{ search: string; month: string; client: string; status: string }>({ search: '', month: '', client: '', status: '' });
+  // Phase 120 — While a user is on the Invoice form having just been
+  // pre-filled from a pro-forma, we stash the parent pro-forma id/number
+  // here so the next Invoice save writes the linkage automatically.
+  // Cleared after the save.
+  const [pendingProformaParent, setPendingProformaParent] = useState<{ id: string; number: string } | null>(null);
   const [productionSpecForm, setProductionSpecForm] = useState(createInitialProductionSpecForm);
   const [productionSpecEditingId, setProductionSpecEditingId] = useState<string | null>(null);
   const [productionSpecMessage, setProductionSpecMessage] = useState('');
@@ -3267,6 +3314,8 @@ function App() {
   function resetCustomerStockReleaseEditor() { setCustomerStockReleaseForm(createInitialCustomerStockReleaseForm()); setCustomerStockReleaseEditingId(null); setCustomerStockReleaseMessage(''); }
   function resetDeliveryNoteEditor() { setDeliveryNoteForm({ ...createInitialDeliveryNoteForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setDeliveryNoteEditingId(null); setDeliveryNoteMessage(''); }
   function resetInvoiceEditor() { setInvoiceForm({ ...createInitialInvoiceForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setInvoiceEditingId(null); setInvoiceMessage(''); }
+  // Phase 120 — pro-forma editor reset (same default customer note as invoice).
+  function resetProformaEditor() { setProformaForm({ ...createInitialProformaForm(), customerNote: data.appSettings.templates.defaultCustomerNote }); setProformaEditingId(null); setProformaMessage(''); }
   function resetProductionSpecEditor() { setProductionSpecForm(createInitialProductionSpecForm()); setProductionSpecEditingId(null); setProductionSpecMessage(''); }
   function resetSettingsEditor() {
     setSettingsForm(buildSettingsForm(data.appSettings));
@@ -4754,6 +4803,11 @@ function App() {
         invoiceNumber,
         createdAt: new Date().toISOString(),
         ...payload,
+        // Phase 120 — Stamp the parent pro-forma if this Invoice was
+        // created via convertProformaToTaxInvoice. The pendingProformaParent
+        // state was set when the user clicked "Generate Tax Invoice".
+        proformaId: pendingProformaParent?.id,
+        proformaNumber: pendingProformaParent?.number,
       };
       // Phase 74 — auto-deduct FG batch when invoice is promoted directly
       // from finished goods (skipping DN). Mirrors the DN deduction logic.
@@ -4796,8 +4850,32 @@ function App() {
           invoices: [newInvoice, ...current.invoices],
           finishedGoodsStock: nextStock,
           stockChangeLogs: nextLogs,
+          // Phase 120 — When the new Invoice was raised from a
+          // pro-forma, update the parent pro-forma's tracking:
+          //  - push the new invoice's id onto linkedInvoiceIds
+          //  - bump amountInvoiced by this invoice's totalInclVat
+          //  - recompute amountStillToInvoice
+          //  - flip status: PartiallyPaid (some) / FullyPaid (all)
+          proformas: pendingProformaParent
+            ? (current.proformas ?? []).map((pf) => {
+                if (pf.id !== pendingProformaParent.id) return pf;
+                const nextLinked = [...pf.linkedInvoiceIds, invoiceNumber];
+                const nextInvoiced = pf.amountInvoiced + newInvoice.totalInclVat;
+                const nextRemaining = Math.max(0, pf.totalInclVat - nextInvoiced);
+                return {
+                  ...pf,
+                  linkedInvoiceIds: nextLinked,
+                  amountInvoiced: nextInvoiced,
+                  amountStillToInvoice: nextRemaining,
+                  status: nextRemaining <= 0.005 ? 'FullyPaid' : 'PartiallyPaid',
+                };
+              })
+            : current.proformas,
         };
       });
+      // Clear the stash so the next direct-Invoice save doesn't
+      // accidentally pin onto the same pro-forma.
+      setPendingProformaParent(null);
     }
     resetInvoiceEditor();
   }
@@ -4866,6 +4944,354 @@ function App() {
       }));
     }
     resetProductionSpecEditor();
+  }
+
+  /**
+   * Phase 120 — Save (create or update) a pro-forma invoice.
+   *
+   * The pro-forma is a request for payment — no VAT is recognised, no
+   * stock is moved. When payment lands (Phase 119 deposit ledger), an
+   * admin clicks "Generate Tax Invoice" on this pro-forma which spawns
+   * a real Invoice with proformaId set. That's where VAT triggers.
+   *
+   * This handler intentionally stays light: no FG batch deduction, no
+   * stock-holding mechanics, no payment matching. Those all happen on
+   * the Tax Invoice side. The pro-forma is just paperwork until paid.
+   */
+  function handleSaveProforma() {
+    if (!proformaForm.clientId || proformaForm.lineItems.length === 0) {
+      setProformaMessage('Pick a client and add at least one line item.');
+      return;
+    }
+    const client = data.clients.find((c) => c.id === proformaForm.clientId);
+    if (!client) {
+      setProformaMessage('Client not found.');
+      return;
+    }
+    // Compute totals once — same shape as Invoice so conversion-to-tax-
+    // invoice can just reuse the line items.
+    const lineItems = proformaForm.lineItems.map((line) => {
+      const qty = Number(line.quantity || 0);
+      const price = Number(line.unitPriceExclVat || 0);
+      const vatPct = Number(line.vatRatePercent || 0);
+      const lineExcl = qty * price;
+      const lineIncl = lineExcl * (1 + vatPct / 100);
+      return {
+        id: line.id,
+        productId: line.productId,
+        productName: line.productName,
+        description: line.description,
+        quantity: qty,
+        quantityUnit: line.quantityUnit,
+        unitPriceExclVat: price,
+        vatRatePercent: vatPct,
+        lineTotalExclVat: lineExcl,
+        lineTotalInclVat: lineIncl,
+        quantityDeliveredToDate: 0,
+      };
+    });
+    const subtotalExclVat = lineItems.reduce((acc, l) => acc + l.lineTotalExclVat, 0);
+    const totalInclVat = lineItems.reduce((acc, l) => acc + l.lineTotalInclVat, 0);
+    const vatTotal = totalInclVat - subtotalExclVat;
+
+    const billingAddress = [
+      client.billingAddressLine1,
+      client.billingAddressLine2,
+      [client.billingCity, client.billingState, client.billingPostalCode].filter(Boolean).join(', '),
+    ].filter(Boolean).join('\n');
+
+    const payload: Omit<ProForma, 'id' | 'proformaNumber' | 'createdAt' | 'linkedInvoiceIds' | 'amountInvoiced' | 'amountStillToInvoice' | 'amountReceivedNotYetInvoiced'> = {
+      proformaDate: proformaForm.proformaDate,
+      validUntilDate: proformaForm.validUntilDate,
+      clientId: proformaForm.clientId,
+      clientName: client.name,
+      clientCompanyName: client.companyName || '',
+      clientVatNumber: client.vatNumber || '',
+      clientBillingAddress: billingAddress,
+      clientContactName: client.contactName || '',
+      clientContactEmail: client.contactEmail || '',
+      clientContactPhone: client.phoneNumber || '',
+      jobId: proformaForm.jobId,
+      jobNumber: proformaForm.jobNumber,
+      quoteId: proformaForm.quoteId,
+      quoteNumber: proformaForm.quoteNumber,
+      customerReference: proformaForm.customerReference,
+      termsType: proformaForm.termsType,
+      termsText: proformaForm.termsText,
+      notes: proformaForm.notes,
+      footerNotes: proformaForm.footerNotes,
+      status: proformaForm.status,
+      currency: proformaForm.currency,
+      exchangeRate: Number(proformaForm.exchangeRate || 1),
+      lineItems,
+      subtotalExclVat,
+      vatTotal,
+      totalInclVat,
+      customerNote: proformaForm.customerNote || undefined,
+      paymentExpectation: proformaForm.paymentExpectation,
+      clientVisible: proformaForm.clientVisible,
+    };
+
+    if (proformaEditingId) {
+      setData((current) => ({
+        ...current,
+        proformas: (current.proformas ?? []).map((pf) => pf.id === proformaEditingId ? { ...pf, ...payload } : pf),
+      }));
+    } else {
+      const existing = (data.proformas ?? []).map((pf) => pf.proformaNumber);
+      const proformaNumber = generateCode('PF', existing, proformaForm.proformaDate);
+      const newProforma: ProForma = {
+        id: proformaNumber,
+        proformaNumber,
+        createdAt: new Date().toISOString(),
+        ...payload,
+        // Derived/tracking fields — populated by the Tax Invoice
+        // conversion handler. Start at zero on a brand-new pro-forma.
+        linkedInvoiceIds: [],
+        amountInvoiced: 0,
+        amountStillToInvoice: totalInclVat,
+        amountReceivedNotYetInvoiced: 0,
+      };
+      setData((current) => ({
+        ...current,
+        proformas: [newProforma, ...(current.proformas ?? [])],
+      }));
+    }
+    resetProformaEditor();
+  }
+
+  /**
+   * Phase 120 — Hydrate the pro-forma form from a saved record (Edit).
+   */
+  function editProforma(proforma: ProForma) {
+    setProformaEditingId(proforma.id);
+    setProformaForm({
+      proformaDate: proforma.proformaDate,
+      validUntilDate: proforma.validUntilDate,
+      clientId: proforma.clientId,
+      jobId: proforma.jobId,
+      jobNumber: proforma.jobNumber,
+      quoteId: proforma.quoteId,
+      quoteNumber: proforma.quoteNumber,
+      customerReference: proforma.customerReference,
+      termsType: proforma.termsType,
+      termsText: proforma.termsText,
+      notes: proforma.notes,
+      footerNotes: proforma.footerNotes,
+      customerNote: proforma.customerNote ?? '',
+      status: proforma.status,
+      currency: proforma.currency,
+      exchangeRate: String(proforma.exchangeRate ?? 1),
+      lineItems: proforma.lineItems.map((l) => ({
+        id: l.id,
+        productId: l.productId,
+        productName: l.productName,
+        description: l.description,
+        quantity: String(l.quantity),
+        quantityUnit: l.quantityUnit,
+        unitPriceExclVat: String(l.unitPriceExclVat),
+        vatRatePercent: String(l.vatRatePercent),
+      })),
+      clientVisible: proforma.clientVisible,
+      paymentExpectation: proforma.paymentExpectation ?? 'fiftyFifty',
+    });
+    setView('proformas');
+  }
+
+  /**
+   * Phase 120 — Quote → Pro-forma promotion. Pre-fills the pro-forma form
+   * with the client + a single line item carrying the quote's product +
+   * total. Sales then refines line items and saves. Quote status flips
+   * to 'Approved' so it's clear the quote has been actioned.
+   */
+  function convertQuoteToProforma(quote: QuoteEstimate) {
+    const validUntil = new Date(getToday());
+    validUntil.setDate(validUntil.getDate() + 30);
+    setProformaEditingId(null);
+    setProformaForm({
+      proformaDate: getToday(),
+      validUntilDate: validUntil.toISOString().slice(0, 10),
+      clientId: quote.clientId,
+      jobId: '',
+      jobNumber: '',
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      customerReference: '',
+      termsType: '50% Deposit',
+      termsText: '50% deposit to start production, balance on completion.',
+      notes: '',
+      footerNotes: '',
+      customerNote: data.appSettings.templates.defaultCustomerNote,
+      status: 'Draft',
+      currency: 'ZAR',
+      exchangeRate: '1',
+      lineItems: [{
+        id: `line-${Date.now().toString(36)}`,
+        productId: quote.productId,
+        productName: quote.productName,
+        description: quote.sizeSpec || '',
+        quantity: String(quote.quantity),
+        quantityUnit: 'units',
+        unitPriceExclVat: String(quote.quotedUnitPrice),
+        vatRatePercent: '15',
+      }],
+      clientVisible: true,
+      paymentExpectation: 'fiftyFifty',
+    });
+    // Mark the quote as actioned so it doesn't sit forever in 'Quoted'.
+    setData((current) => ({
+      ...current,
+      quoteEstimates: current.quoteEstimates.map((q) => q.id === quote.id && q.status !== 'Converted to Job' ? { ...q, status: 'Approved' } : q),
+    }));
+    setView('proformas');
+  }
+
+  /**
+   * Phase 120 — Pro-forma → Tax Invoice conversion. Pre-fills the
+   * invoice form from the pro-forma so admin can confirm-and-save. The
+   * resulting Invoice will carry proformaId + proformaNumber for the
+   * audit chain. Pro-forma's linkedInvoiceIds / amountInvoiced get
+   * bumped on the Invoice save (handled in handleSaveInvoice — wired
+   * separately).
+   *
+   * Per Aman's design choice: one Tax Invoice per payment received, but
+   * the conversion itself is a simple pre-fill so the admin can adjust
+   * the amount before committing. They might raise a 50% Tax Invoice
+   * here and a second one later when the balance pays.
+   */
+  /**
+   * Phase 120 — Print a pro-forma in a new window. Uses the shared
+   * letterhead helper (Phase 114) so the doc carries the same brand
+   * styling as Stock Statements and Warnings. The header banner makes
+   * it unmistakable that this is NOT a Tax Invoice — SARS requirement.
+   */
+  async function printProforma(proforma: ProForma) {
+    const { buildPrintShell } = await import('./utils/printing');
+    const company = data.appSettings.company;
+    const brandLogos = data.appSettings.brandLogos;
+    const client = data.clients.find((c) => c.id === proforma.clientId);
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const fmt = (n: number) => Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // Lines table
+    const linesHtml = proforma.lineItems.map((line) => `
+      <tr>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;font-size:11.5px;">${esc(line.productName)}${line.description ? `<div style="color:#666;font-size:10.5px;">${esc(line.description)}</div>` : ''}</td>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;text-align:right;font-size:11.5px;">${line.quantity}</td>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;text-align:right;font-size:11.5px;">R ${fmt(line.unitPriceExclVat)}</td>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;text-align:right;font-size:11.5px;">R ${fmt(line.lineTotalExclVat)}</td>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;text-align:right;font-size:11.5px;">${line.vatRatePercent}%</td>
+        <td style="padding:6px 8px;border-top:1px solid #ddd;text-align:right;font-size:11.5px;"><strong>R ${fmt(line.lineTotalInclVat)}</strong></td>
+      </tr>`).join('');
+
+    const body = `
+      <!-- Phase 120 — SARS-mandated banner. Must be unambiguous. -->
+      <div style="background:#fef3c7;border:1.5px solid #d97706;border-radius:6px;padding:10px 14px;margin-bottom:18px;text-align:center;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:13px;color:#92400e;letter-spacing:0.05em;">
+        PRO FORMA INVOICE &mdash; NOT A TAX INVOICE
+      </div>
+
+      <table style="width:100%;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11.5px;margin-bottom:18px;">
+        <tr>
+          <td style="vertical-align:top;width:55%;">
+            <div style="color:#666;text-transform:uppercase;letter-spacing:0.06em;font-size:10px;margin-bottom:4px;">Pro-forma for</div>
+            <div style="font-weight:700;font-size:13px;">${esc(proforma.clientCompanyName || proforma.clientName)}</div>
+            ${proforma.clientContactName ? `<div>${esc(proforma.clientContactName)}</div>` : ''}
+            ${proforma.clientBillingAddress ? `<div style="white-space:pre-line;color:#555;">${esc(proforma.clientBillingAddress)}</div>` : ''}
+            ${proforma.clientVatNumber ? `<div style="color:#555;">VAT ${esc(proforma.clientVatNumber)}</div>` : ''}
+          </td>
+          <td style="vertical-align:top;text-align:right;">
+            <div><strong>Pro-forma no.:</strong> ${esc(proforma.proformaNumber)}</div>
+            <div><strong>Date:</strong> ${esc(proforma.proformaDate)}</div>
+            ${proforma.validUntilDate ? `<div><strong>Valid until:</strong> ${esc(proforma.validUntilDate)}</div>` : ''}
+            ${proforma.customerReference ? `<div><strong>Your ref:</strong> ${esc(proforma.customerReference)}</div>` : ''}
+            ${proforma.quoteNumber ? `<div style="color:#666;">From quote ${esc(proforma.quoteNumber)}</div>` : ''}
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;font-family:'Helvetica Neue',Arial,sans-serif;">
+        <thead>
+          <tr style="background:#f8f5ef;">
+            <th style="padding:8px;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">Item</th>
+            <th style="padding:8px;text-align:right;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">Qty</th>
+            <th style="padding:8px;text-align:right;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">Unit (excl)</th>
+            <th style="padding:8px;text-align:right;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">Total (excl)</th>
+            <th style="padding:8px;text-align:right;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">VAT %</th>
+            <th style="padding:8px;text-align:right;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#555;">Total (incl)</th>
+          </tr>
+        </thead>
+        <tbody>${linesHtml}</tbody>
+      </table>
+
+      <table style="width:100%;margin-top:14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;">
+        <tr><td></td><td style="text-align:right;width:200px;">Subtotal (excl VAT):</td><td style="text-align:right;width:120px;">R ${fmt(proforma.subtotalExclVat)}</td></tr>
+        <tr><td></td><td style="text-align:right;">VAT:</td><td style="text-align:right;">R ${fmt(proforma.vatTotal)}</td></tr>
+        <tr><td></td><td style="text-align:right;font-weight:700;font-size:14px;border-top:2px solid #111;padding-top:6px;">Total due (incl VAT):</td><td style="text-align:right;font-weight:700;font-size:14px;border-top:2px solid #111;padding-top:6px;">R ${fmt(proforma.totalInclVat)}</td></tr>
+      </table>
+
+      ${proforma.termsText ? `<div style="margin-top:20px;padding:10px 14px;background:#f8f5ef;border-radius:6px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11.5px;"><strong>Payment terms:</strong> ${esc(proforma.termsText)}</div>` : ''}
+      ${proforma.customerNote ? `<div style="margin-top:14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11.5px;line-height:1.55;">${esc(proforma.customerNote)}</div>` : ''}
+
+      <div style="margin-top:24px;padding:10px 14px;border:1px dashed #d97706;border-radius:6px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;color:#92400e;text-align:center;">
+        A Tax Invoice will be issued upon receipt of payment in accordance with the SARS Value-Added Tax Act.
+      </div>
+
+      ${proforma.footerNotes ? `<div style="margin-top:18px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10.5px;color:#666;white-space:pre-line;border-top:1px solid #e5e5e5;padding-top:10px;">${esc(proforma.footerNotes)}</div>` : ''}
+    `;
+
+    const html = buildPrintShell(company, `Pro-forma ${proforma.proformaNumber}`, body, {
+      rightTitle: 'Pro-forma Invoice',
+      rightSubtitle: proforma.proformaNumber,
+      logoHeightPx: 90,
+      documentKind: 'proforma',
+      brandLogos,
+      clientPreferredLogoId: client?.preferredLogoId,
+    });
+
+    const w = window.open('', '_blank', 'width=900,height=1100');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 300);
+  }
+
+  function convertProformaToTaxInvoice(proforma: ProForma) {
+    setInvoiceEditingId(null);
+    setInvoiceForm({
+      invoiceDate: getToday(),
+      dueDate: getToday(),
+      clientId: proforma.clientId,
+      jobId: proforma.jobId,
+      quoteId: proforma.quoteId,
+      productionSpecId: '',
+      customerReference: proforma.customerReference,
+      termsType: proforma.termsType,
+      termsText: proforma.termsText,
+      notes: proforma.notes,
+      footerNotes: proforma.footerNotes,
+      customerNote: proforma.customerNote ?? data.appSettings.templates.defaultCustomerNote,
+      status: 'Draft',
+      currency: proforma.currency,
+      lineItems: proforma.lineItems.map((l) => ({
+        id: l.id,
+        productId: l.productId,
+        productName: l.productName,
+        description: l.description,
+        quantity: String(l.quantity),
+        quantityUnit: l.quantityUnit,
+        unitPriceExclVat: String(l.unitPriceExclVat),
+        vatRatePercent: String(l.vatRatePercent),
+      })),
+      payments: [],
+      stockHoldingApplies: false,
+      stockHoldingStartDate: getToday(),
+      stockHoldingMaxDays: '90',
+      clientVisible: proforma.clientVisible,
+    });
+    // Stash the parent pro-forma so handleSaveInvoice can write
+    // proformaId/proformaNumber onto the new Invoice when it saves.
+    setPendingProformaParent({ id: proforma.id, number: proforma.proformaNumber });
+    setView('invoices');
   }
 
   async function handleSaveJob() {
@@ -11752,7 +12178,28 @@ function App() {
           filteredQuotes={filteredQuoteEstimates}
           onEdit={editQuote}
           onConvertToJob={handleConvertQuoteToJob}
+          onConvertToProforma={convertQuoteToProforma}
           onPrint={(quote) => setQuotePrintTarget(quote)}
+        />
+      )}
+
+      {view === 'proformas' && (
+        <ProFormasPage
+          monthOptions={monthOptions}
+          clients={data.clients}
+          products={data.products}
+          proformas={data.proformas ?? []}
+          proformaForm={proformaForm}
+          setProformaForm={setProformaForm}
+          proformaEditingId={proformaEditingId}
+          proformaMessage={proformaMessage}
+          onSave={handleSaveProforma}
+          onReset={resetProformaEditor}
+          proformaFilters={proformaFilters}
+          setProformaFilters={setProformaFilters}
+          onEdit={editProforma}
+          onPrint={printProforma}
+          onGenerateTaxInvoice={convertProformaToTaxInvoice}
         />
       )}
 
@@ -11840,6 +12287,9 @@ function App() {
           onEdit={editInvoice}
           currentUser={{ id: profile?.id, name: profile?.fullName || profile?.email }}
           onCreateDeliveryNote={handleCreateDeliveryFromInvoice}
+          // Phase 120.7/120.8 — pro-forma context for the Invoice form.
+          parentProformaNumber={pendingProformaParent?.number}
+          onJumpToProformas={() => setView('proformas')}
         />
       )}
 

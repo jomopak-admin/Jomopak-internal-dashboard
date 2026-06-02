@@ -15,6 +15,7 @@ export type View =
   | 'customerStock'
   | 'deliveryNotes'
   | 'invoices'
+  | 'proformas'
   | 'productionSpecs'
   | 'machines'
   | 'jobs'
@@ -166,7 +167,8 @@ export const VIEW_LABELS: Record<View, string> = {
   artwork: 'Artwork',
   customerStock: 'Customer Stock',
   deliveryNotes: 'Delivery Notes',
-  invoices: 'Invoices',
+  invoices: 'Tax Invoices',
+  proformas: 'Pro-formas',
   productionSpecs: 'Production Specs',
   machines: 'Machines',
   jobs: 'Job Cards',

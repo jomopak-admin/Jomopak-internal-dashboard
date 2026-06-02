@@ -579,6 +579,9 @@ export function mapClient(row: any): Client {
     accountManagerName: row.account_manager_name ?? '',
     // Phase 116 — per-client preferred logo id.
     preferredLogoId: row.preferred_logo_id ?? undefined,
+    // Phase 119 — AR payment model + default deposit % for this client.
+    paymentModel: row.payment_model ?? undefined,
+    defaultDepositPercent: row.default_deposit_percent != null ? Number(row.default_deposit_percent) : undefined,
     code: row.code ?? '',
     pricingTierId: row.pricing_tier_id ?? '',
     pricingTierName: row.pricing_tier_name ?? '',
@@ -1525,6 +1528,59 @@ export function mapInvoice(row: any): any {
     stockHoldingStatus: row.stock_holding_status ?? 'Not Applicable',
     stockHoldingStartDate: row.stock_holding_start_date ?? '',
     stockHoldingMaxDays: Number(row.stock_holding_max_days ?? 0),
+    clientVisible: row.client_visible !== false,
+    // Phase 120 — link back to parent pro-forma when this Tax Invoice
+    // was raised against one.
+    proformaId: row.proforma_id ?? undefined,
+    proformaNumber: row.proforma_number ?? undefined,
+  };
+}
+
+/**
+ * Phase 120 — Pro-forma mapper. Pro-formas are the request-for-payment
+ * docs that precede Tax Invoices. The shape mirrors Invoice closely so
+ * conversion (Pro-forma → Tax Invoice) is just a re-shape of the line
+ * items, no field translation needed.
+ */
+export function mapProForma(row: any): any {
+  return {
+    id: row.id,
+    proformaNumber: row.proforma_number,
+    version: typeof row.version === 'number' ? row.version : undefined,
+    rowUpdatedAt: row.updated_at ?? undefined,
+    createdAt: row.created_at,
+    proformaDate: row.proforma_date,
+    validUntilDate: row.valid_until_date ?? '',
+    clientId: row.client_id ?? '',
+    clientName: row.client_name ?? '',
+    clientCompanyName: row.client_company_name ?? '',
+    clientVatNumber: row.client_vat_number ?? '',
+    clientBillingAddress: row.client_billing_address ?? '',
+    clientContactName: row.client_contact_name ?? '',
+    clientContactEmail: row.client_contact_email ?? '',
+    clientContactPhone: row.client_contact_phone ?? '',
+    jobId: row.job_id ?? '',
+    jobNumber: row.job_number ?? '',
+    quoteId: row.quote_id ?? '',
+    quoteNumber: row.quote_number ?? '',
+    customerReference: row.customer_reference ?? '',
+    termsType: row.terms_type ?? '50% Deposit',
+    termsText: row.terms_text ?? '',
+    notes: row.notes ?? '',
+    footerNotes: row.footer_notes ?? '',
+    customerNote: row.customer_note ?? '',
+    status: row.status ?? 'Draft',
+    currency: row.currency ?? 'ZAR',
+    exchangeRate: Number(row.exchange_rate ?? 1) || 1,
+    lineItems: Array.isArray(row.line_items) ? row.line_items : [],
+    subtotalExclVat: Number(row.subtotal_excl_vat ?? 0),
+    vatTotal: Number(row.vat_total ?? 0),
+    totalInclVat: Number(row.total_incl_vat ?? 0),
+    linkedInvoiceIds: Array.isArray(row.linked_invoice_ids) ? row.linked_invoice_ids : [],
+    amountInvoiced: Number(row.amount_invoiced ?? 0),
+    amountStillToInvoice: Number(row.amount_still_to_invoice ?? 0),
+    amountReceivedNotYetInvoiced: Number(row.amount_received_not_yet_invoiced ?? 0),
+    paymentExpectation: row.payment_expectation ?? undefined,
     clientVisible: row.client_visible !== false,
   };
 }
@@ -2549,6 +2605,7 @@ export async function fetchAppData(): Promise<AppData> {
     pressRates,
     plateCosts,
     invoices,
+    proformasRows,
     productionSpecs,
     workTickets,
     chemicalRegisterEntries,
@@ -2639,6 +2696,7 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('press_rates'),
     safeSelect('plate_costs'),
     safeSelect('invoices'),
+    safeSelect('pro_formas'),
     safeSelect('production_specs'),
     safeSelect('work_tickets'),
     safeSelect('chemical_register_entries'),
@@ -2725,6 +2783,7 @@ export async function fetchAppData(): Promise<AppData> {
     customerStockReleases: customerStockReleases.map(mapCustomerStockRelease),
     deliveryNotes: deliveryNotes.map(mapDeliveryNote),
     invoices: invoices.map(mapInvoice),
+    proformas: proformasRows.map(mapProForma),
     productionSpecs: productionSpecs.map(mapProductionSpec),
     paperRates: paperRates.map(mapPaperRate),
     costProfiles: costProfiles.map(mapCostProfile),
@@ -3090,6 +3149,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       account_manager_name: client.accountManagerName || null,
       // Phase 116 — per-client preferred logo id (references brand_logos[].id).
       preferred_logo_id: client.preferredLogoId || null,
+      // Phase 119 — AR payment model + default deposit %.
+      payment_model: client.paymentModel || null,
+      default_deposit_percent: client.defaultDepositPercent ?? null,
       code: client.code || null,
       pricing_tier_id: client.pricingTierId || null,
       pricing_tier_name: client.pricingTierName || null,
@@ -4170,6 +4232,48 @@ export async function syncAppData(data: AppData): Promise<void> {
       client_visible: inv.clientVisible,
       // Phase 74 — source FG batch link.
       source_finished_goods_stock_id: inv.sourceFinishedGoodsStockId || null,
+      // Phase 120 — link back to parent pro-forma.
+      proforma_id: inv.proformaId || null,
+      proforma_number: inv.proformaNumber || null,
+    }))),
+    // Phase 120 — Pro-forma invoices. SARS-aligned request-for-payment doc.
+    safeUpsert('pro_formas', (data.proformas ?? []).map((pf) => ({
+      id: pf.id,
+      proforma_number: pf.proformaNumber,
+      created_at: pf.createdAt,
+      proforma_date: pf.proformaDate,
+      valid_until_date: pf.validUntilDate || null,
+      client_id: pf.clientId || null,
+      client_name: pf.clientName,
+      client_company_name: pf.clientCompanyName,
+      client_vat_number: pf.clientVatNumber,
+      client_billing_address: pf.clientBillingAddress,
+      client_contact_name: pf.clientContactName,
+      client_contact_email: pf.clientContactEmail,
+      client_contact_phone: pf.clientContactPhone,
+      job_id: pf.jobId || null,
+      job_number: pf.jobNumber || null,
+      quote_id: pf.quoteId || null,
+      quote_number: pf.quoteNumber || null,
+      customer_reference: pf.customerReference,
+      terms_type: pf.termsType,
+      terms_text: pf.termsText,
+      notes: pf.notes,
+      footer_notes: pf.footerNotes,
+      customer_note: pf.customerNote || null,
+      status: pf.status,
+      currency: pf.currency,
+      exchange_rate: pf.exchangeRate ?? 1,
+      payment_expectation: pf.paymentExpectation || null,
+      client_visible: pf.clientVisible,
+      line_items: pf.lineItems,
+      subtotal_excl_vat: pf.subtotalExclVat,
+      vat_total: pf.vatTotal,
+      total_incl_vat: pf.totalInclVat,
+      linked_invoice_ids: pf.linkedInvoiceIds,
+      amount_invoiced: pf.amountInvoiced,
+      amount_still_to_invoice: pf.amountStillToInvoice,
+      amount_received_not_yet_invoiced: pf.amountReceivedNotYetInvoiced,
     }))),
     safeUpsert('production_specs', data.productionSpecs.map((s) => ({
       id: s.id, spec_number: s.specNumber, created_at: s.createdAt,

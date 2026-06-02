@@ -53,6 +53,14 @@ interface InvoicesPageProps {
   currentUser?: { id?: string; name?: string };
   /** Spawn a new Delivery Note pre-filled from this invoice. */
   onCreateDeliveryNote?: (invoice: Invoice) => void;
+  /** Phase 120.8 — When the user is creating a new Invoice that was
+   *  pre-filled from a pro-forma (via convertProformaToTaxInvoice), this
+   *  carries the parent pro-forma number. Drives the "From pro-forma X"
+   *  banner so it's obvious where this revenue came from. */
+  parentProformaNumber?: string;
+  /** Phase 120.7 — Open the Pro-formas page so the nudge banner's
+   *  "Start a pro-forma instead" link can deep-link there. */
+  onJumpToProformas?: () => void;
 }
 
 function makeBlankLine(): InvoiceLineItemFormState {
@@ -109,9 +117,21 @@ export function InvoicesPage({
   onEdit,
   currentUser,
   onCreateDeliveryNote,
+  parentProformaNumber,
+  onJumpToProformas,
 }: InvoicesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  // Phase 120.7 — One-session dismiss for the "should this be a pro-forma?"
+  // nudge. Persists across mounts because it's keyed on the page component,
+  // so reopening the form within the same session keeps the dismissal.
+  const [proformaNudgeDismissed, setProformaNudgeDismissed] = useState(false);
+
+  // Phase 120.8 — Look up the saved Invoice when editing so we can show
+  // "Part of pro-forma X" if proformaId was stamped. Falls back to the
+  // parentProformaNumber prop when creating a new Invoice from a pro-forma.
+  const editingInvoice = invoiceEditingId ? filteredInvoices.find((i) => i.id === invoiceEditingId) : undefined;
+  const linkedProformaNumber = parentProformaNumber || editingInvoice?.proformaNumber || '';
 
   useEffect(() => {
     if (invoiceEditingId) setMode('form');
@@ -389,6 +409,77 @@ export function InvoicesPage({
               currentUser={currentUser}
             />
           )}
+
+          {/* Phase 120.8 — Audit-chain banner. When this Tax Invoice was
+              raised from a pro-forma, show the linkage so it's obvious
+              where the revenue came from. Lives at the top of the form
+              so it's the first thing the user sees on edit. */}
+          {linkedProformaNumber ? (
+            <div style={{
+              background: 'rgba(100, 116, 139, 0.08)',
+              border: '0.5px solid var(--jp-line, #cbd5e1)',
+              borderLeft: '3px solid var(--jp-ink-3, #475569)',
+              borderRadius: 6,
+              padding: '8px 12px',
+              marginBottom: 12,
+              fontSize: 12,
+              color: 'var(--jp-ink-2, #334155)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+            }}>
+              <span>
+                <strong>Part of pro-forma {linkedProformaNumber}</strong>
+                {parentProformaNumber ? ' · this will become a new Tax Invoice against that pro-forma on save' : ''}
+              </span>
+              {onJumpToProformas ? (
+                <button type="button" className="ghost-button" onClick={onJumpToProformas} style={{ fontSize: 11 }}>
+                  View pro-forma →
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Phase 120.7 — Soft nudge for new direct invoices. SARS-aligned
+              flow is to issue a pro-forma first; this banner reminds the
+              user without blocking. Dismissible per session for the case
+              where a direct Tax Invoice IS the right move (existing trade
+              terms customer, no deposit, no pro-forma cycle needed). */}
+          {!invoiceEditingId && !linkedProformaNumber && !proformaNudgeDismissed ? (
+            <div style={{
+              background: 'rgba(219, 90, 31, 0.08)',
+              border: '0.5px solid rgba(219, 90, 31, 0.35)',
+              borderLeft: '3px solid var(--jp-orange, #db5a1f)',
+              borderRadius: 6,
+              padding: '10px 14px',
+              marginBottom: 12,
+              fontSize: 12,
+              color: 'var(--jp-ink-2, #334155)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 12,
+            }}>
+              <div style={{ flex: 1 }}>
+                <strong style={{ color: 'var(--jp-orange, #db5a1f)' }}>Should this be a pro-forma?</strong>
+                <div style={{ marginTop: 3, color: 'var(--jp-ink-3, #475569)' }}>
+                  SARS-aligned flow: issue a pro-forma first, then raise this Tax Invoice once payment is received. Direct Tax Invoices are fine for existing trade-terms customers, but for deposit / 50-50 / prepay flows start with a pro-forma.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {onJumpToProformas ? (
+                  <button type="button" className="secondary-button" onClick={onJumpToProformas} style={{ fontSize: 11 }}>
+                    Start pro-forma instead
+                  </button>
+                ) : null}
+                <button type="button" className="ghost-button" onClick={() => setProformaNudgeDismissed(true)} style={{ fontSize: 11 }} title="Hide this for the rest of the session">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <FormWizard
             title={invoiceEditingId ? 'Edit invoice' : 'New invoice'}
             subtitle="Lines snapshot the rates at the time of issue. Stock-holding section only counts if you opt in."
