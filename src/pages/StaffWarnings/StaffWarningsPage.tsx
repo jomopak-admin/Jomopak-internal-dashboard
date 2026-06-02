@@ -15,11 +15,13 @@
  * — typically given to factory managers like Mornay).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  AppSettingsCompany,
+  BrandLogo,
   Employee,
   STAFF_WARNING_CATEGORIES,
   STAFF_WARNING_TYPES,
@@ -30,6 +32,7 @@ import {
   StaffWarningType,
 } from '../../types';
 import { formatDate } from '../../utils/calculations';
+import { buildLetterhead } from '../../utils/printing';
 
 interface StaffWarningsPageProps {
   warnings: StaffWarning[];
@@ -44,6 +47,16 @@ interface StaffWarningsPageProps {
   onReset: () => void;
   onEdit: (w: StaffWarning) => void;
   onDelete: (id: string) => void;
+  /** Phase 113 — Admin Hub deep-link. 'new' jumps straight into the new
+   *  entry form so the admin doesn't have to land on the list and then
+   *  click + New entry. */
+  pageIntent?: { view: string; intent: string; nonce: number } | null;
+  onIntentConsumed?: () => void;
+  /** Phase 114 — Company config so the print-warning letter can render
+   *  the uploaded logo + letterhead. */
+  company?: AppSettingsCompany;
+  /** Phase 115 — Brand logos library; letterhead picks the right mark. */
+  brandLogos?: BrandLogo[];
 }
 
 // Friendly badge classes for the entry type. Warnings get danger-tinted
@@ -64,8 +77,20 @@ function isWarningType(t: StaffWarningType): boolean {
   return t === 'Verbal Warning' || t === 'Written Warning 1' || t === 'Written Warning 2' || t === 'Final Written Warning';
 }
 
-export function StaffWarningsPage({ warnings, employees, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit, onDelete }: StaffWarningsPageProps) {
+export function StaffWarningsPage({ warnings, employees, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit, onDelete, pageIntent, onIntentConsumed, company, brandLogos }: StaffWarningsPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
+
+  // Phase 113 — Deep-link from Admin Hub: open the new-entry form straight
+  // away. We blank the form first so a half-edited prior entry doesn't
+  // bleed into the new record.
+  useEffect(() => {
+    if (pageIntent?.intent === 'new') {
+      onReset();
+      setMode('form');
+      onIntentConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIntent?.nonce]);
 
   const filtered = useMemo(() => warnings.filter((w) => {
     const q = filters.search.trim().toLowerCase();
@@ -80,6 +105,86 @@ export function StaffWarningsPage({ warnings, employees, filters, setFilters, fo
     if (filters.acknowledged === 'no' && w.acknowledged) return false;
     return true;
   }), [warnings, filters]);
+
+  /*
+   * Phase 114.3 — Print a saved warning as a corporate-letter PDF using
+   * the shared letterhead helper. Matches the existing JomoPak letterhead
+   * conventions (logo top-left, thick black rule, "Yours sincerely" tail,
+   * employee acknowledgement block).
+   *
+   * The function is small on purpose — anything reusable lives in
+   * utils/printing.ts so warnings stay consistent with stock statements,
+   * UI-19s, etc.
+   */
+  function printWarning(w: StaffWarning) {
+    const win = window.open('', '_blank', 'width=900,height=1100');
+    if (!win) return;
+    const esc = (s: string | undefined | null) => String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escNl = (s: string | undefined | null) => esc(s).replace(/\n/g, '<br>');
+    const issuer = w.issuedByName || company?.name || 'JomoPak';
+    const title = w.type === 'Commendation' ? 'LETTER OF COMMENDATION'
+      : w.type === 'Note' ? 'EMPLOYEE NOTE'
+      : `${w.type.toUpperCase()} — ${w.category.toUpperCase()}`;
+    const empName = w.employeeName;
+
+    const corrective = w.correctiveAction
+      ? `<div style="margin-bottom:8px;">You are required to:</div>
+         <div style="margin:0 0 18px 28px;">${escNl(w.correctiveAction)}</div>`
+      : '';
+
+    const expiryNote = w.expiresAt
+      ? ` This warning remains on your employment record until <strong>${esc(formatDate(w.expiresAt))}</strong>.`
+      : '';
+
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} — ${esc(empName)}</title>
+<style>
+  @page { size: A4; margin: 24mm 22mm; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 12.5px; line-height: 1.55; color: #111; margin: 0; }
+  .page { max-width: 780px; margin: 0 auto; padding: 24px 0; }
+  h1.title { text-align: center; font-weight: 700; text-decoration: underline; margin: 0 0 32px; font-size: 13px; }
+  .meta div { margin-bottom: 2px; }
+  ul { margin: 0 0 18px 28px; padding: 0; }
+  .sig-cursive { font-family: Georgia, serif; font-style: italic; font-size: 22px; color: #111; margin-bottom: 4px; }
+  .ack { border-top: 1px solid #ccc; padding-top: 24px; margin-top: 24px; }
+  .sig-line { display: inline-block; border-bottom: 1px solid #111; width: 240px; margin-left: 6px; height: 14px; vertical-align: middle; }
+  @media print { .no-print { display: none !important; } }
+</style></head>
+<body>
+  <div class="page">
+    ${buildLetterhead(company, { logoHeightPx: 110, showDivider: true, documentKind: 'staffWarning', brandLogos })}
+    <div style="text-align:right;margin-bottom:32px;">${esc(formatDate(w.issuedDate))}</div>
+    <h1 class="title">${esc(title)}</h1>
+    <div class="meta" style="margin-bottom:22px;">
+      <div><strong>Employee Name:</strong> ${esc(empName)}</div>
+      ${w.recordNumber ? `<div><strong>Record No:</strong> ${esc(w.recordNumber)}</div>` : ''}
+      ${w.incidentDate ? `<div><strong>Incident Date:</strong> ${esc(formatDate(w.incidentDate))}</div>` : ''}
+    </div>
+    <div style="margin-bottom:18px;">Dear ${esc(empName.split(' ')[0])},</div>
+    <div style="margin-bottom:16px;">${escNl(w.description) || '—'}</div>
+    ${corrective}
+    <div style="margin-bottom:16px;">
+      Please be advised that <strong>any further instances of this nature may result in more serious disciplinary action</strong>, in accordance with company policy.${expiryNote}
+    </div>
+    <div style="margin-bottom:30px;">Yours sincerely,</div>
+    <div style="margin-bottom:50px;">
+      <div class="sig-cursive">${esc(issuer)}</div>
+      <div>${esc(issuer)}</div>
+      <div>${esc(company?.name || 'JomoPak')}</div>
+    </div>
+    <div class="ack">
+      <div style="font-weight:700;margin-bottom:10px;">Employee Acknowledgement:</div>
+      <div style="margin-bottom:28px;">I, ${esc(empName)}, acknowledge receipt of this letter and understand its contents.</div>
+      <div style="margin-bottom:16px;">Employee Signature: <span class="sig-line"></span></div>
+      <div style="margin-bottom:28px;">Date: <span class="sig-line" style="width:200px;"></span></div>
+      <div style="margin-bottom:16px;">Employer Signature: <span class="sig-line"></span></div>
+      <div>Date: <span class="sig-line" style="width:200px;"></span></div>
+    </div>
+  </div>
+</body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 250);
+  }
 
   const stats = useMemo(() => {
     const total = warnings.length;
@@ -258,6 +363,7 @@ export function StaffWarningsPage({ warnings, employees, filters, setFilters, fo
                       </td>
                       <td>
                         <button className="table-button" onClick={() => { onEdit(w); setMode('form'); }}>Edit</button>
+                        <button className="table-button" onClick={() => printWarning(w)} title="Print this letter for signature">Print</button>
                         <button className="table-button danger" onClick={() => { if (confirm('Delete this entry?')) onDelete(w.id); }}>Delete</button>
                       </td>
                     </tr>

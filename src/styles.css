@@ -5177,7 +5177,19 @@ tr.row-muted { opacity: 0.55; }
   background: var(--jp-card-bg); cursor: pointer; font-size: 0.85rem; text-transform: capitalize;
 }
 .role-toggle.is-active { background: var(--jp-orange-soft, #fff3e0); border-color: var(--jp-orange); color: var(--jp-orange); font-weight: 600; }
-.role-toggle input { margin: 0; }
+/* Phase 113 — Fix global `input { width: 100%; padding: 10px 11px }` leaking
+   onto the pill's checkbox, which made it stretch over the role label text.
+   Force a fixed-size native checkbox so the pill renders as [☐ Admin]. */
+.role-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  cursor: pointer;
+  accent-color: var(--jp-orange);
+}
 
 .notice-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
 .notice-item { border: 1px solid var(--jp-border); border-radius: 10px; padding: 14px 16px; background: var(--jp-card-bg); }

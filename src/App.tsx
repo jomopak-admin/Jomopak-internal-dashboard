@@ -117,6 +117,7 @@ import { BankReconciliationPage } from './pages/Sars/BankReconciliationPage';
 import { GeneralLedgerPage } from './pages/Sars/GeneralLedgerPage';
 import { FinancialStatementsPage } from './pages/Sars/FinancialStatementsPage';
 import { FinancialProjectionsPage } from './pages/FinancialProjections/FinancialProjectionsPage';
+import { ReportsHubPage } from './pages/Reports/ReportsHubPage';
 import { FixedAssetsPage } from './pages/Sars/FixedAssetsPage';
 import { MaintenancePage } from './pages/Maintenance/MaintenancePage';
 import { CurrenciesPage } from './pages/Sars/CurrenciesPage';
@@ -539,6 +540,8 @@ const createInitialJobForm = (): JobFormState => ({
   qcPlan: buildBlankQcPlan(),
   // Phase 94 — seed the production pipeline with the default stages.
   pipelineStages: createDefaultJobPipeline(),
+  // Phase 117 — Blockers start empty.
+  waitingOn: [],
 });
 
 const createInitialPaperRateForm = (): PaperRateFormState => ({
@@ -611,6 +614,8 @@ const createInitialQuoteForm = (): QuoteEstimateFormState => ({
   status: 'Draft',
   notes: '',
   customerNote: '',
+  // Phase 117 — Blockers start empty.
+  waitingOn: [],
 });
 
 const createInitialLeadForm = (): LeadFormState => ({
@@ -1432,6 +1437,12 @@ const createInitialClientForm = (): ClientFormState => ({
   name: '',
   companyName: '',
   accountManagerName: '',
+  // Phase 116 — per-client preferred logo id.
+  preferredLogoId: undefined,
+  // Phase 119 — Default to standard trade terms for new clients. Sales
+  // bumps it to deposit / 50-50 / prepay when classifying the account.
+  paymentModel: 'standard',
+  defaultDepositPercent: '',
   code: '',
   pricingTierId: '',
   brandingDefault: false,
@@ -1550,6 +1561,20 @@ function App() {
     [profiles],
   );
   const [view, setView] = useState<View>('dashboard');
+  // Phase 113 — Admin Hub deep-link intent. When a quick action on the
+  // Admin Hub fires, we set both the view AND an intent string here. The
+  // receiving page reads this prop, opens its new-record form, and calls
+  // back via clearPageIntent so the effect doesn't re-fire on re-renders.
+  // The nonce changes every call so clicking the same button twice still
+  // re-triggers the consumer's useEffect.
+  const [pageIntent, setPageIntent] = useState<{ view: View; intent: string; nonce: number } | null>(null);
+  function goToWithIntent(next: View, intent: string) {
+    setView(next);
+    setPageIntent({ view: next, intent, nonce: Date.now() });
+  }
+  function clearPageIntent() {
+    setPageIntent(null);
+  }
   const [dashboardMonth, setDashboardMonth] = useState(currentMonth);
 
   // Phase 60 — Driver auto-route. When a driver profile loads, push them
@@ -2224,20 +2249,16 @@ function App() {
     );
 
     switch (view) {
-      case 'dashboard': {
-        const openJobs = dashboardJobs.filter((job) => job.status !== 'Completed').length;
-        const awaitingArtwork = dashboardJobs.filter((job) => !job.artworkReceived && job.status !== 'Completed').length;
-        const overdue = dashboardJobs.filter((job) => job.dueDate && job.dueDate < todayStr && job.status !== 'Completed').length;
-        const overCredit = data.clients.filter((client) => client.creditLimit > 0 && effectiveClientBalance(client) > client.creditLimit).length;
-        const onHold = data.clients.filter((client) => client.accountHold).length;
-        return renderChips([
-          { label: 'Open jobs', value: openJobs },
-          { label: 'Awaiting artwork', value: awaitingArtwork, tone: awaitingArtwork > 0 ? 'warn' : undefined },
-          { label: 'Overdue', value: overdue, tone: overdue > 0 ? 'alert' : undefined },
-          { label: 'Over credit', value: overCredit, tone: overCredit > 0 ? 'alert' : undefined },
-          { label: 'On hold', value: onHold, tone: onHold > 0 ? 'warn' : undefined },
-        ]);
-      }
+      case 'dashboard':
+        // Dashboard topbar chips were duplicating the AttentionTile strip
+        // rendered inside DashboardPage — those are big clickable cards
+        // showing the same five metrics (open jobs, awaiting artwork,
+        // overdue, over credit, on hold). Keeping both meant the static
+        // top-of-page chips just sat there looking the same regardless
+        // of data, while the live interactive tiles sat right below.
+        // We suppress the chips on the dashboard view and let the
+        // AttentionTile strip do the work; other pages keep their chips.
+        return null;
       case 'salesDesk': {
         const open = data.quoteEstimates.filter((q) => q.status === 'Draft' || q.status === 'Quoted' || q.status === 'Approved').length;
         const converted = data.quoteEstimates.filter((q) => q.status === 'Converted to Job').length;
@@ -3840,6 +3861,8 @@ function App() {
       status: quoteForm.status,
       notes: quoteForm.notes,
       customerNote: quoteForm.customerNote,
+      // Phase 117 — Persist blockers on the quote.
+      waitingOn: quoteForm.waitingOn,
     };
     if (quoteEditingId) {
       setData((current) => ({
@@ -5111,6 +5134,8 @@ function App() {
         : base.stereoToolCode,
       // Phase 94 — persist the pipeline stage tracker.
       pipelineStages: jobForm.pipelineStages ?? base.pipelineStages,
+      // Phase 117 — persist blockers on the job.
+      waitingOn: jobForm.waitingOn,
     });
 
     setJobMessage('');
@@ -5297,6 +5322,8 @@ function App() {
             changeoverChecklist: jobForm.changeoverChecklist,
             qcPlan: jobForm.qcPlan,
             pipelineStages: jobForm.pipelineStages ?? job.pipelineStages,
+            // Phase 117 — persist blockers on the job.
+            waitingOn: jobForm.waitingOn,
           } : job),
         };
       });
@@ -5414,6 +5441,8 @@ function App() {
         // Phase 94 — new job inherits the form's pipeline stages, falling
         // back to the default when blank.
         pipelineStages: jobForm.pipelineStages ?? createDefaultJobPipeline(),
+        // Phase 117 — new job inherits the form's blockers (usually empty).
+        waitingOn: jobForm.waitingOn,
       };
 
       const nextMaterialOrders = [...data.materialOrderRequests];
@@ -6661,6 +6690,11 @@ function App() {
       companyId: clientForm.companyId,
       companyName: clientForm.companyName,
       accountManagerName: clientForm.accountManagerName,
+      // Phase 116 — per-client preferred logo id.
+      preferredLogoId: clientForm.preferredLogoId || undefined,
+      // Phase 119 — Persist AR model on the Client record.
+      paymentModel: clientForm.paymentModel,
+      defaultDepositPercent: clientForm.defaultDepositPercent ? Number(clientForm.defaultDepositPercent) : undefined,
       code: clientForm.code,
       pricingTierId: clientForm.pricingTierId,
       pricingTierName: tier?.name ?? '',
@@ -7507,6 +7541,8 @@ function App() {
       // Phase 94 — load pipeline stages; ensurePipelineShape inside the
       // tracker tops up any missing default items so old jobs don't break.
       pipelineStages: job.pipelineStages,
+      // Phase 117 — Hydrate blockers into the form.
+      waitingOn: job.waitingOn ?? [],
     });
     setView('jobs');
   }
@@ -7655,6 +7691,8 @@ function App() {
       // Phase 94 — duplicate gets a fresh blank pipeline; the old job's
       // progress isn't relevant for the new run.
       pipelineStages: createDefaultJobPipeline(),
+      // Phase 117 — Fresh job starts with no blockers.
+      waitingOn: [],
     });
     setJobMessage('Duplicate loaded. Saving will create a new job number.');
     setView('jobs');
@@ -10263,6 +10301,8 @@ function App() {
       status: quote.status,
       notes: quote.notes,
       customerNote: quote.customerNote ?? '',
+      // Phase 117 — Hydrate blockers into the form.
+      waitingOn: quote.waitingOn ?? [],
     });
     setView('quotes');
   }
@@ -10378,6 +10418,11 @@ function App() {
       companyId: client.companyId,
       companyName: client.companyName ?? '',
       accountManagerName: client.accountManagerName ?? '',
+      // Phase 116 — per-client preferred logo id.
+      preferredLogoId: client.preferredLogoId,
+      // Phase 119 — Hydrate AR model into the form.
+      paymentModel: client.paymentModel ?? 'standard',
+      defaultDepositPercent: client.defaultDepositPercent != null ? String(client.defaultDepositPercent) : '',
       code: client.code,
       pricingTierId: client.pricingTierId,
       brandingDefault: client.brandingDefault,
@@ -11539,6 +11584,107 @@ function App() {
             }));
             toast.success(`Reporting standard switched to ${standard === 'IFRS' ? 'IFRS' : 'US GAAP'}`);
           }}
+          /* Phase 110.1 — Payroll defaults handler (UIF/SDL/PAYE/leave/etc). */
+          onSetPayrollConfig={(config) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                payrollConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Payroll settings saved');
+          }}
+          /* Phase 110.2 — Accounting defaults handler (VAT, terms, GL codes). */
+          onSetAccountingConfig={(config) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                accountingConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Accounting defaults saved');
+          }}
+          /* Phase 110.3 — Document numbering rules handler. */
+          onSetNumberingConfig={(config) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                numberingConfig: config,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Numbering rules saved');
+          }}
+          /* Phase 110.4 — Company bank accounts handler. */
+          onSetBankAccounts={(accounts) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                bankAccounts: accounts,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Bank accounts saved');
+          }}
+          /* Phase 110.6 — Employer details handler. */
+          onSetEmployerDetails={(details) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                employerDetails: details,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Employer details saved');
+          }}
+          /* Phase 115 — Brand logos library handler. Writes the new
+             jsonb column app_settings.brand_logos and propagates the
+             current default URL back to legacy company.logoUrl so
+             unmigrated print code keeps working. */
+          onSetBrandLogos={(logos) => {
+            setData((current) => {
+              const def = logos.find((l) => l.isDefault) || logos[0];
+              return {
+                ...current,
+                appSettings: {
+                  ...current.appSettings,
+                  brandLogos: logos,
+                  company: {
+                    ...current.appSettings.company,
+                    logoUrl: def?.url || current.appSettings.company.logoUrl,
+                  },
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+                },
+              };
+            });
+            toast.success(logos.length === 0 ? 'Logo library cleared' : 'Logo library saved');
+          }}
+          /* Phase 110.7 — Beneficiaries handler. */
+          onSetBeneficiaries={(beneficiaries) => {
+            setData((current) => ({
+              ...current,
+              appSettings: {
+                ...current.appSettings,
+                beneficiaries,
+                updatedAt: new Date().toISOString(),
+                updatedBy: profile?.fullName || profile?.email || current.appSettings.updatedBy,
+              },
+            }));
+            toast.success('Beneficiaries saved');
+          }}
           /* Phase 103.7.1 — Honour the requested tab from the account
              menu ("API access"). SettingsPage clears it via the
              onInitialTabHandled callback so the next visit defaults
@@ -11845,6 +11991,9 @@ function App() {
             productName: j.productName,
             pipelineStages: j.pipelineStages,
           }))}
+          // Phase 116 — Brand logo library so the Client form can show
+          // the per-client logo picker.
+          brandLogos={data.appSettings.brandLogos}
           onOpenJob={(jobId) => {
             const job = data.jobs.find((j) => j.id === jobId);
             if (job) {
@@ -12391,6 +12540,7 @@ function App() {
           invoices={data.invoices}
           clients={data.clients}
           company={data.appSettings.company}
+          brandLogos={data.appSettings.brandLogos}
           today={getToday()}
         />
       )}
@@ -12428,6 +12578,7 @@ function App() {
           onUploadDocumentFile={(file, docId) => uploadDocumentFile(file, docId)}
           companyName={data.appSettings.company?.legalName || data.appSettings.company?.name}
           companyUifReference={data.appSettings.company?.vatNumber}
+          company={data.appSettings.company}
         />
       )}
 
@@ -12592,6 +12743,8 @@ function App() {
           onDelete={(id: string) => {
             setData((current) => ({ ...current, payrollRuns: current.payrollRuns.filter((r) => r.id !== id) }));
           }}
+          pageIntent={pageIntent?.view === 'payroll' ? pageIntent : null}
+          onIntentConsumed={clearPageIntent}
         />
       )}
 
@@ -13051,6 +13204,8 @@ function App() {
           onSave={handleSaveNcr}
           onReset={resetNcrEditor}
           onEdit={editNcr}
+          pageIntent={pageIntent?.view === 'nonConformance' ? pageIntent : null}
+          onIntentConsumed={clearPageIntent}
         />
       )}
 
@@ -13296,6 +13451,7 @@ function App() {
           releases={data.customerStockReleases}
           company={data.appSettings.company}
           today={getToday()}
+          brandLogos={data.appSettings.brandLogos}
         />
       )}
 
@@ -13388,6 +13544,10 @@ function App() {
           onReset={resetWarningEditor}
           onEdit={editWarning}
           onDelete={handleDeleteWarning}
+          pageIntent={pageIntent?.view === 'staffWarnings' ? pageIntent : null}
+          onIntentConsumed={clearPageIntent}
+          company={data.appSettings.company}
+          brandLogos={data.appSettings.brandLogos}
         />
       )}
 
@@ -13402,6 +13562,8 @@ function App() {
           onReset={resetNoticeEditor}
           onEdit={editNotice}
           onDelete={handleDeleteNotice}
+          pageIntent={pageIntent?.view === 'notices' ? pageIntent : null}
+          onIntentConsumed={clearPageIntent}
         />
       )}
 
@@ -13523,6 +13685,8 @@ function App() {
           onSaveAider={handleSaveFirstAider}
           onResetAider={resetFirstAiderEditor}
           onEditAider={editFirstAider}
+          pageIntent={pageIntent?.view === 'firstAidRegister' ? pageIntent : null}
+          onIntentConsumed={clearPageIntent}
         />
       )}
 
@@ -13646,6 +13810,7 @@ function App() {
           data={data}
           profile={profile}
           goTo={(next) => setView(next)}
+          goToWithIntent={goToWithIntent}
         />
       )}
 
@@ -13891,6 +14056,12 @@ function App() {
           filteredDispatchRecords={filteredDispatchRecords}
           onEdit={editDispatch}
         />
+      )}
+
+      {/* Phase 111.4 — Reports Hub: SimplePay-style categorised landing
+          page. Tiles deep-link to the existing report pages. */}
+      {view === 'reportsHub' && (
+        <ReportsHubPage onOpen={(v) => setView(v)} />
       )}
 
       {view === 'reports' && (

@@ -18,11 +18,15 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
   AppSettingsCompany,
+  BrandLogo,
   Client,
   CustomerStockRelease,
   FinishedGoodsStock,
 } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
+import { sendEmails, OutgoingEmail } from '../../utils/emailService';
+import { toast } from '../../components/Toast';
+import { buildLetterhead, buildCompanyBlock } from '../../utils/printing';
 
 interface StockStatementsPageProps {
   clients: Client[];
@@ -30,6 +34,9 @@ interface StockStatementsPageProps {
   releases: CustomerStockRelease[];
   company?: AppSettingsCompany;
   today: string;
+  /** Phase 115 — Brand logos library so the letterhead can pick the right
+   *  mark when multiple are uploaded. */
+  brandLogos?: BrandLogo[];
 }
 
 /** A single line on the per-product summary. */
@@ -69,7 +76,7 @@ function downloadCsv(filename: string, header: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function StockStatementsPage({ clients, finishedStock, releases, company, today }: StockStatementsPageProps) {
+export function StockStatementsPage({ clients, finishedStock, releases, company, today, brandLogos }: StockStatementsPageProps) {
   // 90 days back is a sensible default reporting window — clients usually
   // ask "what's been happening since last month?", not "what happened in 2019".
   const defaultFrom = new Date(today);
@@ -79,6 +86,9 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
   const [fromDate, setFromDate] = useState<string>(defaultFrom.toISOString().slice(0, 10));
   const [toDate, setToDate] = useState<string>(today);
   const [view, setView] = useState<'summary' | 'detail'>('summary');
+  // Phase 112.2 — async sending state for the "Email to client" button so we
+  // can disable it + show a spinner while the email is in flight.
+  const [sending, setSending] = useState(false);
 
   // Only stock-holding clients are interesting — they're the ones who
   // ask "how much do I have left?" The dropdown surfaces them first.
@@ -219,46 +229,248 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
     }
   }
 
+  /**
+   * Phase 112.1 — Branded Stock Statement HTML.
+   *
+   * Built as a function (not a template literal mash-up) so the same string
+   * can power both the popup print window and the outbound email body.
+   * Brand: cream paper (#faf4e8), kraft-bag brown text (#5d3a1f), JomoPak
+   * orange (#db5a1f) only as accent. The brand mark on the letterhead is
+   * the dark-square-with-orange-J + orange-dot lockup from the website nav.
+   *
+   * Inline styles only — Outlook/Gmail strip <style> blocks otherwise, so we
+   * accept the verbosity in exchange for an email that renders the same as
+   * the print preview.
+   */
+  function buildStatementHtml(): string {
+    if (!selectedClient) return '';
+    const ink = '#5d3a1f';           // primary kraft-bag brown
+    const inkSoft = '#8a6440';       // muted body copy
+    const inkFaint = '#ad8d6a';      // hint text
+    const orange = '#db5a1f';        // accent
+    const orangeSoft = '#fbe6d5';
+    const paper = '#faf4e8';         // cream paper
+    const paperWarm = '#efe5d2';     // band/totals
+    const line = '#e5ddcf';
+    const lineSoft = '#ede6d8';
+
+    const summaryRows = (summary.length ? summary.map((l, i) => `
+      <tr style="background:${i % 2 ? paper : '#ffffff'}">
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${ink};font-weight:500;">${esc(l.productName)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${inkSoft};">${esc(l.unit || '—')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${ink};text-align:right;">${formatNumber(l.opening, 0)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${ink};text-align:right;">+${formatNumber(l.received, 0)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${ink};text-align:right;">-${formatNumber(l.released, 0)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${orange};font-weight:500;text-align:right;">${formatNumber(l.closing, 0)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${line};color:${inkFaint};text-align:right;">${formatNumber(l.reserved, 0)}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${inkSoft};font-style:italic;">No stock held for this client in this period.</td></tr>`);
+
+    const detailRows = (detail.length ? detail.map((t, i) => `
+      <tr style="background:${i % 2 ? paper : '#ffffff'}">
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${ink};">${formatDate(t.date)}</td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};">
+          <span style="background:${t.type === 'Release' ? orange : ink};color:${paper};padding:2px 7px;border-radius:3px;font-size:9.5px;font-weight:500;font-family:'Courier New',monospace;letter-spacing:0.5px;">${t.type.toUpperCase()}</span>
+        </td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${ink};">${esc(t.productName)}</td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${inkSoft};">${esc(t.stockNumber)}</td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${inkSoft};">${esc(t.jobNumber)}</td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${t.type === 'Release' ? orange : ink};font-weight:500;text-align:right;">${t.type === 'Release' ? '-' : '+'}${formatNumber(t.quantity, 0)}</td>
+        <td style="padding:6px 9px;border-bottom:1px solid ${lineSoft};color:${inkSoft};">${esc(t.reference)}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${inkSoft};font-style:italic;">No movements in this period.</td></tr>`);
+
+    const companyName = company?.name || 'JomoPak';
+    const companyLegal = company?.legalName || '';
+    const companyAddr = `${company?.addressLine1 || ''}${company?.addressLine2 ? ', ' + company.addressLine2 : ''}`;
+    const companyPhone = company?.phone || '';
+    const companyEmail = company?.email || '';
+    const companyVat = company?.vatNumber || '';
+    const today2 = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+    const statementNo = `SS-${toDate.replace(/-/g, '').slice(0, 6)}-${Math.abs(hashCode(selectedClient.id)).toString().slice(0, 3).padStart(3, '0')}`;
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Stock statement — ${esc(selectedClient.name)}</title>
+<style>@media print { body { background: ${paper} !important; } .page { box-shadow: none !important; } }</style></head>
+<body style="margin:0;background:${paper};font-family:Georgia,'Times New Roman',serif;color:${ink};">
+  <div class="page" style="max-width:780px;margin:0 auto;background:${paper};padding:48px 44px;">
+
+    <!-- Letterhead — Phase 114/115: shared helper picks the right logo from the brand library. -->
+    ${buildLetterhead(company, {
+      rightTitle: 'Stock Statement',
+      rightSubtitle: `No. ${statementNo}`,
+      logoHeightPx: 90,
+      showDivider: true,
+      documentKind: 'stockStatement',
+      brandLogos,
+      // Phase 116 — honour this client's preferred logo (FSC mark, etc).
+      clientPreferredLogoId: selectedClient.preferredLogoId,
+    })}
+
+    <!-- Period band -->
+    <div style="background:${paperWarm};border-radius:6px;padding:10px 14px;margin-bottom:22px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;color:${ink};">
+      <table style="width:100%;border-collapse:collapse;"><tr>
+        <td><span style="color:${inkSoft};">Period:</span> <strong>${esc(fromDate)} &rarr; ${esc(toDate)}</strong></td>
+        <td style="text-align:right;"><span style="color:${inkSoft};">Generated:</span> <strong>${esc(today2)}</strong></td>
+      </tr></table>
+    </div>
+
+    <!-- Address blocks. Phase 114: From block delegates to buildCompanyBlock(). -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:26px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;">
+      <tr>
+        <td style="width:50%;vertical-align:top;border-left:3px solid ${ink};padding:0 0 0 12px;">
+          <div style="font-family:'Courier New',monospace;font-size:10px;font-weight:500;color:${ink};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">From</div>
+          <div style="font-weight:500;color:${ink};font-size:13px;">${esc(companyName)}</div>
+          ${buildCompanyBlock(company)}
+        </td>
+        <td style="width:50%;vertical-align:top;border-left:3px solid ${orange};padding:0 0 0 12px;">
+          <div style="font-family:'Courier New',monospace;font-size:10px;font-weight:500;color:${orange};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Statement of stock for</div>
+          <div style="font-weight:500;color:${ink};font-size:13px;">${esc(selectedClient.name)}</div>
+          ${selectedClient.contactName ? `<div style="color:${inkSoft};">Attn: ${esc(selectedClient.contactName)}</div>` : ''}
+          ${selectedClient.contactEmail ? `<div style="color:${inkSoft};">${esc(selectedClient.contactEmail)}</div>` : ''}
+          ${selectedClient.phoneNumber ? `<div style="color:${inkSoft};">${esc(selectedClient.phoneNumber)}</div>` : ''}
+          <div style="color:${inkFaint};font-size:10.5px;margin-top:4px;">Account: ${esc(selectedClient.id.slice(0, 8))}</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Summary tiles -->
+    <table style="width:100%;border-collapse:separate;border-spacing:6px;margin-bottom:18px;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <tr>
+        ${tile('Opening', formatNumber(totals.opening, 0), '#ffffff', ink, inkSoft)}
+        ${tile('Received', '+' + formatNumber(totals.received, 0), '#ffffff', ink, inkSoft)}
+        ${tile('Released', '-' + formatNumber(totals.released, 0), '#ffffff', ink, inkSoft)}
+        ${tile('On hand', formatNumber(totals.closing, 0), orange, paper, orangeSoft)}
+      </tr>
+    </table>
+
+    <!-- Stock by product -->
+    <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:500;color:${ink};margin:14px 0 10px;text-transform:uppercase;letter-spacing:2px;">Stock by product</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:26px;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <thead><tr style="background:${ink};color:${paper};">
+        <th style="text-align:left;padding:9px 10px;font-weight:500;">Product</th>
+        <th style="text-align:left;padding:9px 10px;font-weight:500;">Unit</th>
+        <th style="text-align:right;padding:9px 10px;font-weight:500;">Opening</th>
+        <th style="text-align:right;padding:9px 10px;font-weight:500;">Received</th>
+        <th style="text-align:right;padding:9px 10px;font-weight:500;">Released</th>
+        <th style="text-align:right;padding:9px 10px;font-weight:500;color:#f4b98f;">On hand</th>
+        <th style="text-align:right;padding:9px 10px;font-weight:500;color:${inkFaint};">Reserved</th>
+      </tr></thead>
+      <tbody>${summaryRows}</tbody>
+      <tfoot><tr style="background:${paperWarm};">
+        <td colspan="2" style="padding:10px;font-weight:500;color:${ink};border-top:2px solid ${ink};">Totals</td>
+        <td style="text-align:right;padding:10px;font-weight:500;color:${ink};border-top:2px solid ${ink};">${formatNumber(totals.opening, 0)}</td>
+        <td style="text-align:right;padding:10px;font-weight:500;color:${ink};border-top:2px solid ${ink};">+${formatNumber(totals.received, 0)}</td>
+        <td style="text-align:right;padding:10px;font-weight:500;color:${ink};border-top:2px solid ${ink};">-${formatNumber(totals.released, 0)}</td>
+        <td style="text-align:right;padding:10px;font-weight:500;color:${orange};font-size:13px;border-top:2px solid ${ink};">${formatNumber(totals.closing, 0)}</td>
+        <td style="text-align:right;padding:10px;color:${inkSoft};border-top:2px solid ${ink};">${formatNumber(totals.reserved, 0)}</td>
+      </tr></tfoot>
+    </table>
+
+    <!-- Movements -->
+    <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:500;color:${ink};margin:14px 0 10px;text-transform:uppercase;letter-spacing:2px;">Movements in this period</div>
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <thead><tr style="background:${ink};color:${paper};">
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Date</th>
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Type</th>
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Product</th>
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Stock #</th>
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Job #</th>
+        <th style="text-align:right;padding:7px 9px;font-weight:500;">Quantity</th>
+        <th style="text-align:left;padding:7px 9px;font-weight:500;">Reference</th>
+      </tr></thead>
+      <tbody>${detailRows}</tbody>
+    </table>
+
+    <!-- Discrepancy clause -->
+    <div style="margin-top:32px;padding:14px 16px;background:${paperWarm};border-radius:6px;border-left:3px solid ${orange};font-size:10.5px;color:${ink};line-height:1.6;font-family:'Helvetica Neue',Arial,sans-serif;">
+      This statement reflects stock physically held on your behalf at ${esc(companyName)}. <em>Reserved</em> quantities are allocated to open orders and not yet released. Please notify us within 7 days of any discrepancies.
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:28px;padding-top:14px;border-top:1px solid ${line};font-size:10px;color:${inkFaint};font-family:'Helvetica Neue',Arial,sans-serif;">
+      <table style="width:100%;border-collapse:collapse;"><tr>
+        <td><span style="display:inline-block;width:6px;height:6px;background:${orange};border-radius:50%;vertical-align:middle;margin-right:6px;"></span>jomopak.co.za &middot; paper bags, made with purpose</td>
+        <td style="text-align:right;">Page 1 of 1</td>
+      </tr></table>
+    </div>
+
+  </div>
+</body></html>`;
+  }
+
   function printStatement() {
     if (!selectedClient) return;
     const w = window.open('', '_blank', 'width=900,height=1100');
     if (!w) return;
-    const summaryRows = summary.map((l) => `<tr><td>${l.productName}</td><td>${l.unit}</td><td class="num">${formatNumber(l.opening, 0)}</td><td class="num">${formatNumber(l.received, 0)}</td><td class="num">${formatNumber(l.released, 0)}</td><td class="num"><strong>${formatNumber(l.closing, 0)}</strong></td><td class="num muted">${formatNumber(l.reserved, 0)}</td></tr>`).join('');
-    const detailRows = detail.map((t) => `<tr><td>${formatDate(t.date)}</td><td>${t.type}</td><td>${t.productName}</td><td>${t.stockNumber}</td><td>${t.jobNumber}</td><td class="num">${t.type === 'Release' ? '-' : '+'}${formatNumber(t.quantity, 0)} ${t.unit}</td><td class="muted">${t.reference}</td></tr>`).join('');
-    w.document.write(`<!doctype html><html><head><title>Stock statement — ${selectedClient.name}</title>
-<style>
-  body { font-family: sans-serif; padding: 24px; color: #111; }
-  h1 { margin: 0 0 4px; }
-  h2 { margin: 24px 0 8px; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 12px; }
-  td.num, th.num { text-align: right; }
-  .muted { color: #666; }
-  .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .totals { margin-top: 6px; font-size: 12px; }
-</style></head><body>
-<h1>Stock Statement</h1>
-<p class="muted">From ${fromDate} to ${toDate} · generated ${new Date().toLocaleDateString()}</p>
-<div class="header-grid">
-  <div><h2>${company?.name || 'JomoPak'}</h2><div class="muted">${company?.legalName || ''}</div><div class="muted">${company?.addressLine1 || ''} ${company?.addressLine2 || ''}</div><div class="muted">${company?.phone || ''} · ${company?.email || ''}</div></div>
-  <div><h2>${selectedClient.name}</h2><div class="muted">${selectedClient.contactName || ''}</div><div class="muted">${selectedClient.contactEmail || ''}</div><div class="muted">${selectedClient.phoneNumber || ''}</div></div>
-</div>
-
-<h2>Stock by product</h2>
-<table><thead><tr><th>Product</th><th>Unit</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Released</th><th class="num">On hand</th><th class="num">Reserved</th></tr></thead>
-<tbody>${summaryRows || '<tr><td colspan="7" class="muted">No stock held for this client in this period.</td></tr>'}</tbody>
-<tfoot><tr><td colspan="2"><strong>Totals</strong></td><td class="num">${formatNumber(totals.opening, 0)}</td><td class="num">${formatNumber(totals.received, 0)}</td><td class="num">${formatNumber(totals.released, 0)}</td><td class="num"><strong>${formatNumber(totals.closing, 0)}</strong></td><td class="num">${formatNumber(totals.reserved, 0)}</td></tr></tfoot>
-</table>
-
-<h2>Movements in this period</h2>
-<table><thead><tr><th>Date</th><th>Type</th><th>Product</th><th>Stock #</th><th>Job #</th><th class="num">Quantity</th><th>Reference</th></tr></thead>
-<tbody>${detailRows || '<tr><td colspan="7" class="muted">No movements in this period.</td></tr>'}</tbody>
-</table>
-
-<p class="muted" style="font-size: 11px; margin-top: 24px;">This statement reflects stock physically held on your behalf at ${company?.name || 'JomoPak'}. Reserved quantities are allocated to open orders and not yet released. Please notify us within 7 days of any discrepancies.</p>
-</body></html>`);
+    w.document.write(buildStatementHtml());
     w.document.close();
     setTimeout(() => w.print(), 250);
+  }
+
+  /**
+   * Phase 112.2 — QuickBooks-style "Send to client".
+   *
+   * Routes the same branded HTML through the existing sendEmails() pipe
+   * (currently a noop stub in dev, Resend in prod). The recipient is the
+   * client's primary contact email; if it's missing we toast a guidance
+   * message rather than failing silently.
+   */
+  async function emailStatement() {
+    if (!selectedClient) return;
+    const to = selectedClient.contactEmail || '';
+    if (!to) {
+      toast.error('No email on file for this client — add one on the Client profile first.');
+      return;
+    }
+    const html = buildStatementHtml();
+    const subject = `Stock statement — ${selectedClient.name} · ${fromDate} to ${toDate}`;
+    const email: OutgoingEmail = { to, subject, html };
+    setSending(true);
+    try {
+      const res = await sendEmails([email]);
+      if (res.error) {
+        toast.error(`Email failed: ${res.error}`);
+      } else if (res.sent === 0) {
+        toast.error('Email could not be sent. Check the connector setup in Settings.');
+      } else {
+        toast.success(`Stock statement sent to ${to}.`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Email failed: ${message}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /**
+   * Phase 112.1 helpers — `esc` HTML-escapes user-controlled strings so a
+   * product name with `<` or `&` in it doesn't break the layout (or worse,
+   * inject markup into the client's inbox). `tile` renders one summary
+   * card; `hashCode` is the cheap deterministic generator for the
+   * SS-YYYYMM-NNN statement number so repeated runs against the same
+   * client + period reproduce the same number.
+   */
+  function esc(value: string | number | null | undefined): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function tile(label: string, value: string, bg: string, valueColor: string, labelColor: string): string {
+    return `<td style="width:25%;background:${bg};border:1px solid #e5ddcf;border-radius:6px;padding:10px 12px;">
+      <div style="font-family:'Courier New',monospace;font-size:9px;color:${labelColor};text-transform:uppercase;letter-spacing:1px;">${label}</div>
+      <div style="font-size:18px;font-weight:500;color:${valueColor};margin-top:4px;">${value}</div>
+    </td>`;
+  }
+  function hashCode(input: string): number {
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      hash = ((hash << 5) - hash) + input.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
   }
 
   return (
@@ -269,6 +481,14 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
         action={
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="ghost-button" onClick={exportCsv} disabled={!selectedClient}>Export CSV</button>
+            <button
+              className="ghost-button"
+              onClick={emailStatement}
+              disabled={!selectedClient || sending || !selectedClient?.contactEmail}
+              title={!selectedClient?.contactEmail ? 'No email on file for this client' : `Email statement to ${selectedClient?.contactEmail}`}
+            >
+              {sending ? 'Sending…' : 'Email to client'}
+            </button>
             <button className="secondary-button" onClick={printStatement} disabled={!selectedClient}>Print / PDF</button>
           </div>
         }

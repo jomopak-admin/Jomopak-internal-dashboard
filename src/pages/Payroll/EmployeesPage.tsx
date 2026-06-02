@@ -11,6 +11,7 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
   ALL_EMPLOYEE_AVAILABILITY_STATUSES,
+  AppSettingsCompany,
   DocumentRecord,
   Employee,
   EmployeeAvailabilityStatus,
@@ -19,6 +20,7 @@ import {
 import { EmployeeDocumentsPanel } from '../../components/EmployeeDocumentsPanel';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { formatNumber } from '../../utils/calculations';
+import { buildLetterhead } from '../../utils/printing';
 
 interface EmployeesPageProps {
   employees: Employee[];
@@ -27,6 +29,9 @@ interface EmployeesPageProps {
   /** Used by the UI-19 generator for the employer-side fields. */
   companyName?: string;
   companyUifReference?: string;
+  /** Phase 114 — Full company block so the UI-19 print can pick up the
+   *  uploaded brand logo + letterhead from Settings → Branding. */
+  company?: AppSettingsCompany;
   /** Phase 96 — HR documents (Doc Vault rows where ownerType='employee'). */
   documents?: DocumentRecord[];
   uploaderName?: string;
@@ -53,11 +58,12 @@ function emptyEmployee(): Employee {
   };
 }
 
-function printUi19(e: Employee, companyName: string, companyUifRef: string) {
+function printUi19(e: Employee, companyName: string, companyUifRef: string, company?: AppSettingsCompany) {
   // Phase 50 — produce a printable UI-19 (UIF declaration on staff exit).
   // Internal/working draft only — the official UI-19 is captured on the
   // SARS / Dept of Labour ufiling portal but this print speeds up data
   // gathering when an employee leaves.
+  // Phase 114 — letterhead at top so the uploaded company logo renders.
   const w = window.open('', '_blank', 'width=800,height=1100');
   if (!w) return;
   w.document.write(`<!doctype html><html><head><title>UI-19 — ${e.firstName} ${e.lastName}</title>
@@ -72,6 +78,7 @@ function printUi19(e: Employee, companyName: string, companyUifRef: string) {
   .sig { margin-top: 60px; }
   .sig-line { border-top: 1px solid #333; padding-top: 4px; width: 240px; }
 </style></head><body>
+${buildLetterhead(company, { rightTitle: 'UI-19', rightSubtitle: 'UIF declaration', logoHeightPx: 90 })}
 <h1>UI-19 Declaration of Employee Termination</h1>
 <p class="muted">For submission to the UIF (Department of Employment &amp; Labour) — generated from the Jomopak dashboard</p>
 
@@ -127,18 +134,54 @@ function printUi19(e: Employee, companyName: string, companyUifRef: string) {
   setTimeout(() => w.print(), 250);
 }
 
-export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference, documents = [], uploaderName = '', onSaveDocument, onDeleteDocument, onUploadDocumentFile }: EmployeesPageProps) {
+export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference, company, documents = [], uploaderName = '', onSaveDocument, onDeleteDocument, onUploadDocumentFile }: EmployeesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [draft, setDraft] = useState<Employee>(emptyEmployee());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  /*  Phase 111.3 — SimplePay-style top tabs + filter chips + sortable cols.
+   *
+   *  Tabs: Employee List / Self-Service / Leave Overview / Bulk Actions.
+   *  Filter chips: Pay Frequency, Current Status, plus a search box.
+   *  Sortable columns: click a header to toggle asc/desc on that field. */
+  type EmpTab = 'list' | 'selfService' | 'leave' | 'bulk';
+  const [empTab, setEmpTab] = useState<EmpTab>('list');
+  const EMP_TABS: Array<{ key: EmpTab; label: string }> = [
+    { key: 'list', label: 'Employee List' },
+    { key: 'selfService', label: 'Self-Service' },
+    { key: 'leave', label: 'Leave Overview' },
+    { key: 'bulk', label: 'Bulk Actions' },
+  ];
+  const [filterFrequency, setFilterFrequency] = useState<'All' | PayCycle>('All');
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Active' | 'Inactive'>('Active');
+  const [filterSearch, setFilterSearch] = useState('');
+  type SortKey = 'lastName' | 'firstName' | 'employeeNumber' | 'basicSalary';
+  const [sortKey, setSortKey] = useState<SortKey>('lastName');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  function toggleSort(k: SortKey) {
+    if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(k); setSortDir('asc'); }
+  }
 
-  const rows = useMemo(
-    () => employees
-      .filter((e) => (showInactive ? true : e.active))
-      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)),
-    [employees, showInactive],
-  );
+  const rows = useMemo(() => {
+    const needle = filterSearch.trim().toLowerCase();
+    return employees
+      .filter((e) => (filterStatus === 'All' ? true : filterStatus === 'Active' ? e.active : !e.active))
+      .filter((e) => (showInactive ? true : filterStatus !== 'Inactive' ? e.active : true))
+      .filter((e) => (filterFrequency === 'All' ? true : e.payCycle === filterFrequency))
+      .filter((e) =>
+        !needle
+        || `${e.firstName} ${e.lastName}`.toLowerCase().includes(needle)
+        || (e.employeeNumber || '').toLowerCase().includes(needle)
+        || (e.jobTitle || '').toLowerCase().includes(needle),
+      )
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === 'basicSalary') cmp = (a.basicSalary || 0) - (b.basicSalary || 0);
+        else cmp = String(a[sortKey] || '').localeCompare(String(b[sortKey] || ''));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+  }, [employees, filterStatus, filterFrequency, filterSearch, sortKey, sortDir, showInactive]);
 
   const monthlyWage = useMemo(
     () => employees.filter((e) => e.active).reduce((s, e) => s + (Number(e.basicSalary) || 0), 0),
@@ -312,48 +355,226 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
         action={<button className="secondary-button" onClick={startNew}>New employee</button>}
       />
 
-      <section className="stats-grid">
-        <div className="card stat-card"><p className="stat-label">Active employees</p><h3>{employees.filter((e) => e.active).length}</h3></div>
-        <div className="card stat-card"><p className="stat-label">Monthly basic wage bill</p><h3>R {formatNumber(monthlyWage, 2)}</h3></div>
-      </section>
+      {/* Phase 111.3 — Top tab strip. */}
+      <div
+        role="tablist"
+        aria-label="Employees sections"
+        style={{
+          display: 'flex',
+          gap: '1.25rem',
+          borderBottom: '1px solid var(--border, #d8dde3)',
+          marginBottom: '1rem',
+        }}
+      >
+        {EMP_TABS.map((t) => {
+          const isActive = t.key === empTab;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setEmpTab(t.key)}
+              style={{
+                padding: '0.5rem 0',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? '3px solid var(--accent, #1f7a4d)' : '3px solid transparent',
+                color: isActive ? 'var(--accent, #1f7a4d)' : 'var(--text, #1a1a1a)',
+                fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <section className="card accounting-toolbar">
-        <label className="accounting-check"><input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /><span>Show inactive</span></label>
-      </section>
+      {empTab === 'list' ? (
+        <>
+          <section className="stats-grid">
+            <div className="card stat-card"><p className="stat-label">Active employees</p><h3>{employees.filter((e) => e.active).length}</h3></div>
+            <div className="card stat-card"><p className="stat-label">Monthly basic wage bill</p><h3>R {formatNumber(monthlyWage, 2)}</h3></div>
+          </section>
 
-      {rows.length === 0 ? (
-        <EmptyState title="No employees" body="Add your staff to start running payroll." />
-      ) : (
-        <section className="card">
-          <table className="data-table">
+          {/* Filter chip row */}
+          <section className="card" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', padding: '0.5rem 0.75rem' }}>
+            <FilterChip label="Pay Frequency" value={filterFrequency} options={['All', 'Monthly', 'Weekly']} onChange={(v) => setFilterFrequency(v as 'All' | PayCycle)} />
+            <FilterChip label="Current Status" value={filterStatus} options={['All', 'Active', 'Inactive']} onChange={(v) => setFilterStatus(v as 'All' | 'Active' | 'Inactive')} />
+            <input
+              type="search"
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              placeholder="Search name / number / job…"
+              style={{ flex: 1, minWidth: '200px', padding: '0.4rem 0.6rem', borderRadius: '0.3rem', border: '1px solid var(--border, #d8dde3)' }}
+            />
+            <label className="accounting-check" style={{ marginLeft: 'auto' }}>
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              <span>Show inactive</span>
+            </label>
+          </section>
+
+          {rows.length === 0 ? (
+            <EmptyState title="No employees match" body="Adjust filters or add staff to start running payroll." />
+          ) : (
+            <section className="card">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <SortableTh label="Last Name" k="lastName" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                    <SortableTh label="First Names" k="firstName" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                    <SortableTh label="Number" k="employeeNumber" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                    <th>Job</th>
+                    <th>Cycle</th>
+                    <SortableTh label="Basic pay" k="basicSalary" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} align="right" />
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((e) => (
+                    <tr key={e.id} className={e.active ? '' : 'row-muted'}>
+                      <td><strong>{e.lastName}</strong></td>
+                      <td>{e.firstName}</td>
+                      <td className="muted">{e.employeeNumber || '—'}</td>
+                      <td>{e.jobTitle || '—'}</td>
+                      <td>{e.payCycle}</td>
+                      <td style={{ textAlign: 'right' }}>R {formatNumber(e.basicSalary, 2)}</td>
+                      <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        <button className="link-button" onClick={() => startEdit(e)}>Edit</button>
+                        {e.endDate ? (
+                          <>
+                            {' · '}
+                            <button className="link-button" onClick={() => printUi19(e, companyName || 'JomoPak', companyUifReference || '', company)} title="Generate UI-19 (UIF declaration on staff exit)">UI-19</button>
+                          </>
+                        ) : null}
+                        {' · '}
+                        <button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(e.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ padding: '0.5rem 1rem', color: 'var(--muted, #5b6b7a)', fontSize: '0.85rem' }}>
+                Showing {rows.length} of {employees.length} entries
+              </p>
+            </section>
+          )}
+        </>
+      ) : empTab === 'selfService' ? (
+        <section className="card" style={{ padding: '1.5rem' }}>
+          <h3>Self-Service</h3>
+          <p>
+            Employees access their own payslips, leave balance, and submit leave requests via the
+            <strong> My Stuff</strong> portal (sidebar &gt; My Stuff). They sign in with their personal
+            email + the PIN issued at onboarding. Self-service access is enabled per employee on the
+            Permissions tab inside each employee's profile.
+          </p>
+        </section>
+      ) : empTab === 'leave' ? (
+        <section className="card" style={{ padding: '1.5rem' }}>
+          <h3>Leave Overview</h3>
+          <p>
+            See annual / sick / family-responsibility leave balances per employee. Approve open leave
+            requests under <strong>Leave</strong> in the sidebar, or open an employee's profile to see their
+            full leave history.
+          </p>
+          <table className="data-table" style={{ marginTop: '0.75rem' }}>
             <thead>
-              <tr><th>Name</th><th>No.</th><th>Job</th><th>Cycle</th><th style={{ textAlign: 'right' }}>Basic pay</th><th></th></tr>
+              <tr><th>Employee</th><th>Annual</th><th>Sick</th><th>Family</th><th>Unpaid</th></tr>
             </thead>
             <tbody>
-              {rows.map((e) => (
-                <tr key={e.id} className={e.active ? '' : 'row-muted'}>
-                  <td><strong>{e.firstName} {e.lastName}</strong>{!e.active ? <span className="muted"> · inactive</span> : null}</td>
-                  <td className="muted">{e.employeeNumber || '—'}</td>
-                  <td>{e.jobTitle || '—'}</td>
-                  <td>{e.payCycle}</td>
-                  <td style={{ textAlign: 'right' }}>R {formatNumber(e.basicSalary, 2)}</td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="link-button" onClick={() => startEdit(e)}>Edit</button>
-                    {e.endDate ? (
-                      <>
-                        {' · '}
-                        <button className="link-button" onClick={() => printUi19(e, companyName || 'JomoPak', companyUifReference || '')} title="Generate UI-19 (UIF declaration on staff exit)">UI-19</button>
-                      </>
-                    ) : null}
-                    {' · '}
-                    <button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(e.id)}>Delete</button>
-                  </td>
+              {employees.filter((e) => e.active).slice(0, 50).map((e) => (
+                <tr key={e.id}>
+                  <td><strong>{e.firstName} {e.lastName}</strong></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted, #5b6b7a)' }}>
+            Balances pull from the Leave module once leave requests are approved against employee profiles.
+          </p>
+        </section>
+      ) : (
+        <section className="card" style={{ padding: '1.5rem' }}>
+          <h3>Bulk Actions</h3>
+          <p style={{ color: 'var(--muted, #5b6b7a)' }}>
+            Apply changes to many employees at once.
+          </p>
+          <div style={{ display: 'grid', gap: '0.5rem', maxWidth: '420px', marginTop: '0.75rem' }}>
+            <button type="button" className="ghost-button" disabled>Bulk salary increase (coming soon)</button>
+            <button type="button" className="ghost-button" disabled>Bulk pay-cycle change (coming soon)</button>
+            <button type="button" className="ghost-button" disabled>Bulk export (CSV)</button>
+            <button type="button" className="ghost-button" disabled>Send portal invitations</button>
+          </div>
         </section>
       )}
     </div>
+  );
+}
+
+/* --------------------------------- Helpers ----------------------------------- */
+/*  Phase 111.3 — Tiny presentational helpers for the new tabs UX. */
+
+function FilterChip({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'stretch',
+      borderRadius: '0.3rem',
+      overflow: 'hidden',
+      border: '1px solid var(--border, #d8dde3)',
+      fontSize: '0.8rem',
+    }}>
+      <span style={{ padding: '0.3rem 0.55rem', background: 'var(--surface, #f5f7fa)', color: 'var(--muted, #5b6b7a)' }}>
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          border: 'none',
+          padding: '0.3rem 0.5rem',
+          background: 'var(--accent, #1f7a4d)',
+          color: '#fff',
+          cursor: 'pointer',
+        }}
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function SortableTh<K extends string>({
+  label, k, sortKey, sortDir, onToggle, align = 'left',
+}: {
+  label: string;
+  k: K;
+  sortKey: string;
+  sortDir: 'asc' | 'desc';
+  onToggle: (k: K) => void;
+  align?: 'left' | 'right';
+}) {
+  const isActive = k === sortKey;
+  return (
+    <th style={{ textAlign: align, cursor: 'pointer', userSelect: 'none' }} onClick={() => onToggle(k)}>
+      {label}
+      <span style={{ opacity: isActive ? 1 : 0.3, marginLeft: '0.25rem' }}>
+        {isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
   );
 }

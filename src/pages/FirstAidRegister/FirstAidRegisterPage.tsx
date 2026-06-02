@@ -56,6 +56,9 @@ interface FirstAidRegisterPageProps {
   onSaveAider: () => void;
   onResetAider: () => void;
   onEditAider: (a: DesignatedFirstAider) => void;
+  /** Phase 113 — Admin Hub deep-link. 'new' opens the entry form. */
+  pageIntent?: { view: string; intent: string; nonce: number } | null;
+  onIntentConsumed?: () => void;
 }
 
 export function FirstAidRegisterPage(props: FirstAidRegisterPageProps) {
@@ -81,12 +84,25 @@ export function FirstAidRegisterPage(props: FirstAidRegisterPageProps) {
     onSaveAider,
     onResetAider,
     onEditAider,
+    pageIntent,
+    onIntentConsumed,
   } = props;
   const [mode, setMode] = useState<'list' | 'entryForm' | 'aiderForm'>('list');
 
   useEffect(() => {
     if (entryEditingId) setMode('entryForm');
   }, [entryEditingId]);
+
+  // Phase 113 — Admin Hub "Log first aid" deep-link: blank the entry form
+  // and jump into entryForm mode so the user types straight into a fresh row.
+  useEffect(() => {
+    if (pageIntent?.intent === 'new') {
+      onResetEntry();
+      setMode('entryForm');
+      onIntentConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIntent?.nonce]);
   useEffect(() => {
     if (aiderEditingId) setMode('aiderForm');
   }, [aiderEditingId]);

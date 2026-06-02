@@ -31,9 +31,19 @@ interface AdminHubPageProps {
   profile: UserProfile | null;
   /** Switch the main view to the given page. */
   goTo: (view: View) => void;
+  /** Phase 113 — Switch the view AND deliver an "intent" so the target page
+   *  can act on landing (e.g. open the new-record form instead of dumping
+   *  the user on the list). */
+  goToWithIntent?: (view: View, intent: string) => void;
 }
 
-export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
+export function AdminHubPage({ data, profile, goTo, goToWithIntent }: AdminHubPageProps) {
+  /** Phase 113 — Convenience that prefers goToWithIntent when available
+   *  and falls back to plain goTo. Means action handlers stay terse. */
+  function goToNew(view: View) {
+    if (goToWithIntent) goToWithIntent(view, 'new');
+    else goTo(view);
+  }
   // ────────────────────────────────────────────────────────────────────
   // Live counts per section — kept lean. A heavier admin queue page can
   // come later if you want it; for now we surface the headline number.
@@ -106,7 +116,9 @@ export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
         { label: 'Pending acks', value: counts.noticesUnack, tone: counts.noticesUnack > 0 ? 'warn' : undefined },
       ],
       actions: [
-        { label: 'Post a notice', primary: true, onClick: () => goTo('notices') },
+        // Phase 113 — Post a notice deep-links straight into the new-notice
+        // form instead of dumping the admin on the list page.
+        { label: 'Post a notice', primary: true, onClick: () => goToNew('notices') },
         { label: 'See notice board', onClick: () => goTo('notices') },
         { label: 'My Stuff (preview)', onClick: () => goTo('myPortal') },
       ],
@@ -134,11 +146,13 @@ export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
         { label: 'Active loans', value: counts.loansActive },
       ],
       actions: [
+        // Approve leave + claims already land in approval-focused views,
+        // no further intent needed. The 'new record' actions deep-link.
         { label: 'Approve leave', primary: true, onClick: () => goTo('staffLeaveApprove') },
         { label: 'Approve claims', onClick: () => goTo('expenseClaimsApprove') },
-        { label: 'Issue warning', onClick: () => goTo('staffWarnings') },
-        { label: 'Staff loans', onClick: () => goTo('staffLoans') },
-        { label: 'Run payroll', onClick: () => goTo('payroll') },
+        { label: 'Issue warning', onClick: () => goToNew('staffWarnings') },
+        { label: 'Staff loans', onClick: () => goToNew('staffLoans') },
+        { label: 'Run payroll', onClick: () => goToNew('payroll') },
         { label: 'IRP5 / EMP501', onClick: () => goTo('irp5Centre') },
       ],
     },
@@ -172,12 +186,14 @@ export function AdminHubPage({ data, profile, goTo }: AdminHubPageProps) {
         { label: 'Last fire drill', value: counts.drillLastDate ? counts.drillLastDate : '—' },
       ],
       actions: [
-        { label: 'NCR register', primary: true, onClick: () => goTo('nonConformance') },
-        { label: 'SHE Committee', onClick: () => goTo('sheCommittee') },
-        { label: 'Drill register', onClick: () => goTo('drillRegister') },
-        { label: 'Incident register', onClick: () => goTo('incidentRegister') },
-        { label: 'Toolbox talks', onClick: () => goTo('toolboxTalks') },
-        { label: 'First aid register', onClick: () => goTo('firstAidRegister') },
+        // Compliance entries are usually "I just observed something, log
+        // it" actions — deep-link straight into the new-entry form.
+        { label: 'Log NCR', primary: true, onClick: () => goToNew('nonConformance') },
+        { label: 'Log SHE meeting', onClick: () => goToNew('sheCommittee') },
+        { label: 'Log fire drill', onClick: () => goToNew('drillRegister') },
+        { label: 'Log incident', onClick: () => goToNew('incidentRegister') },
+        { label: 'Log toolbox talk', onClick: () => goToNew('toolboxTalks') },
+        { label: 'Log first aid', onClick: () => goToNew('firstAidRegister') },
         { label: 'Training records', onClick: () => goTo('staffTraining') },
         { label: 'SARS Centre', onClick: () => goTo('sarsCentre') },
         { label: 'Doc Vault', onClick: () => goTo('documentVault') },

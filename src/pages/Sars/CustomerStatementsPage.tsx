@@ -14,15 +14,19 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
   AppSettingsCompany,
+  BrandLogo,
   Client,
   Invoice,
 } from '../../types';
 import { formatDate, formatNumber } from '../../utils/calculations';
+import { resolveDocumentLogo } from '../../utils/printing';
 
 interface CustomerStatementsPageProps {
   invoices: Invoice[];
   clients: Client[];
   company?: AppSettingsCompany;
+  // Phase 116 — brand library, so we can resolve per-client preferred logos.
+  brandLogos?: BrandLogo[];
   today: string;
 }
 
@@ -40,7 +44,7 @@ interface StatementLine {
   daysOverdue: number;
 }
 
-export function CustomerStatementsPage({ invoices, clients, company, today }: CustomerStatementsPageProps) {
+export function CustomerStatementsPage({ invoices, clients, company, brandLogos, today }: CustomerStatementsPageProps) {
   const [clientId, setClientId] = useState<string>('');
   const [asAt, setAsAt] = useState<string>(today);
   const [showPaid, setShowPaid] = useState(false);
@@ -151,14 +155,24 @@ export function CustomerStatementsPage({ invoices, clients, company, today }: Cu
         // ── Printable statement of account ──────────────────────────────────
         <article className="card" style={{ maxWidth: 900, margin: '0 auto' }}>
           <header style={{ borderBottom: '0.5px solid var(--jp-line)', paddingBottom: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 22 }}>{company?.name || 'Jomopak'}</h1>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--jp-ink-3, #64748b)', lineHeight: 1.5 }}>
-                {company?.legalName}<br />
-                {company?.addressLine1}{company?.addressLine2 ? <>, {company.addressLine2}</> : null}<br />
-                {company?.phone}{company?.email ? ` · ${company.email}` : ''}<br />
-                {company?.vatNumber ? `VAT: ${company.vatNumber}` : ''}
-              </p>
+            {/* Phase 114/115/116 — Resolver picks the right logo for THIS customer's statement.
+                Precedence: client.preferredLogoId → 'customerStatement' doc-type pin → library default → legacy company.logoUrl. */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              {(() => {
+                const logoUrl = resolveDocumentLogo(company, brandLogos, 'customerStatement', undefined, client?.preferredLogoId);
+                return logoUrl ? (
+                  <img src={logoUrl} alt={`${company?.name ?? 'Company'} logo`} style={{ height: 64, width: 'auto', objectFit: 'contain' }} />
+                ) : null;
+              })()}
+              <div>
+                <h1 style={{ margin: 0, fontSize: 22 }}>{company?.name || 'Jomopak'}</h1>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--jp-ink-3, #64748b)', lineHeight: 1.5 }}>
+                  {company?.legalName}<br />
+                  {company?.addressLine1}{company?.addressLine2 ? <>, {company.addressLine2}</> : null}<br />
+                  {company?.phone}{company?.email ? ` · ${company.email}` : ''}<br />
+                  {company?.vatNumber ? `VAT: ${company.vatNumber}` : ''}
+                </p>
+              </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <h2 style={{ margin: 0, fontSize: 16, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Statement of Account</h2>

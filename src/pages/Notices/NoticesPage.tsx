@@ -6,7 +6,7 @@
  * notice automatically. Internal-only — does not go to clients.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -25,10 +25,26 @@ interface NoticesPageProps {
   onReset: () => void;
   onEdit: (n: Notice) => void;
   onDelete: (id: string) => void;
+  /** Phase 113 — Deep-link intent from Admin Hub. When intent.nonce changes
+   *  and intent.intent === 'new', open the new-notice form directly. */
+  pageIntent?: { view: string; intent: string; nonce: number } | null;
+  onIntentConsumed?: () => void;
 }
 
-export function NoticesPage({ notices, form, setForm, editingId, message, onSave, onReset, onEdit, onDelete }: NoticesPageProps) {
+export function NoticesPage({ notices, form, setForm, editingId, message, onSave, onReset, onEdit, onDelete, pageIntent, onIntentConsumed }: NoticesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
+
+  // Phase 113 — Consume the 'new' deep-link from Admin Hub: clear any
+  // pending form state, jump straight into the new-notice wizard, then
+  // clear the intent so it doesn't re-fire on the next re-render.
+  useEffect(() => {
+    if (pageIntent?.intent === 'new') {
+      onReset();
+      setMode('form');
+      onIntentConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIntent?.nonce]);
 
   function toggleRole(r: UserRole) {
     const next = form.audienceRoles.includes(r)

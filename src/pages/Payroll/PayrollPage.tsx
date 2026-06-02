@@ -10,7 +10,7 @@
  * to your bank. Emailing payslips needs a mail connector wired up first.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { EmptyState } from '../../components/EmptyState';
 import {
@@ -34,6 +34,11 @@ interface PayrollPageProps {
   company?: AppSettingsCompany;
   onSave: (run: PayrollRun) => void;
   onDelete: (id: string) => void;
+  /** Phase 113 — Admin Hub deep-link. 'new' starts a fresh pay run
+   *  immediately. The receiving useEffect debounces against nonce so a
+   *  re-render doesn't replay the intent. */
+  pageIntent?: { view: string; intent: string; nonce: number } | null;
+  onIntentConsumed?: () => void;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -120,7 +125,7 @@ function emptyRun(): PayrollRun {
   };
 }
 
-export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete }: PayrollPageProps) {
+export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete, pageIntent, onIntentConsumed }: PayrollPageProps) {
   const [mode, setMode] = useState<'list' | 'run' | 'payslips'>('list');
   const [draft, setDraft] = useState<PayrollRun>(emptyRun());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,6 +151,17 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
     setMode('run');
   }
   function startEdit(r: PayrollRun) { setDraft(recomputeTotals(r)); setEditingId(r.id); setMessage(''); setMode('run'); }
+
+  // Phase 113 — Admin Hub deep-link: 'new' starts a fresh pay run for the
+  // current month immediately. nonce dependency means re-clicking from
+  // Admin Hub re-fires the effect even if intent string is the same.
+  useEffect(() => {
+    if (pageIntent?.intent === 'new') {
+      startNew();
+      onIntentConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIntent?.nonce]);
 
   function updateRun(patch: Partial<PayrollRun>) { setDraft((d) => recomputeTotals({ ...d, ...patch })); }
 
@@ -385,45 +401,272 @@ export function PayrollPage({ payrollRuns, employees, company, onSave, onDelete 
   }
 
   // ──────────────────────────────────────────────────────────────────── List
+  /*  Phase 111.1 — Pay Runs (SimplePay-style).
+   *
+   *  Restructure replaces the flat table with a SOP-shaped layout:
+   *    1. "Pending Pay Runs" hero card on top — the current period that's
+   *       still draft. Shows payslip totals/finalised/pending counters and
+   *       Preview / Finalise CTAs so the CEO doesn't have to scroll.
+   *    2. "Last month" accordion — the most recent finalised run, expanded
+   *       by default, with accounting + beneficiaries info shortcut.
+   *    3. Historical months — older runs collapsed by year/month with the
+   *       same data hidden until you expand.
+   */
+  const now = new Date();
+  const currentPeriodLabel = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+  const pendingRun = sorted.find((r) => r.status === 'Draft');
+  const finalised = sorted.filter((r) => r.status !== 'Draft');
+  const lastMonth = finalised[0];
+  const olderRuns = finalised.slice(1);
+
   return (
     <div className="page-stack">
       <SectionTitle
-        title="Payroll"
-        subtitle="Run payroll, produce payslips and a bank file. PAYE is entered manually — not computed from tax tables."
-        action={<button className="secondary-button" onClick={startNew}>New payroll run</button>}
+        title="Pay Runs"
+        subtitle="The current period sits at the top. Preview the payslips, finalise the run, then download the bank EFT file."
+        action={<button className="secondary-button" onClick={startNew}>+ New pay run</button>}
       />
+
+      {/* Pending pay run hero */}
+      <PendingPayRunCard
+        run={pendingRun}
+        currentPeriodLabel={currentPeriodLabel}
+        onPreview={(r) => { startEdit(r); setMode('payslips'); }}
+        onFinalise={(r) => startEdit(r)}
+        onStartNew={startNew}
+      />
+
+      {/* Last month — expanded by default */}
+      {lastMonth ? (
+        <PayRunHistoryCard
+          run={lastMonth}
+          headingPrefix="Last month"
+          defaultOpen
+          onOpen={() => startEdit(lastMonth)}
+          onPrintPayslips={() => { startEdit(lastMonth); setMode('payslips'); }}
+          onExportEft={() => { startEdit(lastMonth); setTimeout(exportEft, 0); }}
+          onDelete={() => onDelete(lastMonth.id)}
+        />
+      ) : null}
+
+      {/* Older runs — collapsed */}
+      {olderRuns.map((r) => (
+        <PayRunHistoryCard
+          key={r.id}
+          run={r}
+          headingPrefix=""
+          defaultOpen={false}
+          onOpen={() => startEdit(r)}
+          onPrintPayslips={() => { startEdit(r); setMode('payslips'); }}
+          onExportEft={() => { startEdit(r); setTimeout(exportEft, 0); }}
+          onDelete={() => onDelete(r.id)}
+        />
+      ))}
+
       {sorted.length === 0 ? (
         <EmptyState title="No payroll runs yet" body="Start a run to produce payslips and EMP201 totals." />
-      ) : (
-        <section className="card">
-          <table className="data-table">
-            <thead>
-              <tr><th>Period</th><th>Pay date</th><th>Status</th><th style={{ textAlign: 'center' }}>Staff</th><th style={{ textAlign: 'right' }}>Net</th><th style={{ textAlign: 'right' }}>EMP201</th><th></th></tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => {
-                const emp201 = round2(r.totalPaye + r.totalUifEmployee + r.totalUifEmployer + r.totalSdl);
-                return (
-                  <tr key={r.id}>
-                    <td><strong>{r.periodLabel}</strong><div className="muted" style={{ fontSize: '0.75rem' }}>{r.payCycle}</div></td>
-                    <td>{r.payDate || '—'}</td>
-                    <td><span className={`status-pill ${STATUS_CLASS[r.status]}`}>{r.status}</span></td>
-                    <td style={{ textAlign: 'center' }}>{r.payslips.length}</td>
-                    <td style={{ textAlign: 'right' }}>R {formatNumber(r.totalNet, 2)}</td>
-                    <td style={{ textAlign: 'right' }}>R {formatNumber(emp201, 2)}</td>
-                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      <button className="link-button" onClick={() => startEdit(r)}>Open</button>
-                      {' · '}
-                      <button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(r.id)}>Delete</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </section>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+/* -------------------------- Pending pay run hero card ------------------------ */
+/*  Phase 111.1 — Hero card.
+ *
+ *  Two states:
+ *    1. No pending run for the current period → big "Create pay run" CTA.
+ *    2. Pending run exists → counters (total/finalised/pending payslips) plus
+ *       Preview + Finalise CTAs. Payslip count == draft.payslips.length, and
+ *       "finalised" is a flag we'd track per-payslip — for now everything is
+ *       Pending until the run.status flips to Approved.
+ */
+
+function PendingPayRunCard({
+  run,
+  currentPeriodLabel,
+  onPreview,
+  onFinalise,
+  onStartNew,
+}: {
+  run: PayrollRun | undefined;
+  currentPeriodLabel: string;
+  onPreview: (r: PayrollRun) => void;
+  onFinalise: (r: PayrollRun) => void;
+  onStartNew: () => void;
+}) {
+  if (!run) {
+    return (
+      <section
+        className="card"
+        style={{
+          padding: '1rem 1.25rem',
+          background: 'var(--accent-bg, #f0f8f3)',
+          border: '1px solid var(--accent, #1f7a4d)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <strong style={{ display: 'block', fontSize: '1.05rem' }}>Pending Pay Runs</strong>
+            <p style={{ margin: '0.25rem 0 0', color: 'var(--muted, #5b6b7a)', fontSize: '0.875rem' }}>
+              No draft run for {currentPeriodLabel}. Create one when you're ready to pay staff.
+            </p>
+          </div>
+          <button type="button" className="primary-button" onClick={onStartNew}>+ Create pay run</button>
+        </div>
+      </section>
+    );
+  }
+
+  const total = run.payslips.length;
+  const finalised = run.status === 'Approved' || run.status === 'Paid' ? total : 0;
+  const pending = total - finalised;
+
+  return (
+    <section
+      className="card"
+      style={{ padding: 0, border: '1px solid var(--accent, #1f7a4d)', overflow: 'hidden' }}
+    >
+      <header style={{ background: 'var(--accent, #1f7a4d)', color: '#fff', padding: '0.6rem 1rem' }}>
+        <strong>Pending Pay Runs</strong>
+      </header>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', padding: '1rem 1.25rem', alignItems: 'center' }}>
+        <div>
+          <strong style={{ display: 'block', fontSize: '1.1rem' }}>The period ending {run.periodLabel}</strong>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--muted, #5b6b7a)', fontSize: '0.875rem' }}>
+            {run.status === 'Draft'
+              ? 'Payslips need to be finalised before creating the pay run.'
+              : `Run is ${run.status}. EFT batch is ready to send.`}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+          <PaySlipCountTile label="Total" value={total} tone="neutral" />
+          <PaySlipCountTile label="Finalised" value={finalised} tone="good" />
+          <PaySlipCountTile label="Pending" value={pending} tone={pending > 0 ? 'warn' : 'neutral'}>
+            <button type="button" className="link-button" style={{ display: 'block' }} onClick={() => onPreview(run)}>
+              Preview
+            </button>
+            <button type="button" className="link-button" style={{ display: 'block' }} onClick={() => onFinalise(run)}>
+              Finalise
+            </button>
+          </PaySlipCountTile>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PaySlipCountTile({
+  label, value, tone, children,
+}: {
+  label: string;
+  value: number;
+  tone: 'good' | 'warn' | 'neutral';
+  children?: ReactNode;
+}) {
+  const bg = tone === 'good' ? 'var(--accent-bg, #f0f8f3)' : tone === 'warn' ? 'var(--warning-bg, #fff8e1)' : 'var(--card-bg, #fff)';
+  return (
+    <div style={{
+      minWidth: '90px',
+      padding: '0.5rem 0.75rem',
+      border: '1px solid var(--border, #d8dde3)',
+      borderRadius: '0.35rem',
+      background: bg,
+      textAlign: 'center',
+    }}>
+      <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--muted, #5b6b7a)' }}>{label}</div>
+      <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{value}</div>
+      {children}
+    </div>
+  );
+}
+
+/* ----------------------- History card (last month + older) ------------------ */
+/*  Each finalised run renders as a collapsible accordion. The header shows the
+ *  period, total, status pill, and action icons. The body shows the accounting
+ *  info shortcut + beneficiaries reference, matching the SimplePay UX where the
+ *  CEO can drill into "what did we pay this month" without leaving the page.
+ */
+
+function PayRunHistoryCard({
+  run, headingPrefix, defaultOpen, onOpen, onPrintPayslips, onExportEft, onDelete,
+}: {
+  run: PayrollRun;
+  headingPrefix: string;
+  defaultOpen: boolean;
+  onOpen: () => void;
+  onPrintPayslips: () => void;
+  onExportEft: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const emp201 = round2(run.totalPaye + run.totalUifEmployee + run.totalUifEmployer + run.totalSdl);
+  return (
+    <section className="card" style={{ padding: 0, marginTop: '0.75rem', overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%',
+          background: 'var(--surface, #f5f7fa)',
+          border: 'none',
+          padding: '0.75rem 1rem',
+          textAlign: 'left',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div>
+          {headingPrefix ? <div style={{ fontSize: '0.75rem', color: 'var(--muted, #5b6b7a)' }}>{headingPrefix}</div> : null}
+          <strong>{run.periodLabel} Payment Info</strong>
+          <span style={{ marginLeft: '0.75rem' }} className={`status-pill ${STATUS_CLASS[run.status]}`}>{run.status}</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 600 }}>Total: R {formatNumber(run.totalNet, 2)}</div>
+          <small style={{ color: 'var(--muted, #5b6b7a)' }}>{open ? '▲ Hide' : '▼ Show'}</small>
+        </div>
+      </button>
+      {open ? (
+        <div style={{ padding: '0.75rem 1rem 1rem' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: '0.75rem',
+            marginBottom: '0.75rem',
+          }}>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #5b6b7a)', textTransform: 'uppercase' }}>Payslips</div>
+              <button type="button" className="link-button" onClick={onPrintPayslips}>
+                {run.payslips.length} Payslips
+              </button>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #5b6b7a)', textTransform: 'uppercase' }}>Cash / EFT</div>
+              <button type="button" className="link-button" onClick={onExportEft}>Download EFT CSV</button>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #5b6b7a)', textTransform: 'uppercase' }}>Accounting info</div>
+              <button type="button" className="link-button" onClick={onOpen}>Open run</button>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #5b6b7a)', textTransform: 'uppercase' }}>Beneficiaries</div>
+              <span style={{ fontSize: '0.85rem', color: 'var(--muted, #5b6b7a)' }}>
+                Configured in Settings → Beneficiaries
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.85rem' }}>
+            <span><strong>Pay date:</strong> {run.payDate || '—'}</span>
+            <span><strong>EMP201:</strong> R {formatNumber(emp201, 2)}</span>
+            <span><strong>Staff paid:</strong> {run.payslips.length}</span>
+            <span style={{ marginLeft: 'auto' }}>
+              <button type="button" className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={onDelete}>Delete</button>
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

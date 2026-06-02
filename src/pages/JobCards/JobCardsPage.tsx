@@ -10,6 +10,7 @@ import { BulkActionsBar } from '../../components/BulkActionsBar';
 import { HistoryDrawerTarget } from '../../components/HistoryDrawer';
 import { EditFormGuard } from '../../components/EditFormGuard';
 import { JobPipelineTracker } from '../../components/JobPipelineTracker';
+import { WaitingOnPanel, countActiveBlockers, hasOverdueBlocker } from '../../components/WaitingOnPanel';
 import { SavedViewsBar } from '../../components/SavedViewsBar';
 import { SavedView, useSavedViews } from '../../hooks/useSavedViews';
 import { downloadCsv } from '../../utils/csvExport';
@@ -653,6 +654,16 @@ export function JobCardsPage(props: JobCardsPageProps) {
               actingUserName={currentUser?.name}
             />
           </div>
+          {/* Phase 117 — Blockers parking this job ("waiting for tooling",
+              "waiting for paper from supplier"). Surfaced on the dashboard
+              when overdue so production knows what's actually stuck. */}
+          <div className="full-span" style={{ marginTop: 8 }}>
+            <WaitingOnPanel
+              value={jobForm.waitingOn}
+              onChange={(next) => setJobForm({ ...jobForm, waitingOn: next })}
+              actingUserName={currentUser?.name}
+            />
+          </div>
           {/* Phase 62 — Tooling pickers. Sales filters by the job's client
               first ('this client already owns these'), then falls back to
               generic dies if none match. */}
@@ -1242,6 +1253,30 @@ export function JobCardsPage(props: JobCardsPageProps) {
                       <td>
                         <strong>{job.jobNumber}</strong>
                         <div className="table-subtext">{job.productName}</div>
+                        {/* Phase 117 — Blocker chip. Orange when overdue. */}
+                        {(() => {
+                          const n = countActiveBlockers(job.waitingOn);
+                          if (n === 0) return null;
+                          const todayYMD = new Date().toISOString().slice(0, 10);
+                          const overdue = hasOverdueBlocker(job.waitingOn, todayYMD);
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                marginTop: 4,
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                padding: '2px 6px',
+                                borderRadius: 999,
+                                background: overdue ? 'rgba(219, 90, 31, 0.14)' : 'rgba(100, 116, 139, 0.14)',
+                                color: overdue ? 'var(--jp-orange, #db5a1f)' : 'var(--jp-ink-3, #475569)',
+                              }}
+                              title={overdue ? 'Some blockers are past their expected-by date' : 'Has unresolved blockers'}
+                            >
+                              Waiting on {n}{overdue ? ' · overdue' : ''}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>{formatDate(job.jobDate)}</td>
                       <td>{job.customerName}</td>

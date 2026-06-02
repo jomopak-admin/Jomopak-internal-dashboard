@@ -3,6 +3,7 @@ import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
+import { WaitingOnPanel, countActiveBlockers, hasOverdueBlocker } from '../../components/WaitingOnPanel';
 import { Client, CostProfile, Lead, PaperRate, PricingTier, Product, QuoteEstimate, QuoteEstimateFilters, QuoteEstimateFormState } from '../../types';
 import { formatDate, formatNumber, getMonthLabel } from '../../utils/calculations';
 
@@ -56,6 +57,11 @@ export function QuotesPage({
   onPrint,
 }: QuotesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
+  // Phase 117 — Toggle to filter the list to only quotes with active
+  // blockers. Lives locally because it's a UI-only filter and doesn't
+  // need to round-trip through QuoteEstimateFilters.
+  const [waitingOnlyFilter, setWaitingOnlyFilter] = useState(false);
+  const todayYMD = new Date().toISOString().slice(0, 10);
   const paperTypeOptions = useMemo(() => {
     const seen = new Set<string>();
     return paperRates
@@ -199,6 +205,20 @@ export function QuotesPage({
         </div>
       ),
     },
+    // Phase 117 — Blockers parking this quote. Drops into its own section so
+    // sales can find it instantly when they remember they're waiting on a
+    // cost they haven't chased yet.
+    {
+      key: 'waitingOn',
+      title: 'Waiting on',
+      subtitle: 'Park anything blocking this quote — die cost, board cost, artwork approval. Overdue blockers light up on the dashboard.',
+      body: (
+        <WaitingOnPanel
+          value={quoteForm.waitingOn}
+          onChange={(next) => setQuoteForm({ ...quoteForm, waitingOn: next })}
+        />
+      ),
+    },
   ];
 
   return (
@@ -227,15 +247,64 @@ export function QuotesPage({
             <label><span>Month</span><select value={quoteFilters.month} onChange={(event) => setQuoteFilters({ ...quoteFilters, month: event.target.value })}><option value="">All months</option>{monthOptions.map((option) => <option key={option} value={option}>{getMonthLabel(option)}</option>)}</select></label>
             <label><span>Status</span><select value={quoteFilters.status} onChange={(event) => setQuoteFilters({ ...quoteFilters, status: event.target.value })}><option value="">All statuses</option><option value="Draft">Draft</option><option value="Quoted">Quoted</option><option value="Approved">Approved</option><option value="Converted to Job">Converted to Job</option><option value="Lost">Lost</option></select></label>
             <label><span>Client</span><input value={quoteFilters.client} onChange={(event) => setQuoteFilters({ ...quoteFilters, client: event.target.value })} /></label>
+            {/* Phase 117 — Quick toggle: only show quotes with active blockers. */}
+            <label className="checkbox-row" style={{ alignSelf: 'end' }}>
+              <input type="checkbox" checked={waitingOnlyFilter} onChange={(event) => setWaitingOnlyFilter(event.target.checked)} />
+              Only quotes waiting on something
+            </label>
           </div>
-          {filteredQuotes.length ? (
+          {(() => {
+            const visible = waitingOnlyFilter
+              ? filteredQuotes.filter((q) => countActiveBlockers(q.waitingOn) > 0)
+              : filteredQuotes;
+            return visible.length ? (
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Quote</th><th>Date</th><th>Client</th><th>Product</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>{filteredQuotes.map((quote) => <tr key={quote.id}><td><strong>{quote.quoteNumber}</strong><div className="table-subtext">{quote.quickbooksEstimateNumber ? `QB ${quote.quickbooksEstimateNumber}` : (quote.sizeSpec || 'No size')}</div></td><td>{formatDate(quote.quoteDate)}</td><td>{quote.clientName}</td><td>{quote.productName}</td><td>{formatNumber(quote.totalQuote, 2)}</td><td>{quote.status}</td><td><button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button>{onPrint ? <button className="table-button" onClick={() => onPrint(quote)} title="Print quote PDF">Print</button> : null}{onConvertToJob && quote.status !== 'Converted to Job' && quote.status !== 'Lost' ? <button className="table-button table-button-promote" onClick={() => onConvertToJob(quote)} title="Create a job from this quote">→ Job</button> : null}</td></tr>)}</tbody>
+                <tbody>{visible.map((quote) => {
+                  // Phase 117 — Compute blocker chip state per row.
+                  const blockerCount = countActiveBlockers(quote.waitingOn);
+                  const overdue = hasOverdueBlocker(quote.waitingOn, todayYMD);
+                  return (
+                    <tr key={quote.id}>
+                      <td>
+                        <strong>{quote.quoteNumber}</strong>
+                        <div className="table-subtext">{quote.quickbooksEstimateNumber ? `QB ${quote.quickbooksEstimateNumber}` : (quote.sizeSpec || 'No size')}</div>
+                        {blockerCount > 0 ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginTop: 4,
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 999,
+                              background: overdue ? 'rgba(219, 90, 31, 0.14)' : 'rgba(100, 116, 139, 0.14)',
+                              color: overdue ? 'var(--jp-orange, #db5a1f)' : 'var(--jp-ink-3, #475569)',
+                            }}
+                            title={overdue ? 'Some blockers are past their expected-by date' : 'Has unresolved blockers'}
+                          >
+                            Waiting on {blockerCount}{overdue ? ' · overdue' : ''}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>{formatDate(quote.quoteDate)}</td>
+                      <td>{quote.clientName}</td>
+                      <td>{quote.productName}</td>
+                      <td>{formatNumber(quote.totalQuote, 2)}</td>
+                      <td>{quote.status}</td>
+                      <td>
+                        <button className="table-button" onClick={() => { onEdit(quote); setMode('form'); }}>Edit</button>
+                        {onPrint ? <button className="table-button" onClick={() => onPrint(quote)} title="Print quote PDF">Print</button> : null}
+                        {onConvertToJob && quote.status !== 'Converted to Job' && quote.status !== 'Lost' ? <button className="table-button table-button-promote" onClick={() => onConvertToJob(quote)} title="Create a job from this quote">→ Job</button> : null}
+                      </td>
+                    </tr>
+                  );
+                })}</tbody>
               </table>
             </div>
-          ) : <EmptyState title="No quotes yet" body="Save estimates here before converting them into jobs." />}
+          ) : <EmptyState title={waitingOnlyFilter ? 'No quotes are waiting on anything' : 'No quotes yet'} body={waitingOnlyFilter ? 'All your quotes have their blockers cleared — nice.' : 'Save estimates here before converting them into jobs.'} />;
+          })()}
         </section>
       )}
     </>

@@ -166,8 +166,47 @@ export function SarsCentrePage({
     [calendar, savedByKey, today],
   );
 
-  const actionNeeded = enriched.filter((e) => e.overdue || e.dueSoon);
-  const upcoming = enriched.filter((e) => !e.overdue && !e.dueSoon);
+  // Phase 111.2 — SimplePay-style top tab strip.
+  // Monthly Submissions: EMP201 (PAYE/UIF/SDL) + VAT201.
+  // Bi-Annual Filing: EMP501 + IRP6 + ITR14.
+  // OID Return: workmen's comp annual return (placeholder — surfaces once
+  // the COIDA module is in).
+  type SarsTab = 'monthly' | 'biannual' | 'oid';
+  const [sarsTab, setSarsTab] = useState<SarsTab>('monthly');
+  const SARS_TABS: Array<{ key: SarsTab; label: string }> = [
+    { key: 'monthly', label: 'Monthly Submissions' },
+    { key: 'biannual', label: 'Bi-Annual Filing (IRP5s etc.)' },
+    { key: 'oid', label: 'OID (Workmen’s Comp) Return' },
+  ];
+  function matchesTab(obligationType: string, tab: SarsTab): boolean {
+    if (tab === 'monthly') return obligationType === 'EMP201' || obligationType === 'VAT201';
+    if (tab === 'biannual') return obligationType === 'EMP501' || obligationType === 'IRP6' || obligationType === 'ITR14';
+    return false; // OID handled separately below
+  }
+  const filteredEnriched = enriched.filter((e) => matchesTab(e.slot.obligationType, sarsTab));
+  const actionNeeded = filteredEnriched.filter((e) => e.overdue || e.dueSoon);
+  const upcoming = filteredEnriched.filter((e) => !e.overdue && !e.dueSoon);
+
+  // Group filtered slots by year+month for the SimplePay-style "month folder"
+  // layout. Each month becomes a card listing every obligation (EMP201, UIF,
+  // VAT201) due in that period with status + actions.
+  type MonthBucket = { key: string; year: number; month: number; label: string; rows: typeof enriched };
+  const monthBuckets = useMemo<MonthBucket[]>(() => {
+    const buckets = new Map<string, MonthBucket>();
+    filteredEnriched.forEach((e) => {
+      const [y, m] = e.slot.dueDate.split('-').map(Number);
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          key, year: y, month: m,
+          label: `${MONTHS[m - 1]} ${y}`,
+          rows: [],
+        });
+      }
+      buckets.get(key)!.rows.push(e);
+    });
+    return Array.from(buckets.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
+  }, [filteredEnriched]);
 
   function openSlot(slot: SarsCalendarSlot) {
     setDraft(filingFromSlot(slot, savedByKey.get(slot.periodKey), invoices, supplierBills, payrollRuns));
@@ -366,10 +405,47 @@ export function SarsCentrePage({
   return (
     <div className="page-stack">
       <SectionTitle
-        title="SARS Centre"
+        title="Monthly Submissions"
         subtitle="Every SARS deadline in one place, with figures pre-filled from your books. An organizer — it doesn't file for you."
         action={<button className="ghost-button" onClick={() => { setConfigDraft(sarsConfig); setShowConfig((v) => !v); }}>{showConfig ? 'Close settings' : 'Settings'}</button>}
       />
+
+      {/* Phase 111.2 — Top tab strip. */}
+      <div
+        role="tablist"
+        aria-label="SARS submissions sections"
+        style={{
+          display: 'flex',
+          gap: '1.25rem',
+          borderBottom: '1px solid var(--border, #d8dde3)',
+          marginBottom: '1rem',
+        }}
+      >
+        {SARS_TABS.map((t) => {
+          const isActive = t.key === sarsTab;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setSarsTab(t.key)}
+              style={{
+                padding: '0.5rem 0',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? '3px solid var(--accent, #1f7a4d)' : '3px solid transparent',
+                color: isActive ? 'var(--accent, #1f7a4d)' : 'var(--text, #1a1a1a)',
+                fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
       <section className="card sars-config-summary">
         <span>VAT: <strong>{sarsConfig.vatRegistered ? `${sarsConfig.vatFrequency === 'monthly' ? 'Monthly' : `Bi-monthly (Cat ${sarsConfig.vatCategory})`}` : 'Not registered'}</strong></span>
@@ -407,29 +483,49 @@ export function SarsCentrePage({
         </section>
       )}
 
-      <section className="card">
-        <h3 className="sars-section-h">Action needed</h3>
-        {actionNeeded.length === 0 ? (
-          <p className="muted">Nothing overdue or due within 30 days. You're on top of it.</p>
-        ) : (
+      {/* Phase 111.2 — Action-needed bar (filtered to the active tab). */}
+      {sarsTab !== 'oid' && actionNeeded.length > 0 ? (
+        <section className="card">
+          <h3 className="sars-section-h">Action needed</h3>
           <table className="data-table">
             <thead><tr><th></th><th>Period</th><th>Due</th><th>Countdown</th><th>Status</th><th></th></tr></thead>
             <tbody>{actionNeeded.map(renderRow)}</tbody>
           </table>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card">
-        <h3 className="sars-section-h">Upcoming</h3>
-        {upcoming.length === 0 ? (
-          <EmptyState title="No upcoming deadlines" body="Adjust your SARS settings if this looks wrong." />
+      {/* Phase 111.2 — Month folders for the active tab. Each month card
+          lists every obligation due in that period, matching SimplePay's
+          "May 2026" / "April 2026" stacked layout. */}
+      {sarsTab !== 'oid' ? (
+        monthBuckets.length === 0 ? (
+          <EmptyState title="No filings in this view" body="Adjust your SARS settings if this looks wrong." />
         ) : (
-          <table className="data-table">
-            <thead><tr><th></th><th>Period</th><th>Due</th><th>Countdown</th><th>Status</th><th></th></tr></thead>
-            <tbody>{upcoming.map(renderRow)}</tbody>
-          </table>
-        )}
-      </section>
+          monthBuckets.map((bucket) => (
+            <section key={bucket.key} className="card" style={{ padding: 0, overflow: 'hidden', marginTop: '0.75rem' }}>
+              <header style={{ background: 'var(--surface, #3b4956)', color: '#fff', padding: '0.65rem 1rem' }}>
+                <strong style={{ fontSize: '1.05rem' }}>{bucket.label}</strong>
+              </header>
+              <table className="data-table" style={{ margin: 0 }}>
+                <thead><tr><th></th><th>Type</th><th>Due</th><th>Countdown</th><th>Status</th><th></th></tr></thead>
+                <tbody>{bucket.rows.map(renderRow)}</tbody>
+              </table>
+            </section>
+          ))
+        )
+      ) : (
+        <section className="card" style={{ padding: '1rem 1.25rem' }}>
+          <h3 className="sars-section-h">OID / Workmen's Compensation Return</h3>
+          <p style={{ color: 'var(--muted, #5b6b7a)' }}>
+            The annual OID return (W.As.8) reconciles your COIDA wage assessment.
+            Surface this filing once the COIDA module is in. For now, capture your
+            COIDA reference and total annual earnings in Settings → Employer details.
+          </p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted, #5b6b7a)' }}>
+            Due: end of April each year. Filed via the CompEasy portal.
+          </p>
+        </section>
+      )}
 
       {/* Phase 98.3 — SARS Correspondence panel. PDFs go into Supabase
           Storage; only metadata sits in the documents table. Retention

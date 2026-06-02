@@ -11,7 +11,7 @@
  * status, and an overdue-only toggle.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
@@ -45,6 +45,9 @@ interface NonConformancePageProps {
   onSave: () => void;
   onReset: () => void;
   onEdit: (n: NonConformance) => void;
+  /** Phase 113 — Admin Hub deep-link. */
+  pageIntent?: { view: string; intent: string; nonce: number } | null;
+  onIntentConsumed?: () => void;
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -71,8 +74,20 @@ export function NonConformancePage(props: NonConformancePageProps) {
   const {
     ncrs, jobs, finishedGoodsStock, cleaningLogs,
     filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit,
+    pageIntent, onIntentConsumed,
   } = props;
   const [mode, setMode] = useState<'list' | 'form'>('list');
+
+  // Phase 113 — Admin Hub "Log NCR" deep-link: blank the form and switch
+  // into form mode immediately.
+  useEffect(() => {
+    if (pageIntent?.intent === 'new') {
+      onReset();
+      setMode('form');
+      onIntentConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIntent?.nonce]);
 
   const filtered = useMemo(() => {
     return ncrs.filter((n) => {

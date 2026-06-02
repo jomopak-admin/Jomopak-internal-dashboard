@@ -115,9 +115,55 @@ function mapAppSettings(row: any): AppSettings {
       row.visitor_approval_escalation_minutes !== undefined && row.visitor_approval_escalation_minutes !== null
         ? Number(row.visitor_approval_escalation_minutes)
         : (row.visitorApprovalEscalationMinutes ?? undefined),
+    // Phase 109.1 — Accounting standard (IFRS / US GAAP).
+    accountingStandard: row.accounting_standard ?? row.accountingStandard ?? undefined,
+    // Phase 110.1 — Payroll defaults.
+    payrollConfig: hydratePayrollConfig(row.payroll_config ?? row.payrollConfig, row.payroll_calculations ?? row.payrollCalculations),
+    // Phase 110.2 — Accounting defaults.
+    accountingConfig: row.accounting_config ?? row.accountingConfig ?? undefined,
+    // Phase 110.3 — Document numbering.
+    numberingConfig: row.numbering_config ?? row.numberingConfig ?? undefined,
+    // Phase 110.4 — Company bank accounts.
+    bankAccounts: Array.isArray(row.bank_accounts ?? row.bankAccounts)
+      ? (row.bank_accounts ?? row.bankAccounts)
+      : undefined,
+    // Phase 110.6 — Employer details.
+    employerDetails: row.employer_details ?? row.employerDetails ?? undefined,
+    // Phase 110.7 — Beneficiaries.
+    beneficiaries: Array.isArray(row.beneficiaries) ? row.beneficiaries : undefined,
+    // Phase 115 — Brand logo library.
+    brandLogos: Array.isArray(row.brand_logos ?? row.brandLogos)
+      ? (row.brand_logos ?? row.brandLogos)
+      : undefined,
     updatedAt: row.updated_at ?? row.updatedAt ?? '',
     updatedBy: row.updated_by ?? row.updatedBy ?? '',
   });
+}
+
+/**
+ * Phase 110.9 — Payroll Calculations is stored on its own jsonb column
+ * (payroll_calculations) in Postgres but nested under payrollConfig.calculations
+ * in the in-memory model. Stitch them back together on read; the upsert
+ * unpicks them again.
+ */
+function hydratePayrollConfig(raw: any, calculations: any) {
+  if (!raw && !calculations) return undefined;
+  const base = (raw && typeof raw === 'object') ? raw : {};
+  if (calculations && typeof calculations === 'object') {
+    return { ...base, calculations };
+  }
+  return base;
+}
+
+/**
+ * Mirror of hydratePayrollConfig — strips calculations off the payroll
+ * config before upsert so the payroll_calculations column owns that data.
+ * Returning undefined leaves the column at its DB default.
+ */
+function stripCalculations(config: any) {
+  if (!config) return {};
+  const { calculations: _omit, ...rest } = config;
+  return rest;
 }
 
 function mapSupplier(row: any): Supplier {
@@ -247,6 +293,8 @@ export function mapQuoteEstimate(row: any): QuoteEstimate {
     calculatorSnapshot: row.calculator_snapshot && typeof row.calculator_snapshot === 'object'
       ? row.calculator_snapshot
       : undefined,
+    // Phase 117 — Blockers on the quote.
+    waitingOn: Array.isArray(row.waiting_on) ? row.waiting_on : [],
   };
 }
 
@@ -529,6 +577,8 @@ export function mapClient(row: any): Client {
     companyId: row.company_id ?? undefined,
     companyName: row.company_name ?? '',
     accountManagerName: row.account_manager_name ?? '',
+    // Phase 116 — per-client preferred logo id.
+    preferredLogoId: row.preferred_logo_id ?? undefined,
     code: row.code ?? '',
     pricingTierId: row.pricing_tier_id ?? '',
     pricingTierName: row.pricing_tier_name ?? '',
@@ -781,6 +831,8 @@ export function mapJob(row: any): JobCard {
     stereoToolCode: row.stereo_tool_code ?? undefined,
     // Phase 94 — production pipeline tracker.
     pipelineStages: Array.isArray(row.pipeline_stages) ? row.pipeline_stages : undefined,
+    // Phase 117 — Blockers on the job.
+    waitingOn: Array.isArray(row.waiting_on) ? row.waiting_on : [],
   };
 }
 
@@ -2550,6 +2602,8 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 106 — visitor approval requests + bookings.
     visitorAreaApprovalRequestRows,
     visitorBookingRows,
+    // Phase 109.5 — Financial Projections.
+    financialProjectionRows,
   ] = await Promise.all([
     safeSelect('suppliers'),
     safeSelect('machines'),
@@ -2658,6 +2712,8 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 106 — visitor approval requests + bookings.
     safeSelect('visitor_area_approval_requests'),
     safeSelect('visitor_bookings'),
+    // Phase 109.5 — Financial Projections.
+    safeSelect('financial_projections'),
   ]);
 
   return {
@@ -2745,7 +2801,39 @@ export async function fetchAppData(): Promise<AppData> {
     // Phase 106 — visitor approval system.
     visitorAreaApprovalRequests: visitorAreaApprovalRequestRows.map(mapVisitorAreaApprovalRequest),
     visitorBookings: visitorBookingRows.map(mapVisitorBooking),
+    // Phase 109.5 — Financial Projections.
+    financialProjections: financialProjectionRows.map(mapFinancialProjection),
     appSettings: mapAppSettings(appSettingsRow),
+  };
+}
+
+/**
+ * Phase 109.5 — Map a financial_projections row back to FinancialProjection.
+ * snake_case to camelCase, plus rehydrating the rich jsonb assumption blocks.
+ * The shape of revenue / workingCapital / tax / opening / costLines / capex /
+ * funding is owned by the engine in src/types/index.ts — we just pass it
+ * through.
+ */
+function mapFinancialProjection(row: any) {
+  return {
+    id: row.id,
+    name: row.name ?? 'Untitled scenario',
+    description: row.description ?? '',
+    scenarioKind: row.scenario_kind ?? 'base',
+    horizonMonths: Number(row.horizon_months ?? 12),
+    startMonth: row.start_month ?? new Date().toISOString().slice(0, 10),
+    accountingStandard: row.accounting_standard ?? 'IFRS',
+    inventoryMethod: row.inventory_method ?? 'FIFO',
+    revenue: row.revenue ?? {},
+    workingCapital: row.working_capital ?? {},
+    tax: row.tax ?? {},
+    opening: row.opening ?? {},
+    costLines: Array.isArray(row.cost_lines) ? row.cost_lines : [],
+    capex: Array.isArray(row.capex) ? row.capex : [],
+    funding: Array.isArray(row.funding) ? row.funding : [],
+    createdAt: row.created_at ?? new Date().toISOString(),
+    createdBy: row.created_by ?? '',
+    updatedAt: row.updated_at ?? undefined,
   };
 }
 
@@ -2860,6 +2948,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       // jsonb auto-serialises. Null when not a calculator quote.
       calculator_batch_id: quote.calculatorBatchId ?? null,
       calculator_snapshot: quote.calculatorSnapshot ?? null,
+      // Phase 117 — Blockers as jsonb.
+      waiting_on: quote.waitingOn ?? [],
     }))),
     safeUpsert('artwork_records', data.artworkRecords.map((artwork) => ({
       id: artwork.id,
@@ -2998,6 +3088,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       name: client.name,
       company_name: client.companyName || null,
       account_manager_name: client.accountManagerName || null,
+      // Phase 116 — per-client preferred logo id (references brand_logos[].id).
+      preferred_logo_id: client.preferredLogoId || null,
       code: client.code || null,
       pricing_tier_id: client.pricingTierId || null,
       pricing_tier_name: client.pricingTierName || null,
@@ -3375,6 +3467,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       stereo_tool_code: job.stereoToolCode || null,
       // Phase 94 — production pipeline tracker.
       pipeline_stages: job.pipelineStages ?? null,
+      // Phase 117 — Blockers parking this job.
+      waiting_on: job.waitingOn ?? [],
     }))),
     safeUpsert('tooling', (data.tooling ?? []).map((t) => ({
       id: t.id,
@@ -3605,6 +3699,32 @@ export async function syncAppData(data: AppData): Promise<void> {
       certificate_expiry_date: a.certificateExpiryDate || null,
       created_at: a.createdAt,
       updated_at: a.updatedAt,
+    }))),
+
+    /* ─── Phase 109.5 — Financial Projections persistence ────────────
+       One row per scenario. The rich assumption blocks (revenue, working
+       capital, tax, opening balance sheet, cost lines, capex, funding)
+       all live as jsonb. computeProjection() runs client-side, so we
+       never query inside these columns. */
+    safeUpsert('financial_projections', (data.financialProjections ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description ?? '',
+      scenario_kind: p.scenarioKind ?? 'base',
+      horizon_months: Number(p.horizonMonths ?? 12),
+      start_month: p.startMonth,
+      accounting_standard: p.accountingStandard ?? 'IFRS',
+      inventory_method: p.inventoryMethod ?? 'FIFO',
+      revenue: p.revenue ?? {},
+      working_capital: p.workingCapital ?? {},
+      tax: p.tax ?? {},
+      opening: p.opening ?? {},
+      cost_lines: p.costLines ?? [],
+      capex: p.capex ?? [],
+      funding: p.funding ?? [],
+      created_at: p.createdAt,
+      created_by: p.createdBy ?? '',
+      updated_at: p.updatedAt || null,
     }))),
 
     /* ─── Phase 106 — Visitor approval system ──────────────────────── */
@@ -3970,6 +4090,19 @@ export async function syncAppData(data: AppData): Promise<void> {
       // Phase 106 — visitor approval policy + escalation timer.
       visitor_area_policy: data.appSettings.visitorAreaPolicy ?? {},
       visitor_approval_escalation_minutes: data.appSettings.visitorApprovalEscalationMinutes ?? 5,
+      // Phase 109.1 — Accounting standard.
+      accounting_standard: data.appSettings.accountingStandard ?? 'IFRS',
+      // Phase 110 — settings blocks. payroll_calculations gets split out
+      // of payrollConfig so we can index it independently if needed later.
+      payroll_config: stripCalculations(data.appSettings.payrollConfig),
+      payroll_calculations: data.appSettings.payrollConfig?.calculations ?? {},
+      accounting_config: data.appSettings.accountingConfig ?? {},
+      numbering_config: data.appSettings.numberingConfig ?? {},
+      bank_accounts: data.appSettings.bankAccounts ?? [],
+      employer_details: data.appSettings.employerDetails ?? {},
+      beneficiaries: data.appSettings.beneficiaries ?? [],
+      // Phase 115 — Brand logo library.
+      brand_logos: data.appSettings.brandLogos ?? [],
       updated_at: data.appSettings.updatedAt || new Date().toISOString(),
       updated_by: data.appSettings.updatedBy || null,
     }]),

@@ -76,6 +76,7 @@ export type View =
   | 'paper'
   | 'dispatch'
   | 'reports'
+  | 'reportsHub'
   | 'myPortal'
   | 'notices'
   | 'staffWarnings'
@@ -226,7 +227,8 @@ export const VIEW_LABELS: Record<View, string> = {
   waste: 'Waste Log',
   paper: 'Paper Log',
   dispatch: 'Dispatch',
-  reports: 'Reports',
+  reports: 'Operational Reports',
+  reportsHub: 'Reports Hub',
   myPortal: 'My Stuff',
   notices: 'Notice Board',
   staffWarnings: 'Staff Warnings & Notes',
@@ -339,6 +341,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'paper',
     'dispatch',
     'reports',
+    'reportsHub',
     'documentVault',
     'chartOfAccounts',
     'accountsPayable',
@@ -1232,6 +1235,223 @@ export type ProcurementOrderStatus = 'Requested' | 'Ordered' | 'Received' | 'Can
 export type ArtworkPreparationStatus = 'Print Ready' | 'Ready but Not Print Ready' | 'Needs Design';
 export type SupplierType = 'Paper' | 'Packaging' | 'Spares' | 'General';
 export type QuoteStatus = 'Draft' | 'Quoted' | 'Approved' | 'Converted to Job' | 'Lost';
+
+/**
+ * Phase 119 — Customer payment models.
+ *
+ * JomoPak runs four distinct AR flows depending on the customer:
+ *
+ *  - 'depositThenDraw' — Customer pays a deposit upfront, then we invoice
+ *    against the deposit as we deliver. Common with wholesale customers
+ *    on long-running orders. The deposit sits as a liability (we owe
+ *    them stock) until it's drawn down.
+ *
+ *  - 'fiftyFifty' — 50% Tax Invoice to start production, 50% on
+ *    completion / before delivery. Default for new commercial orders
+ *    where we want skin in the game before tying up paper + machine time.
+ *
+ *  - 'prepayThenDraw' — Customer pays full order value upfront, takes
+ *    stock as and when they need it. Stock-holding customers usually
+ *    work this way. We hold finished goods on their behalf and draw
+ *    against their prepayment on each release.
+ *
+ *  - 'cod' — Cash on delivery. Customer pays in full at collection,
+ *    no deposit, no terms.
+ *
+ *  - 'standard' — Normal trade terms (e.g. 30 days). No deposit. Used
+ *    for established credit customers.
+ *
+ * The model lives on the Client record so sales doesn't have to remember
+ * which customer needs which treatment; new Jobs / Quotes / Invoices for
+ * that client pre-fill the right flow.
+ */
+export type CustomerPaymentModel =
+  | 'depositThenDraw'
+  | 'fiftyFifty'
+  | 'prepayThenDraw'
+  | 'cod'
+  | 'standard';
+
+export const CUSTOMER_PAYMENT_MODEL_LABELS: Record<CustomerPaymentModel, string> = {
+  depositThenDraw: 'Deposit, then invoice as we deliver',
+  fiftyFifty: '50% to start, 50% on completion',
+  prepayThenDraw: 'Prepay full order, draw stock as needed',
+  cod: 'Cash on delivery',
+  standard: 'Standard terms (no deposit)',
+};
+
+/**
+ * Phase 119 — Why a particular deposit was received. Drives the auto-
+ * generated pro-forma wording + the dashboard categorisation. Aligns
+ * with CustomerPaymentModel but is per-deposit so a 50/50 client can
+ * still take a one-off prepayment without us having to change their
+ * customer record.
+ */
+export type DepositPurpose =
+  | 'jobDeposit'      // a per-order deposit (depositThenDraw)
+  | 'fiftyFirstHalf'  // first 50% of a 50/50 invoice
+  | 'fiftySecondHalf' // second 50% — recorded against the same job
+  | 'prepayment'      // full prepay for a stock-holding customer
+  | 'topUp'           // top-up to an existing client deposit balance
+  | 'other';
+
+/**
+ * Phase 119 — A deposit received from a customer.
+ *
+ * Deposits live in their own ledger because they're a balance-sheet
+ * liability ("we owe this customer goods or a refund"), NOT revenue.
+ * Revenue only recognises when we deliver and invoice — the allocation
+ * engine handles that automatically.
+ *
+ * Numbering:
+ *  - depositNumber — internal sequence (DEP-2026-001)
+ *  - proformaNumber — issued at deposit receipt if a pro-forma was
+ *    generated (PF-2026-001). SARS-compliant clients can switch this
+ *    to a Tax-Invoice-on-receipt later via Settings.
+ *  - receiptNumber — confirmation that money has been received.
+ *
+ * Earmarking:
+ *  - jobId / quoteId — optional. Set on per-order deposits. Lets us see
+ *    "this R50k is for Job JC-241" rather than just a client balance.
+ *    Unset for prepayment / top-up deposits that float at client level.
+ *
+ * Allocation tracking:
+ *  - allocations[] — every drawdown from this deposit. The remaining
+ *    balance is amount - sum(allocations.appliedAmount).
+ *  - The engine never deletes allocations; reversals are recorded as
+ *    isReversal entries with a negative appliedAmount so the audit
+ *    trail stays intact.
+ */
+export interface CustomerDeposit {
+  id: string;
+  depositNumber: string;
+  version?: number;
+  rowUpdatedAt?: string;
+  // Who paid
+  clientId: string;
+  clientName: string;
+  // When and how much
+  receivedDate: string;            // YYYY-MM-DD — bank credit date
+  amount: number;                  // gross amount received (incl. VAT if pro-forma)
+  currency: CurrencyCode;
+  paymentMethod: string;           // EFT / Card / Cash / Cheque
+  bankReference: string;           // for bank-rec matching
+  // Numbering on the documents we issued back to them
+  proformaNumber: string;          // empty if pro-forma not yet generated
+  receiptNumber: string;
+  // Earmarking — optional, lets us tie the deposit to a specific work item
+  jobId: string;
+  jobNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  purpose: DepositPurpose;
+  // Allocation state (computed from allocations[])
+  allocations: DepositAllocation[];
+  /** sum(allocations.appliedAmount) — denormalised for fast list rendering. */
+  allocatedAmount: number;
+  /** amount - allocatedAmount — sometimes negative if a reversal overruns. */
+  remainingAmount: number;
+  // Lifecycle
+  status: DepositStatus;
+  // Audit
+  capturedByName: string;
+  capturedAt: string;
+  notes: string;
+}
+
+/**
+ * Phase 119 — A drawdown allocating part of a deposit against an Invoice
+ * or Delivery Note. Recorded on the deposit's allocations[] array.
+ *
+ * One deposit can be split across many invoices (typical for a prepay
+ * customer who collects in chunks). One invoice can pull from many
+ * deposits (a top-up + an earlier deposit might both fund a single
+ * collection). FIFO by default — oldest deposit drained first — but the
+ * allocation engine lets admins manually retarget if needed.
+ */
+export interface DepositAllocation {
+  id: string;
+  depositId: string;
+  // What the deposit was applied against — exactly one of these is set.
+  invoiceId: string;
+  invoiceNumber: string;
+  deliveryNoteId: string;
+  deliveryNoteNumber: string;
+  appliedAmount: number;           // positive for normal allocation, negative for reversals
+  appliedAt: string;
+  appliedByName: string;
+  /** How this allocation was created. */
+  reason: 'autoOnInvoice' | 'autoOnDelivery' | 'manual' | 'reversal' | 'refund';
+  isReversal: boolean;
+  notes: string;
+}
+
+export type DepositStatus =
+  | 'Open'        // received, allocations < amount
+  | 'Allocated'   // fully drawn down
+  | 'Refunded'    // refunded back to customer (rare)
+  | 'Cancelled';  // captured in error, voided
+
+/**
+ * Phase 119 — Tax treatment for a customer deposit. Defaults to
+ * 'proforma' for new dashboards (matches what most SA factories do) but
+ * Settings can flip the default to 'taxInvoiceOnReceipt' if the
+ * accountant determines deposit volumes trigger SARS deemed-supply
+ * rules. Per-deposit override lets us flip individual ones too.
+ *
+ * - 'proforma' — Pro-forma invoice + receipt issued. Tax Invoice raised
+ *   on delivery for the full amount, with a "less deposit received" line.
+ * - 'taxInvoiceOnReceipt' — Tax Invoice raised on deposit receipt
+ *   (output VAT triggers immediately). Final invoice applies the
+ *   deposit and only charges VAT on the balance.
+ */
+export type DepositTaxTreatment = 'proforma' | 'taxInvoiceOnReceipt';
+
+/**
+ * Phase 117 — "Waiting on" blockers for Quotes & Jobs.
+ *
+ * Real factory pattern: a quote sits half-done because someone is waiting
+ * for a die cost from the toolmaker, a board cost from the paper rep, or
+ * artwork approval from the client. Same on jobs — production parked
+ * waiting for tooling, paper, or food-safe sign-off. Without a place to
+ * capture the blocker, the job gets forgotten and a follow-up never gets
+ * chased.
+ *
+ * Each work item (Quote, Job) carries an array of these. Resolved ones
+ * stick around for the audit trail; only unresolved ones drive the UI
+ * chips, filters, and overdue alerts.
+ */
+export type WaitingOnParty =
+  | 'Supplier'
+  | 'Client'
+  | 'Toolmaker'
+  | 'Paper rep'
+  | 'Internal'
+  | 'Other';
+
+export interface WaitingOnBlocker {
+  id: string;
+  /** Who we're waiting on — categorises the blocker for filtering. */
+  party: WaitingOnParty;
+  /** Optional named contact / company ("Polipack", "John at Sappi").
+   *  Free text so the rep doesn't have to be a Supplier record. */
+  partyName?: string;
+  /** What we're waiting for ("Die cost for 2-up cutter", "Board cost
+   *  for 100gsm kraft", "Artwork approval"). Required so the blocker
+   *  is actually useful when re-read later. */
+  reason: string;
+  /** Expected-by date. Past this date with no resolution → marked as
+   *  overdue in the UI and surfaced on the dashboard. Optional in case
+   *  the rep has no commitment yet. */
+  expectedBy?: string;
+  createdAt: string;
+  createdBy?: string;
+  /** Set when the blocker is cleared. Resolved blockers stay in the
+   *  array as an audit trail but stop showing in chips/filters. */
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNote?: string;
+}
 export type LeadStatus = 'New' | 'Qualified' | 'Awaiting Info' | 'Quoted' | 'Won' | 'Lost';
 /** Phase 99 — Niched lead sources.
  *  Lets us answer "which channel converts best?" instead of lumping
@@ -1480,6 +1700,10 @@ export interface QuoteEstimate {
    *  the original CalculatorState. The 'shared' header is identical
    *  on every sibling row (same client / date / cost profile / etc.). */
   calculatorSnapshot?: CalculatorState;
+  /** Phase 117 — Blockers parking this quote ("waiting for die cost from
+   *  toolmaker"). Resolved entries stay for audit; unresolved ones drive
+   *  list chips, filters, and dashboard alerts. */
+  waitingOn?: WaitingOnBlocker[];
 }
 
 /** Phase 99 — One line in a lead's enquiry.
@@ -2070,6 +2294,24 @@ export interface Client {
    *  email to contactEmail). Some clients prefer to be contacted by their
    *  account manager directly rather than receive system emails. */
   notifyClientOnDelivery?: boolean;
+  /** Phase 116 — Per-client logo preference. References an id in
+   *  AppSettings.brandLogos[]. When any customer-facing document is
+   *  printed for this client (invoice, DN, quote, stock statement,
+   *  customer statement), the resolver picks this logo over the dashboard
+   *  default. Empty / unset = use the global default. Internal documents
+   *  (warnings, payslips, UI-19) always use the dashboard default. */
+  preferredLogoId?: string;
+  /** Phase 119 — Which AR model this customer runs on. Drives default
+   *  deposit % on new jobs, the dashboard chase logic, the overdraw
+   *  gate on Invoices/DNs, and the wording on auto-generated pro-formas.
+   *  Defaults to 'standard' (normal trade terms) so existing customers
+   *  stay unchanged until explicitly classified. */
+  paymentModel?: CustomerPaymentModel;
+  /** Phase 119 — Default deposit % expected from this customer on new
+   *  orders. 50 for 50/50, 100 for prepay, blank for standard. Used by
+   *  the Quote → Job promote handler to set paymentRequirement and by
+   *  the dashboard to compute "expected deposit not yet received". */
+  defaultDepositPercent?: number;
   /** Phase 76 — does this client want FSC claimed on their outputs by default?
    *  Auto-fills the per-job fscClaimEnabled flag on job creation. Sales can
    *  still override per job. Defaults to false (no claim) so we never claim
@@ -2383,6 +2625,10 @@ export interface JobCard {
    *  for new jobs; promote handlers also seed it. Optional so legacy jobs
    *  load cleanly. */
   pipelineStages?: PipelineStage[];
+  /** Phase 117 — Blockers parking this job ("waiting for tooling from
+   *  toolmaker", "waiting for paper from supplier"). Same shape as quote
+   *  blockers — see WaitingOnBlocker. */
+  waitingOn?: WaitingOnBlocker[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -5597,6 +5843,146 @@ export interface Invoice {
   clientVisible: boolean;
   /** Phase 34 — customer-facing note printed on the invoice. */
   customerNote?: string;
+  /** Phase 120 — Parent pro-forma if this Tax Invoice was raised from a
+   *  pro-forma. Empty for legacy direct invoices. Drives the audit
+   *  banner "Part of pro-forma PF-2026-001 · Tax Invoice 1 of 2" and
+   *  lets us roll up the full chain when SARS asks where this revenue
+   *  came from. */
+  proformaId?: string;
+  proformaNumber?: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 120 — Pro-forma invoices.
+ *
+ * THE FLOW:
+ *   1. Quote accepted → Pro-forma issued (NOT a Tax Invoice). Pro-forma
+ *      is a request for payment with no accounting impact. It is clearly
+ *      marked "PRO FORMA INVOICE — NOT A TAX INVOICE" so the customer
+ *      can't use it as a SARS-compliant tax document.
+ *   2. Customer pays (full / 50% / a deposit). Payment is captured as a
+ *      CustomerDeposit (Phase 119) linked to this pro-forma.
+ *   3. Admin clicks "Generate Tax Invoice for R X received". System
+ *      raises a real Invoice with VAT, links it back to the parent
+ *      pro-forma, and allocates the deposit against it. VAT output
+ *      triggers at this point (SARS-compliant: tax invoice = revenue
+ *      recognition + VAT trigger).
+ *   4. For 50/50 deals: two payments → two tax invoices, each carrying
+ *      half the VAT. The pro-forma stays open until fully invoiced.
+ *   5. Goods can release on payment proof (per Aman's choice — we don't
+ *      block delivery just because the tax invoice hasn't been issued).
+ *      Tax invoices must follow within 21 days of payment receipt per
+ *      SARS rules.
+ *
+ * Status lifecycle:
+ *   Draft → Sent → PartiallyPaid → FullyPaid
+ *                                ↘ Cancelled
+ *
+ * Relationship to Invoice:
+ *   Pro-forma is the PARENT; one pro-forma can spawn many tax invoices
+ *   (one per payment received). Each Invoice.proformaId points back.
+ *   Pro-forma totals are the source of truth; tax invoices sum to the
+ *   pro-forma when fully paid.
+ *
+ * Why not just use Invoice with a "draft" flag?
+ *   - Different numbering sequence (PF vs INV) for SARS clarity.
+ *   - Different accounting treatment (no VAT, no revenue).
+ *   - Different lifecycle (one pro-forma → many invoices).
+ *   - Different printable (clearly marked "NOT A TAX INVOICE").
+ *
+ * The Pro-forma shape mirrors Invoice closely so the form / printable
+ * can reuse most of the existing components.
+ * ─────────────────────────────────────────────────────────────────── */
+
+export type ProFormaStatus =
+  | 'Draft'
+  | 'Sent'
+  | 'PartiallyPaid'   // one or more tax invoices issued; pro-forma not fully drawn down
+  | 'FullyPaid'       // sum(linkedInvoices.totalInclVat) === totalInclVat
+  | 'Cancelled';
+
+export const PROFORMA_STATUS_LABELS: Record<ProFormaStatus, string> = {
+  Draft: 'Draft',
+  Sent: 'Sent',
+  PartiallyPaid: 'Partially paid',
+  FullyPaid: 'Fully paid',
+  Cancelled: 'Cancelled',
+};
+
+export interface ProForma {
+  id: string;
+  proformaNumber: string;
+  version?: number;
+  rowUpdatedAt?: string;
+  createdAt: string;
+  proformaDate: string;
+  validUntilDate: string;          // pro-formas typically expire — usually 30 days
+  // Client snapshot (so the doc doesn't change retroactively if client is edited)
+  clientId: string;
+  clientName: string;
+  clientCompanyName: string;
+  clientVatNumber: string;
+  clientBillingAddress: string;
+  clientContactName: string;
+  clientContactEmail: string;
+  clientContactPhone: string;
+  // Upstream links
+  jobId: string;
+  jobNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  customerReference: string;
+  // Body
+  termsType: InvoiceTermsType;     // reuse the same terms semantics as Invoice
+  termsText: string;
+  notes: string;
+  footerNotes: string;
+  status: ProFormaStatus;
+  currency: CurrencyCode;
+  exchangeRate?: number;
+  lineItems: InvoiceLineItem[];    // pro-forma uses the same line item shape
+  // Totals (frozen at save — mirrors Invoice for ease of conversion)
+  subtotalExclVat: number;
+  vatTotal: number;                // computed but NOT a VAT liability until tax-invoiced
+  totalInclVat: number;
+  // Conversion tracking (Phase 120.6)
+  linkedInvoiceIds: string[];      // every Tax Invoice raised from this pro-forma
+  /** Sum of linked Tax Invoices' totalInclVat. */
+  amountInvoiced: number;
+  /** totalInclVat - amountInvoiced. Drives the "Generate Tax Invoice for R X" prompt. */
+  amountStillToInvoice: number;
+  /** Sum of CustomerDeposit.amount where deposit.proformaId === this.id and not yet invoiced. */
+  amountReceivedNotYetInvoiced: number;
+  /** Customer-facing note printed on the pro-forma. */
+  customerNote?: string;
+  /** Phase 120 — Payment expectation prints on the pro-forma. Inherits from
+   *  client.paymentModel by default but can be overridden per pro-forma. */
+  paymentExpectation?: CustomerPaymentModel;
+  clientVisible: boolean;
+}
+
+/** Pro-forma form state — same field types as InvoiceFormState but
+ *  status is constrained to ProFormaStatus. */
+export interface ProFormaFormState {
+  proformaDate: string;
+  validUntilDate: string;
+  clientId: string;
+  jobId: string;
+  jobNumber: string;
+  quoteId: string;
+  quoteNumber: string;
+  customerReference: string;
+  termsType: InvoiceTermsType;
+  termsText: string;
+  notes: string;
+  footerNotes: string;
+  status: ProFormaStatus;
+  currency: CurrencyCode;
+  exchangeRate: string;
+  lineItems: InvoiceLineItemFormState[];
+  clientVisible: boolean;
+  customerNote: string;
+  paymentExpectation: CustomerPaymentModel;
 }
 
 export interface ProductionSpec {
@@ -5709,10 +6095,88 @@ export interface AppSettingsCompany {
   email: string;
   vatNumber: string;
   /**
-   * Public URL of the logo file. Empty string falls back to the stylised
-   * "JomoPak / PAPER BAGS" text mark used historically.
+   * Public URL of the PRIMARY logo file. Kept as the backward-compatible
+   * single-logo field. When the multi-logo brandLogos[] array on AppSettings
+   * is non-empty, that wins per-document; otherwise we fall back here.
    */
   logoUrl: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 115 — Brand assets library.
+ *
+ * The CEO wants to be able to upload more than one logo (e.g. main mark,
+ * FSC-certified mark, co-branded mark, festive-season alt) and pick which
+ * one prints on which kind of document. One is always marked default — any
+ * doc type without a specific assignment uses that.
+ *
+ * The picker logic lives in resolveDocumentLogo() in utils/printing.ts.
+ *
+ * Document kinds:
+ *   We deliberately keep this list as a string-union (not just `string`)
+ *   so the multi-select picker in Settings shows a finite set of options
+ *   that match the actual printables in the dashboard.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type DocumentKind =
+  | 'invoice'
+  | 'proforma'
+  | 'quote'
+  | 'deliveryNote'
+  | 'productionSpec'
+  | 'workTicket'
+  | 'jobCard'
+  | 'stockStatement'
+  | 'customerStatement'
+  | 'staffWarning'
+  | 'ui19'
+  | 'payslip'
+  | 'irp5'
+  | 'morningDigest'
+  | 'auditCertificate'
+  | 'noticeBroadcast'
+  | 'ppeAcknowledgement'
+  | 'firstAidSlip'
+  | 'incidentReport'
+  | 'sopDocument';
+
+export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
+  invoice: 'Tax Invoices',
+  proforma: 'Pro-forma Invoices',
+  quote: 'Quotes',
+  deliveryNote: 'Delivery Notes',
+  productionSpec: 'Production Specs',
+  workTicket: 'Work Tickets',
+  jobCard: 'Job Cards',
+  stockStatement: 'Stock Statements',
+  customerStatement: 'Customer Statements',
+  staffWarning: 'Staff Warnings',
+  ui19: 'UI-19 (UIF declaration)',
+  payslip: 'Payslips',
+  irp5: 'IRP5 / IT3a',
+  morningDigest: 'Morning Digest',
+  auditCertificate: 'Audit Certificates',
+  noticeBroadcast: 'Notices / Broadcasts',
+  ppeAcknowledgement: 'PPE Acknowledgement',
+  firstAidSlip: 'First Aid Slip',
+  incidentReport: 'Incident Report',
+  sopDocument: 'SOP Documents',
+};
+
+export interface BrandLogo {
+  id: string;
+  /** Admin-facing label so the picker in Settings reads sensibly. */
+  label: string;
+  /** Public URL — usually a Supabase Storage URL with a cache-buster. */
+  url: string;
+  /** Exactly one BrandLogo should be marked default. The resolver
+   *  enforces this — see resolveDocumentLogo(). */
+  isDefault: boolean;
+  /** Empty array = "use everywhere by default". A non-empty array pins
+   *  this logo to ONLY those doc types, overriding the default for them. */
+  appliesToDocumentTypes: DocumentKind[];
+  uploadedAt: string;
+  uploadedBy: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -5885,10 +6349,494 @@ export interface AppSettings {
    *  public companies, IFRS for SMEs for private — both align with the
    *  Companies Act). Change in Settings → Accounting. */
   accountingStandard?: AccountingStandard;
+  /** Phase 110.1 — Payroll defaults (rates, leave, payslip layout, EFT). */
+  payrollConfig?: AppSettingsPayrollConfig;
+  /** Phase 119 — Default tax treatment for customer deposits. 'proforma'
+   *  matches what most SA factories do (simpler bookkeeping); switching
+   *  to 'taxInvoiceOnReceipt' triggers output VAT on the deposit and is
+   *  the SARS-compliant treatment under deemed-supply rules. Per-deposit
+   *  override is still available on capture. Settings → Accounting. */
+  depositTaxTreatment?: DepositTaxTreatment;
+  /** Phase 110.2 — Accounting defaults (VAT rates, payment terms, default
+   *  retained-earnings account). Sits alongside sarsConfig — sarsConfig
+   *  drives SARS filings, this drives bookkeeping behaviour. */
+  accountingConfig?: AppSettingsAccountingConfig;
+  /** Phase 110.3 — Document numbering — per-doc prefix + next number. */
+  numberingConfig?: AppSettingsNumberingConfig;
+  /** Phase 110.4 — Company bank accounts (for EFT exports + invoice footers). */
+  bankAccounts?: AppSettingsBankAccount[];
+  /** Phase 110.6 — Employer details + SARS filing references. */
+  employerDetails?: AppSettingsEmployerDetails;
+  /** Phase 110.7 — Beneficiaries (funds, medical aids, unions, garnishees). */
+  beneficiaries?: AppSettingsBeneficiary[];
+  /** Phase 115 — Brand assets library. Multiple uploaded logos with per-
+   *  document-type assignments. Optional so existing installs keep using
+   *  company.logoUrl until the admin populates this. */
+  brandLogos?: BrandLogo[];
   /** Last-write metadata, surfaced in the UI so admins can see who changed what. */
   updatedAt: string;
   updatedBy: string;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.1 — Payroll defaults.
+ *
+ * Mirrors the "Settings" page of SimplePay. These values are read by the
+ * Payroll page when computing PAYE / UIF / SDL on each payslip, and by the
+ * Employees + Leave pages when defaulting entitlements.
+ *
+ * Statutory values are South African defaults at FY2025/26. Admin can edit
+ * any of them — the values that don't apply to a particular employee get
+ * overridden on the Employee profile.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type PayFrequency = 'monthly' | 'weekly' | 'fortnightly';
+
+export interface AppSettingsPayrollConfig {
+  /** How often payslips are produced. */
+  payFrequency: PayFrequency;
+  /** For monthly pay: day-of-month salaries hit accounts. Default 25. */
+  payDayOfMonth: number;
+  /** UIF — 1% employee + 1% employer of remuneration, capped at the
+   *  earnings ceiling (R17 712 / month for FY2025/26). */
+  uifEmployeePercent: number;
+  uifEmployerPercent: number;
+  uifEarningsCeilingMonthly: number;
+  /** SDL — 1% of total payroll, employer cost. Exempt if annual payroll
+   *  under R500 000. */
+  sdlPercent: number;
+  sdlExemptionAnnualPayrollUnder: number;
+  /** PAYE tax rebates (annual amounts in ZAR). */
+  payePrimaryRebateAnnual: number;
+  payeSecondaryRebateAnnual: number;
+  payeTertiaryRebateAnnual: number;
+  /** BCEA leave defaults. */
+  annualLeaveDaysPerYear: number;
+  sickLeaveDaysPerCycle: number;
+  sickLeaveCycleMonths: number;
+  familyResponsibilityDaysPerYear: number;
+  /** Public holidays observed this year — ISO yyyy-mm-dd strings. */
+  publicHolidays: string[];
+  /** Employee number format. e.g. "EMP-{seq:4}" → EMP-0001. */
+  employeeNumberPrefix: string;
+  employeeNumberNextSeq: number;
+  employeeNumberPadding: number;
+  /** Payslip layout flags. */
+  payslipShowYtd: boolean;
+  payslipShowLeaveBalance: boolean;
+  payslipShowLoanBalance: boolean;
+  payslipFooterNote: string;
+  /** EFT batch defaults — bank file format + delivery cadence. */
+  eftBatchFormat: 'ACB' | 'ABSA' | 'FNB' | 'Standard Bank' | 'Generic CSV';
+  eftBatchSendCcEmails: string;
+  /** Phase 110.9 — Payroll Calculations (Sundays/PH multiplier, ETI,
+   *  garnishees, CTC, pro-rata, etc). */
+  calculations?: PayrollCalculationsConfig;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.9 — Payroll Calculations.
+ *
+ * SimplePay-equivalent computation rules. These are the "how" of payroll,
+ * sitting alongside the "what" (rates + leave entitlements above).
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export interface PayrollCalculationsConfig {
+  /** Basic Pay calculation. */
+  sundayRateMultiplier: number;
+  publicHolidayRateMultiplier: number;
+  /** Termination preferences (BCEA notice period). */
+  terminationNoticeDaysUnder6Months: number;
+  terminationNoticeDays6MonthsTo1Year: number;
+  terminationNoticeDaysOver1Year: number;
+  payTerminationLeaveInLieu: boolean;
+  /** BCEA Leave Pay — which days do you average over? */
+  leavePayBasis: 'last13Weeks' | 'last4Weeks' | 'monthlyAverage';
+  /** ETI (Employment Tax Incentive) — youth wage subsidy for 18-29. */
+  etiEnabled: boolean;
+  etiMinimumWageMonthly: number;
+  /** Garnishees — cap on % of net salary that can be garnished. */
+  garnisheeMaxPercentOfNet: number;
+  garnisheeAdminFeePercent: number;
+  /** SDL exemption auto-check (annual payroll bill threshold). */
+  sdlAutoExemptionCheck: boolean;
+  /** Cost-to-Company convention. */
+  ctcIncludesUif: boolean;
+  ctcIncludesSdl: boolean;
+  ctcIncludesPension: boolean;
+  ctcIncludesMedicalAid: boolean;
+  /** Pro-rata method when an employee joins / leaves mid-month. */
+  proRataMethod: 'calendarDays' | 'workingDays' | 'fixed22Days';
+}
+
+export const DEFAULT_PAYROLL_CALCULATIONS: PayrollCalculationsConfig = {
+  sundayRateMultiplier: 1.5,
+  publicHolidayRateMultiplier: 2.0,
+  terminationNoticeDaysUnder6Months: 7,
+  terminationNoticeDays6MonthsTo1Year: 14,
+  terminationNoticeDaysOver1Year: 28,
+  payTerminationLeaveInLieu: true,
+  leavePayBasis: 'last13Weeks',
+  etiEnabled: true,
+  etiMinimumWageMonthly: 2000,
+  garnisheeMaxPercentOfNet: 25,
+  garnisheeAdminFeePercent: 0,
+  sdlAutoExemptionCheck: true,
+  ctcIncludesUif: true,
+  ctcIncludesSdl: true,
+  ctcIncludesPension: true,
+  ctcIncludesMedicalAid: true,
+  proRataMethod: 'calendarDays',
+};
+
+export const DEFAULT_PAYROLL_CONFIG: AppSettingsPayrollConfig = {
+  payFrequency: 'monthly',
+  payDayOfMonth: 25,
+  uifEmployeePercent: 1,
+  uifEmployerPercent: 1,
+  uifEarningsCeilingMonthly: 17712,
+  sdlPercent: 1,
+  sdlExemptionAnnualPayrollUnder: 500000,
+  payePrimaryRebateAnnual: 17235,
+  payeSecondaryRebateAnnual: 9444,
+  payeTertiaryRebateAnnual: 3145,
+  annualLeaveDaysPerYear: 15,
+  sickLeaveDaysPerCycle: 30,
+  sickLeaveCycleMonths: 36,
+  familyResponsibilityDaysPerYear: 3,
+  publicHolidays: [
+    // 2026 SA public holidays.
+    '2026-01-01', '2026-03-21', '2026-04-03', '2026-04-06', '2026-04-27',
+    '2026-05-01', '2026-06-16', '2026-08-09', '2026-09-24', '2026-12-16',
+    '2026-12-25', '2026-12-26',
+  ],
+  employeeNumberPrefix: 'EMP-',
+  employeeNumberNextSeq: 1,
+  employeeNumberPadding: 4,
+  payslipShowYtd: true,
+  payslipShowLeaveBalance: true,
+  payslipShowLoanBalance: true,
+  payslipFooterNote: 'Queries: payroll@jomopak.co.za',
+  eftBatchFormat: 'Generic CSV',
+  eftBatchSendCcEmails: '',
+  calculations: DEFAULT_PAYROLL_CALCULATIONS,
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.2 — Accounting defaults.
+ *
+ * Captures bookkeeping policy — VAT rates the business uses, default
+ * payment terms applied to new invoices, which GL account retained earnings
+ * sits in, and whether multi-currency is on. Most of these surface on the
+ * AccountingTab so the books behave consistently.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export interface VatRateConfig {
+  id: string;
+  /** Display code — e.g. "STD", "ZER", "EXM". */
+  code: string;
+  label: string;
+  /** Percentage. */
+  ratePercent: number;
+  /** Whether the rate is the default for new invoice lines. */
+  isDefault: boolean;
+  /** Whether to surface this as selectable in the line-item dropdown. */
+  active: boolean;
+}
+
+export interface AppSettingsAccountingConfig {
+  /** Last day of the financial year — for IS/BS captioning + projection roll. */
+  fiscalYearEndMonth: number;
+  fiscalYearEndDay: number;
+  /** VAT codes the business uses. Edited inline on the Accounting tab. */
+  vatRates: VatRateConfig[];
+  /** Default payment terms applied to new invoices ("Net 30", "Net 7", "COD", etc.). */
+  defaultPaymentTermDays: number;
+  defaultPaymentTermLabel: string;
+  /** GL account where the year-end net income is closed. Code-only — the
+   *  Chart of Accounts is the source of truth for the account itself. */
+  retainedEarningsAccountCode: string;
+  /** Default expense / revenue accounts for quick capture flows. */
+  defaultSalesAccountCode: string;
+  defaultPurchaseAccountCode: string;
+  defaultBankAccountCode: string;
+  /** Auto-create journals when invoices / bills are posted? */
+  autoPostInvoicesToGl: boolean;
+  autoPostBillsToGl: boolean;
+  /** Multi-currency toggle. When off, all docs default to baseCurrency. */
+  enableMultiCurrency: boolean;
+  /** Round line totals to nearest cent. */
+  roundingMode: 'nearest' | 'up' | 'down';
+}
+
+export const DEFAULT_ACCOUNTING_CONFIG: AppSettingsAccountingConfig = {
+  fiscalYearEndMonth: 2,
+  fiscalYearEndDay: 28,
+  vatRates: [
+    { id: 'vat-std', code: 'STD', label: 'Standard rate', ratePercent: 15, isDefault: true, active: true },
+    { id: 'vat-zer', code: 'ZER', label: 'Zero-rated', ratePercent: 0, isDefault: false, active: true },
+    { id: 'vat-exm', code: 'EXM', label: 'Exempt', ratePercent: 0, isDefault: false, active: true },
+  ],
+  defaultPaymentTermDays: 30,
+  defaultPaymentTermLabel: 'Net 30 days',
+  retainedEarningsAccountCode: '3500',
+  defaultSalesAccountCode: '4000',
+  defaultPurchaseAccountCode: '5000',
+  defaultBankAccountCode: '1100',
+  autoPostInvoicesToGl: true,
+  autoPostBillsToGl: true,
+  enableMultiCurrency: false,
+  roundingMode: 'nearest',
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.3 — Document numbering.
+ *
+ * Each doc kind gets a prefix + next sequence + padding. The number generator
+ * (utils/numbering.ts) reads this map and increments the seq when a doc is
+ * saved. Today's number generators are scattered across pages — this gives
+ * one place to change them.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type DocumentNumberKind =
+  | 'invoice'
+  | 'quote'
+  | 'deliveryNote'
+  | 'purchaseOrder'
+  | 'jobCard'
+  | 'supplierBill'
+  | 'creditNote'
+  | 'payslip';
+
+export interface DocumentNumberRule {
+  prefix: string;
+  nextSeq: number;
+  padding: number;
+  /** Include a yyyy-mm date prefix in the number? */
+  includeDate: boolean;
+  /** Reset sequence each year? */
+  resetAnnually: boolean;
+}
+
+export type AppSettingsNumberingConfig = Record<DocumentNumberKind, DocumentNumberRule>;
+
+export const DEFAULT_NUMBERING_CONFIG: AppSettingsNumberingConfig = {
+  invoice: { prefix: 'INV-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  quote: { prefix: 'QUO-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  deliveryNote: { prefix: 'DN-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  purchaseOrder: { prefix: 'PO-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  jobCard: { prefix: 'JC-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  supplierBill: { prefix: 'BILL-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  creditNote: { prefix: 'CN-', nextSeq: 1, padding: 5, includeDate: false, resetAnnually: false },
+  payslip: { prefix: 'PS-', nextSeq: 1, padding: 6, includeDate: true, resetAnnually: true },
+};
+
+export const DOCUMENT_NUMBER_LABELS: Record<DocumentNumberKind, string> = {
+  invoice: 'Invoice',
+  quote: 'Quote',
+  deliveryNote: 'Delivery Note',
+  purchaseOrder: 'Purchase Order',
+  jobCard: 'Job Card',
+  supplierBill: 'Supplier Bill',
+  creditNote: 'Credit Note',
+  payslip: 'Payslip',
+};
+
+/** Render the next document number for a rule (without incrementing). */
+export function previewDocumentNumber(rule: DocumentNumberRule, todayIso?: string): string {
+  const seq = String(rule.nextSeq).padStart(rule.padding, '0');
+  if (!rule.includeDate) return `${rule.prefix}${seq}`;
+  const today = todayIso ?? new Date().toISOString().slice(0, 10);
+  const yyyymm = today.slice(0, 7).replace('-', '');
+  return `${rule.prefix}${yyyymm}-${seq}`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.4 — Company bank accounts.
+ *
+ * Used by:
+ *   - Payroll EFT exports (which account salaries are paid from)
+ *   - Invoice footers (which account customers should pay into)
+ *   - Bank reconciliation (matching imported transactions back to an account)
+ *
+ * One account is marked primary; the invoice footer shows it by default.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type BankAccountType = 'cheque' | 'savings' | 'transmission' | 'credit_card';
+
+export interface AppSettingsBankAccount {
+  id: string;
+  accountName: string;
+  bankName: string;
+  branchCode: string;
+  accountNumber: string;
+  accountType: BankAccountType;
+  /** Primary account = the one shown on invoice footers by default. */
+  isPrimary: boolean;
+  /** Toggle to surface the account number on printed invoices. */
+  showOnInvoice: boolean;
+  /** GL account code this bank account maps to in the chart of accounts. */
+  glAccountCode?: string;
+  /** Optional SWIFT code for foreign payments. */
+  swiftCode?: string;
+  notes?: string;
+}
+
+export const DEFAULT_BANK_ACCOUNTS: AppSettingsBankAccount[] = [];
+
+export const BANK_ACCOUNT_TYPE_LABELS: Record<BankAccountType, string> = {
+  cheque: 'Cheque',
+  savings: 'Savings',
+  transmission: 'Transmission',
+  credit_card: 'Credit Card',
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 113 — Page intents (deep-link from Admin Hub).
+ *
+ * One-shot "do the thing on landing" signals so quick actions like "Post a
+ * notice" don't just dump the user on a list page where they still have to
+ * click "+ New" — they land directly in the new-record form.
+ *
+ * The receiving page consumes the intent in a useEffect and calls
+ * onIntentConsumed so it doesn't re-fire on re-renders. The `nonce` field
+ * guarantees a fresh intent (e.g. clicking the same button twice) still
+ * triggers the effect.
+ *
+ * Intents are page-local strings — 'new' is the common one, but each page
+ * is free to define its own (e.g. PayrollPage might accept 'newRun', the
+ * SHE register 'minutesFromLast').
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export interface PageIntent {
+  view: View;
+  intent: string;
+  /** Cheap unique-per-click value so the receiving useEffect re-fires when
+   *  the admin clicks the same button twice in a row. */
+  nonce: number;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.6 — Employer Details + SARS Filing.
+ *
+ * Captures every reference number the business holds with SARS / DoL / FSCA
+ * so that EMP201, EMP501, UI-19, OID return, and ROE forms can be auto-
+ * filled. Separate from the marketing-facing AppSettingsCompany (which
+ * drives letterheads).
+ *
+ * Filing contact = the person SARS calls when EMP201 is late.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export interface AppSettingsEmployerDetails {
+  /** Income tax reference (10-digit). */
+  incomeTaxReference: string;
+  /** PAYE reference (10-digit, starts with 7). */
+  payeReference: string;
+  /** UIF reference (8-digit). */
+  uifReference: string;
+  /** SDL reference (10-digit, starts with L). */
+  sdlReference: string;
+  /** UIF Department of Labour reference (used on UI-19). */
+  uifDolReference: string;
+  /** COIDA / Workmen's Comp registration number. */
+  coidaReference: string;
+  /** WCC industry classification code. */
+  wcCommissionerCode: string;
+  /** Companies & Intellectual Property Commission (CIPC) registration number. */
+  cipcRegistrationNumber: string;
+  /** Trading name (if different from legal name). Goes on EMP201. */
+  emp201TradingName: string;
+  /** SETA the business is registered with (for WSP/ATR). */
+  setaCode: string;
+  /** Date the business registered as an employer (used on EMP501). */
+  employerRegistrationDate: string;
+  /** Whether the business is a "small business corporation" for tax purposes. */
+  isSmallBusinessCorporation: boolean;
+  /** SARS eFiling filing contact. */
+  filingContactName: string;
+  filingContactEmail: string;
+  filingContactPhone: string;
+  /** Optional secondary contact for vacation cover. */
+  backupContactName: string;
+  backupContactEmail: string;
+}
+
+export const DEFAULT_EMPLOYER_DETAILS: AppSettingsEmployerDetails = {
+  incomeTaxReference: '',
+  payeReference: '',
+  uifReference: '',
+  sdlReference: '',
+  uifDolReference: '',
+  coidaReference: '',
+  wcCommissionerCode: '',
+  cipcRegistrationNumber: '',
+  emp201TradingName: '',
+  setaCode: 'FP&M SETA',
+  employerRegistrationDate: '',
+  isSmallBusinessCorporation: false,
+  filingContactName: '',
+  filingContactEmail: '',
+  filingContactPhone: '',
+  backupContactName: '',
+  backupContactEmail: '',
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 110.7 — Beneficiaries.
+ *
+ * Third parties who receive money on behalf of employees:
+ *   - Pension / provident / retirement annuity funds (FSCA-registered)
+ *   - Medical aid schemes (CMS-registered)
+ *   - Unions (Labour Relations Act regulated)
+ *   - Garnishees (emolument attachment orders)
+ *   - Other (loans, savings clubs)
+ *
+ * Each carries the registration number + bank details. PayrollPage uses
+ * these when generating EFT batches — the deduction shows the beneficiary's
+ * bank account, not the employee's.
+ * ────────────────────────────────────────────────────────────────────────*/
+
+export type BeneficiaryKind =
+  | 'pension'
+  | 'provident'
+  | 'retirementAnnuity'
+  | 'medicalAid'
+  | 'union'
+  | 'garnishee'
+  | 'other';
+
+export const BENEFICIARY_KIND_LABELS: Record<BeneficiaryKind, string> = {
+  pension: 'Pension Fund',
+  provident: 'Provident Fund',
+  retirementAnnuity: 'Retirement Annuity',
+  medicalAid: 'Medical Aid',
+  union: 'Union',
+  garnishee: 'Garnishee',
+  other: 'Other',
+};
+
+export interface AppSettingsBeneficiary {
+  id: string;
+  kind: BeneficiaryKind;
+  name: string;
+  /** FSCA / CMS / Court registration number depending on kind. */
+  registrationNumber: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  bankName: string;
+  branchCode: string;
+  accountNumber: string;
+  accountType: BankAccountType;
+  /** Tax certificate code for IRP5 (e.g. 4001 for pension, 4474 for medical aid employer contribution). */
+  irp5Code: string;
+  /** Optional reference / member number prefix shown on EFT line. */
+  paymentReferencePrefix: string;
+  active: boolean;
+  notes: string;
+}
+
+export const DEFAULT_BENEFICIARIES: AppSettingsBeneficiary[] = [];
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   id: 'default',
@@ -6845,6 +7793,15 @@ export interface AppData {
   /** Phase 109.2 — Financial projection scenarios (3, 6, 12, 36-month forecasts
    *  of P&L, Balance Sheet, Cash Flow). Optional so legacy state loads. */
   financialProjections?: FinancialProjection[];
+  /** Phase 119 — Customer deposit ledger. Sits as a liability ("we owe
+   *  these customers stock or money"), separate from invoices.
+   *  Optional so legacy state loads cleanly. */
+  customerDeposits?: CustomerDeposit[];
+  /** Phase 120 — Pro-forma invoices. Every customer sale now starts as
+   *  a pro-forma (request for payment, no VAT). A pro-forma spawns one
+   *  or more Tax Invoices as payments arrive. Optional so legacy state
+   *  without pro-formas continues to load. */
+  proformas?: ProForma[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -7457,6 +8414,8 @@ export interface QuoteEstimateFormState {
   status: QuoteStatus;
   notes: string;
   customerNote: string;
+  /** Phase 117 — Blockers. Edited inline on the form. */
+  waitingOn: WaitingOnBlocker[];
 }
 
 export interface ArtworkFormState {
@@ -7725,6 +8684,12 @@ export interface ClientFormState {
   companyId?: string;
   companyName: string;
   accountManagerName: string;
+  /** Phase 116 — Per-client brand logo. Empty string = use dashboard default. */
+  preferredLogoId?: string;
+  /** Phase 119 — AR payment model selector on the Client form. */
+  paymentModel: CustomerPaymentModel;
+  /** Phase 119 — String for form input convenience; parsed on save. */
+  defaultDepositPercent: string;
   code: string;
   pricingTierId: string;
   brandingDefault: boolean;
@@ -7928,6 +8893,8 @@ export interface JobFormState {
   /** Phase 94 — production-stage tracker, edited via JobPipelineTracker
    *  on the form and persisted with the job. */
   pipelineStages?: PipelineStage[];
+  /** Phase 117 — Blockers parking this job. */
+  waitingOn: WaitingOnBlocker[];
 }
 
 export interface FinishedGoodsStockFormState {

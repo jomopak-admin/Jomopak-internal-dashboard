@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { QuickAddCard } from '../../components/QuickAddCard';
 import { SectionTitle } from '../../components/SectionTitle';
-import { Client, ClientFilters, ClientFormState, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
+import { BrandLogo, Client, ClientFilters, ClientFormState, DeliveryNote, DispatchRecord, Invoice, PricingTier } from '../../types';
 import { formatNumber } from '../../utils/calculations';
 import { describePipelinePosition, summarisePipeline } from '../../utils/jobPipeline';
 import { formatDaysFriendly, summariseClientStockHolding } from '../../utils/stockHolding';
@@ -48,6 +48,10 @@ interface ClientsPageProps {
    *  current production stage + any blockers. */
   jobs?: Array<{ id: string; jobNumber: string; clientId: string; productName: string; pipelineStages?: import('../../types').PipelineStage[] }>;
   onOpenJob?: (jobId: string) => void;
+  /** Phase 116 — Brand logo library for the per-client logo picker. The
+   *  Client form lets the admin pin a specific logo to this client; all
+   *  customer-facing documents for this client then use it. */
+  brandLogos?: BrandLogo[];
 }
 
 export function ClientsPage({
@@ -79,6 +83,7 @@ export function ClientsPage({
   onConvertToCompany,
   jobs = [],
   onOpenJob,
+  brandLogos = [],
 }: ClientsPageProps) {
   const [mode, setMode] = useState<'list' | 'quick' | 'form'>('list');
 
@@ -245,6 +250,23 @@ export function ClientsPage({
               {staffOptions.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
           </label>
+          {/* Phase 116 — Per-client preferred logo. Empty value = inherit the
+              dashboard default. Only the brand logo library shows here; if no
+              logos have been uploaded yet, hide the field. */}
+          {brandLogos.length > 0 ? (
+            <label><span>Preferred logo for this client&apos;s docs</span>
+              <select
+                value={clientForm.preferredLogoId ?? ''}
+                onChange={(event) => setClientForm({ ...clientForm, preferredLogoId: event.target.value || undefined })}
+                title="Used on every customer-facing document for this client (invoices, DNs, stock statements). Leave blank to use the dashboard default."
+              >
+                <option value="">— Use dashboard default —</option>
+                {brandLogos.map((logo) => (
+                  <option key={logo.id} value={logo.id}>{logo.label}{logo.isDefault ? ' · default' : ''}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label><span>Code</span><input value={clientForm.code} onChange={(event) => setClientForm({ ...clientForm, code: event.target.value })} /></label>
           <label><span>Website</span><input value={clientForm.website} onChange={(event) => setClientForm({ ...clientForm, website: event.target.value })} /></label>
           <label><span>Title</span><input value={clientForm.title} onChange={(event) => setClientForm({ ...clientForm, title: event.target.value })} /></label>
