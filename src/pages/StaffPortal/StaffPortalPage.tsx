@@ -17,6 +17,7 @@ import { SectionTitle } from '../../components/SectionTitle';
 import { SignaturePad } from '../../components/SignaturePad';
 import {
   ALL_EMPLOYEE_AVAILABILITY_STATUSES,
+  DocumentRecord,
   Employee,
   EmployeeAvailabilityStatus,
   FACTORY_AREAS,
@@ -83,21 +84,40 @@ interface StaffPortalPageProps {
    * staff portal. Creates a Request-type record the admin can action.
    */
   onRequestPpeReplacement?: (originalRecord: PpeIssueRecord) => void;
+  /**
+   * Phase 121.7 — HR documents (contracts, leave letters, etc.) from
+   * the Doc Vault. Filtered in the parent to ownerType==='employee'.
+   * The portal further filters to the linked employee's documents.
+   */
+  documents?: DocumentRecord[];
 }
 
-export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl, ppeIssueRecords = [], onRequestPpeReplacement }: StaffPortalPageProps) {
+export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl, ppeIssueRecords = [], onRequestPpeReplacement, documents = [] }: StaffPortalPageProps) {
   const fullName = profile.fullName || profile.email || '';
   const today = new Date().toISOString().slice(0, 10);
 
   // Resolve the staff member's linked employee record. Prefer the explicit
   // linkedEmployeeId set by an admin in Permissions; otherwise fall back to
   // a name match so new users see something useful right away.
+  /**
+   * Phase 121.7 — Resolve the linked Employee record. Priority:
+   *   1. Explicit linkedEmployeeId from admin (Permissions page)
+   *   2. Email match against Employee.email (so Aman just needs to put
+   *      his work email on his own Employee record and it auto-links)
+   *   3. Name match against firstName + lastName (legacy fallback)
+   */
   const linkedEmployee = useMemo<Employee | undefined>(() => {
     if (profile.linkedEmployeeId) {
-      return employees.find((e) => e.id === profile.linkedEmployeeId);
+      const byId = employees.find((e) => e.id === profile.linkedEmployeeId);
+      if (byId) return byId;
+    }
+    const lowerEmail = (profile.email || '').trim().toLowerCase();
+    if (lowerEmail) {
+      const byEmail = employees.find((e) => (e.email || '').trim().toLowerCase() === lowerEmail);
+      if (byEmail) return byEmail;
     }
     return employees.find((e) => `${e.firstName} ${e.lastName}`.trim().toLowerCase() === fullName.trim().toLowerCase());
-  }, [profile.linkedEmployeeId, employees, fullName]);
+  }, [profile.linkedEmployeeId, profile.email, employees, fullName]);
 
   const visibleNotices = useMemo(() => {
     return notices
@@ -281,6 +301,16 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
   const ppeOverdueCount = myPpe.filter((r) => r.status === 'Issued' && r.replacementDueDate && r.replacementDueDate < todayYMD).length;
   const ppeInUseCount = myPpe.filter((r) => r.status === 'Issued').length;
   const [openPpe, setOpenPpe] = useState(ppeOverdueCount > 0);
+  // Phase 121.7 — My documents (contracts, leave letters, etc.) from
+  // the Doc Vault. Filter to ownerType === 'employee' AND ownerId
+  // matches the linked employee. Sorted most-recent first.
+  const myDocuments = useMemo<DocumentRecord[]>(() => {
+    if (!linkedEmployee) return [];
+    return documents
+      .filter((d) => d.ownerType === 'employee' && d.ownerId === linkedEmployee.id)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }, [documents, linkedEmployee]);
+  const [openDocs, setOpenDocs] = useState(false);
 
   // Shared styles — declared inline so this card doesn't depend on
   // any new global CSS.
@@ -406,35 +436,133 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
         </div>
       )}
 
+      {/* ───────────────── 2b. NOT LINKED NOTICE ─────────────────
+          Phase 121.7 — When the signed-in profile has no linked Employee
+          record, almost everything on this page sits empty (no pay, no
+          leave balance, no PPE, no warnings, no profile details). Tell
+          the user clearly instead of silently hiding things — this was
+          the "where's all my stuff?" complaint. */}
+      {!linkedEmployee && (
+        <div style={{
+          ...cardBase,
+          borderColor: HERO_AMBER,
+          background: HERO_AMBER_TINT,
+          borderLeft: `6px solid ${HERO_AMBER}`,
+          marginBottom: 16,
+          padding: '14px 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              background: HERO_AMBER,
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              flexShrink: 0,
+            }}>NOT LINKED</span>
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: 15, color: '#92400e' }}>Your account isn&apos;t linked to an Employee record yet</strong>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#78350f' }}>
+                Until this is linked, this page can&apos;t show your payslips, leave balance, PPE, contracts, or letters from your manager.
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--jp-ink-3, #475569)' }}>
+                <strong>Fix it:</strong> ask the admin to open <strong>Settings → Permissions</strong>, find your user, and pick your Employee record under &ldquo;Linked employee&rdquo;.
+                Or, if you have an Employee record already, make sure its <strong>email</strong> field matches the email you sign in with ({profile.email || '—'}). It will auto-link.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────── 2c. MY PROFILE ─────────────────
+          Phase 121.7 — Basic employee details so staff can sanity-check
+          their own record. Always visible when linked. */}
+      {linkedEmployee && (
+        <div style={{ ...cardBase, marginBottom: 16, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>MY PROFILE</span>
+              <h3 style={{ margin: '2px 0 0', fontSize: 16 }}>{linkedEmployee.firstName} {linkedEmployee.lastName}</h3>
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{linkedEmployee.employeeNumber || '—'}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, fontSize: 13 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Job</div>
+              <div>{linkedEmployee.jobTitle || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{linkedEmployee.department || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Contact</div>
+              <div>{linkedEmployee.email || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{linkedEmployee.phone || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Started</div>
+              <div>{linkedEmployee.startDate ? formatDate(linkedEmployee.startDate) : '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{linkedEmployee.payCycle || '—'} pay</div>
+            </div>
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>
+            Something wrong here? Ask admin to update your record on the Employees page.
+          </p>
+        </div>
+      )}
+
       {/* ───────────────── 3. QUICK ACTIONS ─────────────────
           Three fat tiles staff can always find: leave, pay, instructions.
           Numbers visible up front so they don't have to dig. */}
       {/* No emojis. Each tile uses an uppercase category banner across
           the top to identify it, big bold action verb, and the live
           number so they don't have to dig. */}
+      {/* Quick Action tiles are ALWAYS visible. Tiles requiring a
+          linked employee render in a disabled state with a hint instead
+          of disappearing, so the menu doesn't look empty. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 18 }}>
-        {linkedEmployee && (
-          <button
-            type="button"
-            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
-            onClick={() => { setOpenLeave(true); setLeaveStart(new Date().toISOString().slice(0, 10)); setLeaveEnd(new Date().toISOString().slice(0, 10)); setShowLeaveForm(true); }}
-          >
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>LEAVE</span>
-            <strong style={{ fontSize: 18 }}>Apply for leave</strong>
-            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days available</div>
-          </button>
-        )}
-        {linkedEmployee && myPayslips.length > 0 && (
-          <button
-            type="button"
-            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
-            onClick={() => setOpenPay(true)}
-          >
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>PAY</span>
-            <strong style={{ fontSize: 18 }}>See my pay</strong>
-            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>Last: {myPayslips[0].run.periodLabel}</div>
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={!linkedEmployee}
+          style={{
+            ...cardBase,
+            cursor: linkedEmployee ? 'pointer' : 'not-allowed',
+            opacity: linkedEmployee ? 1 : 0.55,
+            textAlign: 'left',
+            padding: '16px 18px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            borderTop: `4px solid var(--jp-ink-2, #475569)`,
+          }}
+          onClick={() => { if (!linkedEmployee) return; setOpenLeave(true); setLeaveStart(new Date().toISOString().slice(0, 10)); setLeaveEnd(new Date().toISOString().slice(0, 10)); setShowLeaveForm(true); }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>LEAVE</span>
+          <strong style={{ fontSize: 18 }}>Apply for leave</strong>
+          <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>{linkedEmployee ? `${annualBal.available.toFixed(0)} days available` : 'Link your profile to use this'}</div>
+        </button>
+        <button
+          type="button"
+          disabled={!linkedEmployee || myPayslips.length === 0}
+          style={{
+            ...cardBase,
+            cursor: (linkedEmployee && myPayslips.length > 0) ? 'pointer' : 'not-allowed',
+            opacity: (linkedEmployee && myPayslips.length > 0) ? 1 : 0.55,
+            textAlign: 'left',
+            padding: '16px 18px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            borderTop: `4px solid var(--jp-ink-2, #475569)`,
+          }}
+          onClick={() => { if (linkedEmployee && myPayslips.length > 0) setOpenPay(true); }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>PAY</span>
+          <strong style={{ fontSize: 18 }}>See my pay</strong>
+          <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>
+            {!linkedEmployee ? 'Link your profile to use this' : myPayslips.length > 0 ? `Last: ${myPayslips[0].run.periodLabel}` : 'No payslips yet'}
+          </div>
+        </button>
         <button
           type="button"
           style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
@@ -996,6 +1124,59 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────────── My documents — Phase 121.7 ──────────
+            Contracts, leave letters, ID copies, etc. Pulled from the
+            Doc Vault filtered to this employee. */}
+        {linkedEmployee && myDocuments.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setOpenDocs((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>My documents</h3>
+              <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{myDocuments.length} document{myDocuments.length === 1 ? '' : 's'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openDocs ? '−' : '+'}</span>
+            </button>
+            {openDocs && (
+              <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {myDocuments.map((d) => (
+                  <div
+                    key={d.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 12px',
+                      border: '1px solid var(--jp-divider, #e2e8f0)',
+                      borderRadius: 8,
+                      background: '#fff',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={{ fontSize: 14 }}>{d.title || d.fileName || 'Document'}</strong>
+                      <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>
+                        {d.category || 'Document'}
+                        {d.createdAt ? ` · uploaded ${formatDate(d.createdAt)}` : ''}
+                        {d.uploadedByName ? ` by ${d.uploadedByName}` : ''}
+                      </div>
+                    </div>
+                    {d.fileUrl ? (
+                      <a
+                        href={d.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="secondary-button"
+                        style={{ flexShrink: 0, textDecoration: 'none' }}
+                      >Open</a>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -13999,6 +13999,9 @@ function App() {
           leaveRequests={data.leaveRequests ?? []}
           // Phase 121 — Help video URL for this page (Settings → Help videos).
           helpVideoUrl={data.appSettings.helpVideos?.myPortal}
+          // Phase 121.7 — HR documents from Doc Vault, filtered to
+          // employee owners. The portal further narrows by linkedEmployee.
+          documents={(data.documents ?? []).filter((d) => d.ownerType === 'employee')}
           // Phase 122.3 — PPE issued to me + "Request replacement" handler.
           ppeIssueRecords={data.ppeIssueRecords}
           onRequestPpeReplacement={(original) => {
