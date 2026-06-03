@@ -545,9 +545,15 @@ function mapPaperRate(row: any): PaperRate {
     name: row.name,
     supplierId: row.supplier_id ?? '',
     supplierName: row.supplier_name ?? '',
-    // Phase 126.1 — Cost/charge split, use case grouping, public label.
+    // Phase 126.1/126.3 — Cost/charge split, multi-use-case grouping, public label.
     productCode: row.product_code ?? undefined,
+    // Phase 126.3 — Prefer multi-value array. Fall back to legacy single
+    // use_case so already-saved rows still render under their group.
+    useCases: Array.isArray(row.use_cases) && row.use_cases.length > 0
+      ? row.use_cases
+      : (row.use_case ? [row.use_case] : undefined),
     useCase: row.use_case ?? undefined,
+    requiresSlitting: Boolean(row.requires_slitting),
     form: row.form ?? undefined,
     publicLabel: row.public_label ?? undefined,
     paperType: row.paper_type ?? '',
@@ -3163,9 +3169,13 @@ export async function syncAppData(data: AppData): Promise<void> {
       name: rate.name,
       supplier_id: rate.supplierId || null,
       supplier_name: rate.supplierName || null,
-      // Phase 126.1 — Cost/charge split + use case + public label.
+      // Phase 126.1/126.3 — Cost/charge split + multi-use-case + public label.
       product_code: rate.productCode || null,
-      use_case: rate.useCase || null,
+      use_cases: rate.useCases && rate.useCases.length > 0 ? rate.useCases : null,
+      // Keep legacy single-value column in sync for back-compat. First
+      // useCase if multiple are set, falling back to the deprecated field.
+      use_case: rate.useCases?.[0] || rate.useCase || null,
+      requires_slitting: Boolean(rate.requiresSlitting),
       form: rate.form || null,
       public_label: rate.publicLabel || null,
       paper_type: rate.paperType || null,

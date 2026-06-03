@@ -10,7 +10,6 @@ import {
   PaperRateFilters,
   PaperRateFormState,
   PaperForm,
-  PaperUseCase,
   PAPER_USE_CASES,
   Supplier,
 } from '../../types';
@@ -93,15 +92,46 @@ export function CostInputsPage({
               onChange={(event) => setPaperRateForm({ ...paperRateForm, publicLabel: event.target.value })}
             />
           </label>
-          <label>
-            <span>Use case</span>
-            <select
-              value={paperRateForm.useCase}
-              onChange={(event) => setPaperRateForm({ ...paperRateForm, useCase: event.target.value as PaperUseCase | '' })}
-            >
-              <option value="">— pick a use case —</option>
-              {PAPER_USE_CASES.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
+          <label className="full-span">
+            <span>End-uses (tick all that apply)</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '6px 0' }}>
+              {PAPER_USE_CASES.map((u) => {
+                const selected = paperRateForm.useCases.includes(u);
+                return (
+                  <button
+                    type="button"
+                    key={u}
+                    onClick={() => {
+                      const next = selected
+                        ? paperRateForm.useCases.filter((x) => x !== u)
+                        : [...paperRateForm.useCases, u];
+                      setPaperRateForm({ ...paperRateForm, useCases: next });
+                    }}
+                    style={{
+                      padding: '6px 14px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      borderRadius: 999,
+                      border: selected ? '2px solid #22a865' : '1px solid var(--jp-divider, #d1d5db)',
+                      background: selected ? 'rgba(34,168,101,0.12)' : 'var(--jp-paper, #fff)',
+                      color: selected ? '#065f46' : 'var(--jp-ink-2, #334155)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {u}
+                  </button>
+                );
+              })}
+            </div>
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={paperRateForm.requiresSlitting}
+              onChange={(e) => setPaperRateForm({ ...paperRateForm, requiresSlitting: e.target.checked })}
+            />
+            Needs to be slit before use
           </label>
           <label>
             <span>Form</span>
@@ -312,7 +342,7 @@ export function CostInputsPage({
                       <thead>
                         <tr>
                           <th>Public label</th>
-                          <th>Use case</th>
+                          <th>End-uses</th>
                           <th>Form</th>
                           <th>GSM</th>
                           <th title="Private — admin only">Supplier</th>
@@ -329,8 +359,15 @@ export function CostInputsPage({
                           const marginPct = rate.pricePerTon > 0 ? (margin / rate.pricePerTon) * 100 : 0;
                           return (
                             <tr key={rate.id}>
-                              <td><strong>{rate.publicLabel || `${rate.gsm}gsm ${rate.paperType}` || rate.name}</strong></td>
-                              <td>{rate.useCase || '—'}</td>
+                              <td>
+                                <strong>{rate.publicLabel || `${rate.gsm}gsm ${rate.paperType}` || rate.name}</strong>
+                                {rate.requiresSlitting ? <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fde68a', color: '#78350f', fontWeight: 700, letterSpacing: '0.05em' }}>SLIT</span> : null}
+                              </td>
+                              <td>
+                                {(rate.useCases && rate.useCases.length > 0)
+                                  ? rate.useCases.join(' · ')
+                                  : (rate.useCase || '—')}
+                              </td>
                               <td>{rate.form || '—'}</td>
                               <td>{rate.gsm}</td>
                               <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{rate.supplierName || '—'}</td>

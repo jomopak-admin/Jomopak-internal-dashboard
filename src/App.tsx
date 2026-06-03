@@ -557,9 +557,10 @@ const createInitialJobForm = (): JobFormState => ({
 const createInitialPaperRateForm = (): PaperRateFormState => ({
   name: '',
   supplierId: '',
-  // Phase 126.1 — Cost/charge split + use case + public label.
+  // Phase 126.1/126.3 — Cost/charge split + multi-use-case + public label.
   productCode: '',
-  useCase: '',
+  useCases: [],
+  requiresSlitting: false,
   form: '',
   publicLabel: '',
   paperType: '',
@@ -2188,8 +2189,15 @@ function App() {
     [profile?.permissions],
   );
   const allowedViews = useMemo(() => new Set(navItems.map((item) => item.key)), [navItems]);
-  const canManageCostInputs = allowedViews.has('costInputs');
-  const canViewInternalCalculatorCosts = canManageCostInputs;
+  // Phase 126.3 — Cost Inputs page (paper rates incl. cost/charge/margin
+  // + supplier identity) is admin-only. Even users with costInputs in
+  // their permission list see nothing if they're not admin. This stops
+  // anyone other than the owner seeing what we pay suppliers per ton or
+  // what our markup is.
+  const canManageCostInputs = allowedViews.has('costInputs') && profile?.role === 'admin';
+  // pricingEditor users can still see Calculator-side costs (they need
+  // it to apply margin per quote) — that's a separate gate.
+  const canViewInternalCalculatorCosts = profile?.role === 'admin' || Boolean(profile?.pricingEditor);
 
   // Live accounts-receivable balance per client, derived from unpaid invoices,
   // so credit checks fire on real numbers rather than a stale stored field.
@@ -7006,7 +7014,12 @@ function App() {
       supplierId: linkedSupplier?.id ?? '',
       supplierName: linkedSupplier?.name ?? '',
       productCode: paperRateForm.productCode || undefined,
-      useCase: paperRateForm.useCase || undefined,
+      // Phase 126.3 — Multi-use-case array. Keep legacy single-value
+      // field synced to the first selected use case so any code still
+      // reading rate.useCase falls through cleanly.
+      useCases: paperRateForm.useCases.length > 0 ? paperRateForm.useCases : undefined,
+      useCase: paperRateForm.useCases[0] || undefined,
+      requiresSlitting: paperRateForm.requiresSlitting,
       form: paperRateForm.form || undefined,
       publicLabel: paperRateForm.publicLabel,
       paperType: paperRateForm.paperType,
@@ -10910,7 +10923,12 @@ function App() {
       name: rate.name,
       supplierId: rate.supplierId,
       productCode: rate.productCode || '',
-      useCase: rate.useCase || '',
+      // Phase 126.3 — Hydrate from the array if present, else fall back
+      // to the legacy single-value useCase wrapped in an array.
+      useCases: rate.useCases && rate.useCases.length > 0
+        ? rate.useCases
+        : (rate.useCase ? [rate.useCase] : []),
+      requiresSlitting: Boolean(rate.requiresSlitting),
       form: rate.form || '',
       publicLabel: rate.publicLabel || '',
       paperType: rate.paperType,

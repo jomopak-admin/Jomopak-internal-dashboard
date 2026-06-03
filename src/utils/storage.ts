@@ -229,9 +229,13 @@ function normalizePaperRate(raw: any): PaperRate {
     name: raw.name ?? '',
     supplierId: raw.supplierId ?? '',
     supplierName: raw.supplierName ?? '',
-    // Phase 126.1 — Cost/charge split + use case + public label.
+    // Phase 126.1/126.3 — Cost/charge split + multi-use-case + public label.
     productCode: raw.productCode ?? undefined,
+    useCases: Array.isArray(raw.useCases) && raw.useCases.length > 0
+      ? raw.useCases
+      : (raw.useCase ? [raw.useCase] : undefined),
     useCase: raw.useCase ?? undefined,
+    requiresSlitting: Boolean(raw.requiresSlitting),
     form: raw.form ?? undefined,
     publicLabel: raw.publicLabel ?? undefined,
     paperType: raw.paperType ?? '',

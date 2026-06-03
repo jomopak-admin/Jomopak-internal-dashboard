@@ -1834,20 +1834,29 @@ export interface DeliveryNoteLineItem {
  * Handle Patch). 'Other' is the catch-all so we never block adding a new
  * line just because the taxonomy hasn't caught up.
  */
+/**
+ * Phase 126.3 — End-uses only. Slitting is NOT an end-use, it's a
+ * process we do to a reel to prepare it for one of these. Tracked via
+ * `requiresSlitting` flag on the rate instead.
+ *
+ * A single paper rate can legitimately serve MULTIPLE end-uses
+ * (e.g. 70gsm Unbleached Kraft → both bag bodies and handle patches),
+ * so the rate stores `useCases: PaperUseCase[]` not a single value.
+ */
 export type PaperUseCase =
   | 'Paper Bags'
-  | 'Slitting'
+  | 'Handle Patches'
   | 'Rope'
-  | 'Handle Patch'
   | 'Greaseproof Paper'
+  | 'Liner'
   | 'Other';
 
 export const PAPER_USE_CASES: PaperUseCase[] = [
   'Paper Bags',
-  'Slitting',
+  'Handle Patches',
   'Rope',
-  'Handle Patch',
   'Greaseproof Paper',
+  'Liner',
   'Other',
 ];
 
@@ -1870,10 +1879,22 @@ export interface PaperRate {
    */
   productCode?: string;
   /**
-   * Phase 126.1 — What we BUY this paper for. Drives the calculator's
-   * grouped picker so users only see relevant papers per use case.
+   * Phase 126.3 — End-uses this paper covers. A single rate can serve
+   * multiple (e.g. 70gsm Unbleached Kraft → Paper Bags AND Handle
+   * Patches). Drives the calculator's grouped picker. Kept the
+   * single-value field below for backwards-compat with already-saved
+   * rows; new rows write to `useCases`.
    */
+  useCases?: PaperUseCase[];
+  /** Phase 126.1 — DEPRECATED. Kept so legacy rows still display. */
   useCase?: PaperUseCase;
+  /**
+   * Phase 126.3 — Process flag. Slitting is what we DO to a reel to
+   * prepare it for an end-use. Tracked separately from useCases so the
+   * production team knows which rolls need to go through the slitter
+   * before being booked into a job. Private — production planning only.
+   */
+  requiresSlitting?: boolean;
   /**
    * Phase 126.1 — Reels (slit on our side from jumbo) vs Sheets (pre-cut).
    */
@@ -8606,8 +8627,12 @@ export interface PaperRateFormState {
   supplierId: string;
   /** Phase 126.1 — Supplier's product code (e.g. "PrimePak U"). Private. */
   productCode: string;
-  /** Phase 126.1 — Use case grouping. Drives the calculator picker. */
-  useCase: PaperUseCase | '';
+  /** Phase 126.3 — End-uses (multi-select). Same paper can serve more
+   *  than one purpose, so this is an array, not a single value. */
+  useCases: PaperUseCase[];
+  /** Phase 126.3 — Production flag: this paper has to go through the
+   *  slitter before it can be used on the bag machine / patch line. */
+  requiresSlitting: boolean;
   /** Phase 126.1 — Reels vs Sheets. */
   form: PaperForm | '';
   /** Phase 126.1 — What non-admin staff see in the calculator picker. */
