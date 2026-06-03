@@ -1114,6 +1114,8 @@ const createInitialWarningForm = (): StaffWarningFormState => ({
 });
 
 const createInitialPpeForm = (): PpeIssueFormState => ({
+  // Phase 122 — Required Employee picker on the PPE form.
+  employeeId: '',
   staffName: '',
   staffRole: '',
   itemType: 'Hairnet',
@@ -9090,6 +9092,8 @@ function App() {
       ? r.items
       : [{ type: r.itemType, description: r.itemDescription, quantity: r.quantity || 1 }];
     setPpeForm({
+      // Phase 122 — Hydrate Employee picker.
+      employeeId: r.employeeId ?? '',
       staffName: r.staffName, staffRole: r.staffRole, itemType: r.itemType,
       itemDescription: r.itemDescription, quantity: String(r.quantity),
       issuedByName: r.issuedByName, issuedDate: r.issuedDate, status: r.status,
@@ -9104,7 +9108,10 @@ function App() {
     setView('ppeControl');
   }
   function handleSavePpe() {
-    if (!ppeForm.staffName.trim()) { setPpeMessage('Staff name is required.'); return; }
+    // Phase 122 — Employee picker is now the source of truth. New rows
+    // must pick an Employee; legacy free-text rows still load (no
+    // employeeId) but can't be created any more via this form.
+    if (!ppeForm.employeeId && !ppeForm.staffName.trim()) { setPpeMessage('Pick an employee.'); return; }
     if (!ppeForm.issuedDate) { setPpeMessage('Issue date is required.'); return; }
     setData((current) => {
       const today = getToday();
@@ -9117,6 +9124,8 @@ function App() {
         : [{ type: ppeForm.itemType, description: ppeForm.itemDescription.trim(), quantity: Number(ppeForm.quantity || 1) }];
       const first = items[0];
       const payload: Omit<PpeIssueRecord, 'id' | 'issueNumber' | 'createdAt'> = {
+        // Phase 122 — Persist linked Employee id.
+        employeeId: ppeForm.employeeId || undefined,
         staffName: ppeForm.staffName.trim(),
         staffRole: ppeForm.staffRole.trim(),
         itemType: first.type,
@@ -13283,6 +13292,8 @@ function App() {
       {view === 'employees' && (
         <EmployeesPage
           employees={data.employees}
+          // Phase 122.2 — PPE records for the employee profile panel.
+          ppeIssueRecords={data.ppeIssueRecords}
           onSave={(employee: Employee) => {
             setData((current) => {
               if (employee.id) {
@@ -13988,6 +13999,41 @@ function App() {
           leaveRequests={data.leaveRequests ?? []}
           // Phase 121 — Help video URL for this page (Settings → Help videos).
           helpVideoUrl={data.appSettings.helpVideos?.myPortal}
+          // Phase 122.3 — PPE issued to me + "Request replacement" handler.
+          ppeIssueRecords={data.ppeIssueRecords}
+          onRequestPpeReplacement={(original) => {
+            // Create a Request-type row that references the original item.
+            // Admin sees this in the PPE register as a row to action.
+            const period = getToday().replace(/-/g, '').slice(0, 6);
+            const existing = data.ppeIssueRecords.map((r) => r.issueNumber);
+            const seq = existing.filter((c) => c.startsWith(`PPE-${period}-`)).length + 1;
+            const issueNumber = `PPE-${period}-${String(seq).padStart(3, '0')}`;
+            const requestRow: PpeIssueRecord = {
+              id: issueNumber,
+              issueNumber,
+              createdAt: new Date().toISOString(),
+              employeeId: original.employeeId,
+              staffName: original.staffName,
+              staffRole: original.staffRole,
+              itemType: original.itemType,
+              itemDescription: `Replacement requested for ${original.itemDescription || original.itemType}`,
+              quantity: original.quantity,
+              issuedByName: '',
+              issuedDate: getToday(),
+              status: 'Issued',
+              returnDate: '',
+              replacementDueDate: '',
+              notes: `Requested by ${profile?.fullName || profile?.email || 'staff'} on ${getToday()}. Original: ${original.issueNumber}.`,
+              items: original.items,
+              transactionType: 'Request',
+              requiredByDate: getToday(),
+            };
+            setData((current) => ({
+              ...current,
+              ppeIssueRecords: [requestRow, ...current.ppeIssueRecords],
+            }));
+            toast.success('Replacement requested — the office has been notified.');
+          }}
           onAcknowledgeTraining={handleAcknowledgeTraining}
           onAcknowledgeSop={handleAcknowledgeSop}
           onAcknowledgeWarning={handleAcknowledgeWarning}
@@ -14307,6 +14353,7 @@ function App() {
       {view === 'ppeControl' && (
         <PpeIssuePage
           records={data.ppeIssueRecords}
+          employees={data.employees}
           filters={ppeFilters}
           setFilters={setPpeFilters}
           form={ppeForm}

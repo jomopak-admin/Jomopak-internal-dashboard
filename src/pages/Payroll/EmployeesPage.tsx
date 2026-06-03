@@ -16,8 +16,10 @@ import {
   Employee,
   EmployeeAvailabilityStatus,
   PayCycle,
+  PpeIssueRecord,
 } from '../../types';
 import { EmployeeDocumentsPanel } from '../../components/EmployeeDocumentsPanel';
+import { EmployeePpePanel } from '../../components/EmployeePpePanel';
 import { PhotoUploader } from '../../components/PhotoUploader';
 import { formatNumber } from '../../utils/calculations';
 import { buildLetterhead } from '../../utils/printing';
@@ -38,6 +40,8 @@ interface EmployeesPageProps {
   onSaveDocument?: (doc: DocumentRecord) => void;
   onDeleteDocument?: (id: string) => void;
   onUploadDocumentFile?: (file: File, docId: string) => Promise<{ storagePath: string; signedUrl: string } | null>;
+  /** Phase 122.2 — PPE records, filtered to this employee in the panel. */
+  ppeIssueRecords?: PpeIssueRecord[];
 }
 
 function emptyEmployee(): Employee {
@@ -134,7 +138,7 @@ ${buildLetterhead(company, { rightTitle: 'UI-19', rightSubtitle: 'UIF declaratio
   setTimeout(() => w.print(), 250);
 }
 
-export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference, company, documents = [], uploaderName = '', onSaveDocument, onDeleteDocument, onUploadDocumentFile }: EmployeesPageProps) {
+export function EmployeesPage({ employees, onSave, onDelete, companyName, companyUifReference, company, documents = [], uploaderName = '', onSaveDocument, onDeleteDocument, onUploadDocumentFile, ppeIssueRecords = [] }: EmployeesPageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [draft, setDraft] = useState<Employee>(emptyEmployee());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -338,6 +342,19 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
               onDelete={onDeleteDocument}
               onUploadFile={onUploadDocumentFile}
             />
+          ) : null}
+          {/* Phase 122.2 — PPE issued to this employee. Only renders for
+              saved employees (a draft with no id has nothing to filter on). */}
+          {draft.id ? (
+            <section className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, letterSpacing: '0.02em' }}>PPE issued to this employee</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>
+                  Pulled from the PPE register. Overdue items show in orange.
+                </p>
+              </div>
+              <EmployeePpePanel employee={draft} records={ppeIssueRecords} />
+            </section>
           ) : null}
           <div className="accounting-actions">
             <button className="primary-button" onClick={save} disabled={!draft.firstName.trim() && !draft.lastName.trim()}>Save employee</button>

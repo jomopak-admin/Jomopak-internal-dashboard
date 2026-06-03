@@ -1951,6 +1951,8 @@ function mapPpeIssueRecord(row: any): any {
     id: row.id,
     issueNumber: row.issue_number,
     createdAt: row.created_at,
+    // Phase 122 — linked Employee record.
+    employeeId: row.employee_id ?? undefined,
     staffName: row.staff_name,
     staffRole: row.staff_role ?? '',
     itemType: row.item_type ?? 'Hairnet',
@@ -4549,6 +4551,8 @@ export async function syncAppData(data: AppData): Promise<void> {
     }))),
     safeUpsert('ppe_issue_records', data.ppeIssueRecords.map((r) => ({
       id: r.id, issue_number: r.issueNumber, created_at: r.createdAt,
+      // Phase 122 — linked Employee id.
+      employee_id: r.employeeId || null,
       staff_name: r.staffName, staff_role: r.staffRole,
       item_type: r.itemType, item_description: r.itemDescription,
       quantity: r.quantity, issued_by_name: r.issuedByName,

@@ -4415,6 +4415,13 @@ export interface PpeIssueRecord {
   id: string;
   issueNumber: string;
   createdAt: string;
+  /** Phase 122 — Linked Employee record. Required for new rows captured
+   *  via the picker; left empty on legacy free-text rows so they still
+   *  load. Drives the Employee-profile PPE panel and the staff portal
+   *  "PPE issued to you" surface. */
+  employeeId?: string;
+  /** Snapshot of the staff member's name at issue time. Stays useful for
+   *  printables and history even if the Employee record is later renamed. */
   staffName: string;
   staffRole: string;
   /** Legacy single-item fields — still populated for back-compat. New records
@@ -4443,6 +4450,8 @@ export interface PpeIssueRecord {
 }
 
 export interface PpeIssueFormState {
+  /** Phase 122 — Required Employee picker. */
+  employeeId: string;
   staffName: string;
   staffRole: string;
   itemType: PpeItemType;

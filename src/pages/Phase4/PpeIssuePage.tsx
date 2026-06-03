@@ -6,11 +6,13 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Combobox, ComboboxOption } from '../../components/Combobox';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import { SignaturePad } from '../../components/SignaturePad';
 import {
+  Employee,
   PPE_ITEM_TYPES,
   PPE_TRANSACTION_TYPES,
   PpeIssueFilters,
@@ -25,6 +27,9 @@ import { formatDate } from '../../utils/calculations';
 
 interface PpeIssuePageProps {
   records: PpeIssueRecord[];
+  /** Phase 122 — Employee list for the picker. PPE is now linked to a
+   *  real Employee record instead of free text. */
+  employees: Employee[];
   filters: PpeIssueFilters;
   setFilters: (v: PpeIssueFilters) => void;
   form: PpeIssueFormState;
@@ -36,7 +41,7 @@ interface PpeIssuePageProps {
   onEdit: (r: PpeIssueRecord) => void;
 }
 
-export function PpeIssuePage({ records, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit }: PpeIssuePageProps) {
+export function PpeIssuePage({ records, employees, filters, setFilters, form, setForm, editingId, message, onSave, onReset, onEdit }: PpeIssuePageProps) {
   const [mode, setMode] = useState<'list' | 'form'>('list');
 
   const filtered = useMemo(() => records.filter((r) => {
@@ -70,10 +75,36 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
     setForm({ ...form, items: form.items.map((i) => (i.type === t ? { ...i, ...patch } : i)) });
   }
 
+  // Phase 122 — Employee picker options. Only active employees so the
+  // list stays clean as people leave.
+  const employeeOptions: ComboboxOption[] = useMemo(
+    () => employees
+      .filter((e) => e.active !== false)
+      .map((e) => ({
+        value: e.id,
+        label: `${e.firstName} ${e.lastName}`.trim(),
+        sublabel: [e.jobTitle, e.department].filter(Boolean).join(' · ') || undefined,
+      })),
+    [employees],
+  );
+
+  /** Pick an Employee → snapshot their name + role onto the form so the
+   *  printable and history rows stay correct even if the employee is
+   *  later renamed or has their job title changed. */
+  function pickEmployee(employeeId: string) {
+    const emp = employees.find((e) => e.id === employeeId);
+    setForm({
+      ...form,
+      employeeId,
+      staffName: emp ? `${emp.firstName} ${emp.lastName}`.trim() : form.staffName,
+      staffRole: emp ? (emp.jobTitle || emp.department || '') : form.staffRole,
+    });
+  }
+
   const sections: FormWizardSection[] = [{
     key: 'issue', title: 'PPE issue',
     missingRequired: [
-      ...(form.staffName.trim() ? [] : ['Staff name']),
+      ...(form.employeeId ? [] : ['Employee']),
       ...(form.issuedDate ? [] : ['Issue date']),
       ...(form.items.length > 0 ? [] : ['At least one PPE item']),
     ],
@@ -101,8 +132,11 @@ export function PpeIssuePage({ records, filters, setFilters, form, setForm, edit
             >{t}</button>
           ))}
         </div>
-        <label><span>Staff name <RequiredMarker /></span><input value={form.staffName} onChange={(e) => setForm({ ...form, staffName: e.target.value })} /></label>
-        <label><span>Role</span><input value={form.staffRole} onChange={(e) => setForm({ ...form, staffRole: e.target.value })} /></label>
+        {/* Phase 122 — Employee picker. PPE must be issued to a real
+            Employee record; staff name + role auto-fill from the pick
+            so the printable carries a clean snapshot. */}
+        <label><span>Employee <RequiredMarker /></span><Combobox options={employeeOptions} value={form.employeeId} onChange={pickEmployee} placeholder="Search employees…" emptyMessage="No matching employees" /></label>
+        <label><span>Role</span><input value={form.staffRole} onChange={(e) => setForm({ ...form, staffRole: e.target.value })} placeholder="Auto-filled from employee" /></label>
 
         <div className="full-span">
           <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>

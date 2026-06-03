@@ -27,6 +27,7 @@ import {
   Notice,
   PayrollRun,
   Payslip,
+  PpeIssueRecord,
   SopDocument,
   StaffTrainingRecord,
   StaffWarning,
@@ -72,9 +73,19 @@ interface StaffPortalPageProps {
    * staff with limited reading can still learn the page by watching.
    */
   helpVideoUrl?: string;
+  /**
+   * Phase 122.3 — PPE issued to this staff member, filtered in the parent
+   * via linkedEmployeeId. Drives the "PPE issued to you" panel.
+   */
+  ppeIssueRecords?: PpeIssueRecord[];
+  /**
+   * Phase 122.3 — Submit a "request a replacement" PPE row from the
+   * staff portal. Creates a Request-type record the admin can action.
+   */
+  onRequestPpeReplacement?: (originalRecord: PpeIssueRecord) => void;
 }
 
-export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl }: StaffPortalPageProps) {
+export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl, ppeIssueRecords = [], onRequestPpeReplacement }: StaffPortalPageProps) {
   const fullName = profile.fullName || profile.email || '';
   const today = new Date().toISOString().slice(0, 10);
 
@@ -258,6 +269,18 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
   const [openLeave, setOpenLeave] = useState(false);
   const [openManager, setOpenManager] = useState(managerTodoCount > 0);
   const [openPay, setOpenPay] = useState(false);
+  // Phase 122.3 — PPE issued to this staff member. Filter on
+  // linkedEmployeeId. Open by default if there's overdue kit.
+  const myPpe = useMemo<PpeIssueRecord[]>(() => {
+    if (!linkedEmployee) return [];
+    return ppeIssueRecords
+      .filter((r) => r.employeeId === linkedEmployee.id)
+      .sort((a, b) => (b.issuedDate || '').localeCompare(a.issuedDate || ''));
+  }, [ppeIssueRecords, linkedEmployee]);
+  const todayYMD = new Date().toISOString().slice(0, 10);
+  const ppeOverdueCount = myPpe.filter((r) => r.status === 'Issued' && r.replacementDueDate && r.replacementDueDate < todayYMD).length;
+  const ppeInUseCount = myPpe.filter((r) => r.status === 'Issued').length;
+  const [openPpe, setOpenPpe] = useState(ppeOverdueCount > 0);
 
   // Shared styles — declared inline so this card doesn't depend on
   // any new global CSS.
@@ -908,6 +931,71 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                     <span className={`portal-pill ${run.status === 'Paid' ? 'ok' : 'due'}`}>{run.status}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────────── My PPE — Phase 122.3 ──────────
+            Read-only list of PPE issued to this staff member.
+            Overdue replacement → orange accent + auto-expand.
+            "Request replacement" button creates a PPE Request row
+            for admin to action. */}
+        {linkedEmployee && myPpe.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden', borderLeft: ppeOverdueCount > 0 ? `4px solid ${HERO_AMBER}` : '4px solid transparent' }}>
+            <button
+              type="button"
+              onClick={() => setOpenPpe((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>PPE issued to you</h3>
+              <span style={{ fontSize: 12, fontWeight: ppeOverdueCount > 0 ? 700 : 400, color: ppeOverdueCount > 0 ? HERO_AMBER : 'var(--jp-ink-3, #64748b)' }}>
+                {ppeOverdueCount > 0 ? `${ppeOverdueCount} due for replacement` : `${ppeInUseCount} item${ppeInUseCount === 1 ? '' : 's'}`}
+              </span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openPpe ? '−' : '+'}</span>
+            </button>
+            {openPpe && (
+              <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {myPpe.map((r) => {
+                  const overdue = r.status === 'Issued' && !!r.replacementDueDate && r.replacementDueDate < todayYMD;
+                  const inUse = r.status === 'Issued';
+                  const lineLabel = (r.items && r.items.length > 0)
+                    ? r.items.map((i) => `${i.quantity}× ${i.type}`).join(', ')
+                    : `${r.quantity}× ${r.itemType}`;
+                  return (
+                    <div
+                      key={r.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 12px',
+                        border: '1px solid var(--jp-divider, #e2e8f0)',
+                        borderLeft: `4px solid ${overdue ? '#db5a1f' : inUse ? '#22a865' : '#94a3b8'}`,
+                        borderRadius: 8,
+                        background: '#fff',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ fontSize: 14 }}>{lineLabel}</strong>
+                        <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>
+                          Issued {formatDate(r.issuedDate)}
+                          {r.replacementDueDate ? <> · Replace by <span style={{ color: overdue ? '#9a3412' : 'inherit', fontWeight: overdue ? 700 : 400 }}>{formatDate(r.replacementDueDate)}</span></> : null}
+                          {' · '}{r.status}
+                        </div>
+                      </div>
+                      {inUse && onRequestPpeReplacement ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => onRequestPpeReplacement(r)}
+                          title="Tell the office you need a new one"
+                          style={{ flexShrink: 0 }}
+                        >Request replacement</button>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
