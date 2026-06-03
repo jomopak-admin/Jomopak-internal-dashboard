@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { FormWizard, FormWizardSection, RequiredMarker } from '../../components/FormWizard';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
+  CONSUMABLE_CATEGORIES,
+  CONSUMABLE_UNITS,
+  ConsumableCategory,
+  ConsumableRate,
+  ConsumableRateFilters,
+  ConsumableRateFormState,
+  ConsumableUnit,
   CostProfile,
   CostProfileFilters,
   CostProfileFormState,
@@ -20,6 +27,7 @@ import { formatNumber } from '../../utils/calculations';
 interface CostInputsPageProps {
   suppliers: Supplier[];
   paperRates: PaperRate[];
+  consumableRates: ConsumableRate[];
   costProfiles: CostProfile[];
   paperRateForm: PaperRateFormState;
   setPaperRateForm: (value: PaperRateFormState) => void;
@@ -31,6 +39,17 @@ interface CostInputsPageProps {
   setPaperRateFilters: (value: PaperRateFilters) => void;
   filteredPaperRates: PaperRate[];
   onEditPaperRate: (rate: PaperRate) => void;
+  // Phase 127.1 — Consumable rate plumbing.
+  consumableRateForm: ConsumableRateFormState;
+  setConsumableRateForm: (value: ConsumableRateFormState) => void;
+  consumableRateEditingId: string | null;
+  consumableRateMessage: string;
+  onSaveConsumableRate: () => void;
+  onResetConsumableRate: () => void;
+  consumableRateFilters: ConsumableRateFilters;
+  setConsumableRateFilters: (value: ConsumableRateFilters) => void;
+  filteredConsumableRates: ConsumableRate[];
+  onEditConsumableRate: (rate: ConsumableRate) => void;
   costProfileForm: CostProfileFormState;
   setCostProfileForm: (value: CostProfileFormState) => void;
   costProfileEditingId: string | null;
@@ -43,13 +62,38 @@ interface CostInputsPageProps {
   onEditCostProfile: (profile: CostProfile) => void;
 }
 
-type CostInputsTab = 'paperRates' | 'costProfiles';
-type PaperRatesMode = 'list' | 'form';
+type CostInputsTab = 'materials' | 'costProfiles';
+type MaterialsMode = 'list' | 'pickCategory' | 'paperForm' | 'consumableForm';
 type CostProfilesMode = 'list' | 'form';
+
+// Phase 127.2 — A "material category" the user picks first when adding.
+// "Paper" routes to the paper form; everything else routes to consumable.
+type MaterialCategory = 'Paper' | ConsumableCategory;
+const MATERIAL_CATEGORIES: MaterialCategory[] = ['Paper', ...CONSUMABLE_CATEGORIES];
+
+/** Row in the unified Materials list. Wraps either a PaperRate or a
+ *  ConsumableRate, with a common shape the table can render. */
+interface UnifiedMaterialRow {
+  id: string;
+  category: MaterialCategory;
+  publicLabel: string;
+  unit: string;
+  supplierName: string;
+  region: string;
+  cost: number;
+  charge: number;
+  active: boolean;
+  /** Source so the Edit button knows which form to open. */
+  source: 'paper' | 'consumable';
+  /** The underlying record for dispatching Edit. */
+  paperRate?: PaperRate;
+  consumableRate?: ConsumableRate;
+}
 
 export function CostInputsPage({
   suppliers,
   paperRates,
+  consumableRates: _consumableRatesRaw,
   costProfiles,
   paperRateForm,
   setPaperRateForm,
@@ -61,6 +105,16 @@ export function CostInputsPage({
   setPaperRateFilters,
   filteredPaperRates,
   onEditPaperRate,
+  consumableRateForm,
+  setConsumableRateForm,
+  consumableRateEditingId,
+  consumableRateMessage,
+  onSaveConsumableRate,
+  onResetConsumableRate,
+  consumableRateFilters,
+  setConsumableRateFilters,
+  filteredConsumableRates,
+  onEditConsumableRate,
   costProfileForm,
   setCostProfileForm,
   costProfileEditingId,
@@ -72,9 +126,70 @@ export function CostInputsPage({
   filteredCostProfiles,
   onEditCostProfile,
 }: CostInputsPageProps) {
-  const [tab, setTab] = useState<CostInputsTab>('paperRates');
-  const [paperRatesMode, setPaperRatesMode] = useState<PaperRatesMode>('list');
+  const [tab, setTab] = useState<CostInputsTab>('materials');
+  // Phase 127.2 — Single mode for the unified Materials tab.
+  const [materialsMode, setMaterialsMode] = useState<MaterialsMode>('list');
   const [costProfilesMode, setCostProfilesMode] = useState<CostProfilesMode>('list');
+  // Local filter state for the unified Materials list. Category drives
+  // both display filter AND which paper/consumable list to read.
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState<'All' | MaterialCategory>('All');
+  const [materialSearch, setMaterialSearch] = useState('');
+  const [materialActiveFilter, setMaterialActiveFilter] = useState<'all' | 'yes' | 'no'>('yes');
+
+  // Phase 127.2 — Merge paper + consumables into a single list view.
+  // We don't touch the underlying tables; just present them together.
+  const unifiedMaterials = useMemo<UnifiedMaterialRow[]>(() => {
+    void _consumableRatesRaw; // unused — combined from filtered* below
+    const fromPaper: UnifiedMaterialRow[] = filteredPaperRates.map((r) => ({
+      id: `p-${r.id}`,
+      category: 'Paper' as MaterialCategory,
+      publicLabel: r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name,
+      unit: 'ton',
+      supplierName: r.supplierName,
+      region: r.region || '',
+      cost: r.pricePerTon,
+      charge: r.chargePerTon ?? r.pricePerTon,
+      active: r.active,
+      source: 'paper',
+      paperRate: r,
+    }));
+    const fromConsumable: UnifiedMaterialRow[] = filteredConsumableRates.map((r) => ({
+      id: `c-${r.id}`,
+      category: r.category as MaterialCategory,
+      publicLabel: r.publicLabel || r.name,
+      unit: r.unit,
+      supplierName: r.supplierName,
+      region: r.region || '',
+      cost: r.costPerUnit,
+      charge: r.chargePerUnit ?? r.costPerUnit,
+      active: r.active,
+      source: 'consumable',
+      consumableRate: r,
+    }));
+    let combined = [...fromPaper, ...fromConsumable];
+    // Local filters that apply on top of the parent-level ones.
+    if (materialCategoryFilter !== 'All') {
+      combined = combined.filter((m) => m.category === materialCategoryFilter);
+    }
+    if (materialActiveFilter !== 'all') {
+      const wantActive = materialActiveFilter === 'yes';
+      combined = combined.filter((m) => m.active === wantActive);
+    }
+    if (materialSearch.trim()) {
+      const q = materialSearch.toLowerCase();
+      combined = combined.filter((m) =>
+        m.publicLabel.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        m.supplierName.toLowerCase().includes(q));
+    }
+    // Sort: Paper first (by gsm desc), then by category, then by label.
+    return combined.sort((a, b) => {
+      if (a.category === 'Paper' && b.category !== 'Paper') return -1;
+      if (a.category !== 'Paper' && b.category === 'Paper') return 1;
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.publicLabel.localeCompare(b.publicLabel);
+    });
+  }, [filteredPaperRates, filteredConsumableRates, materialCategoryFilter, materialActiveFilter, materialSearch]);
 
   const paperRateSections: FormWizardSection[] = [
     {
@@ -226,6 +341,135 @@ export function CostInputsPage({
     },
   ];
 
+  // Phase 127.1 — Consumable rate form. Same 4-section pattern as paper:
+  // PUBLIC label + category + unit / Supplier PRIVATE / Pricing PRIVATE / Notes.
+  const consumableRateSections: FormWizardSection[] = [
+    {
+      key: 'identity',
+      title: 'What staff see (PUBLIC)',
+      subtitle: 'This is the ONLY label non-admin staff see in the calculator. Use a generic descriptor — never the supplier brand.',
+      missingRequired: [
+        ...(consumableRateForm.publicLabel.trim() ? [] : ['Public label']),
+        ...(consumableRateForm.category ? [] : ['Category']),
+        ...(consumableRateForm.unit ? [] : ['Unit']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Public label <RequiredMarker /></span>
+            <input
+              placeholder='e.g. "Hot Melt Glue", "Brown PVC Tape 48mm"'
+              value={consumableRateForm.publicLabel}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, publicLabel: event.target.value })}
+            />
+          </label>
+          <label>
+            <span>Category <RequiredMarker /></span>
+            <select
+              value={consumableRateForm.category}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, category: event.target.value as ConsumableCategory | '' })}
+            >
+              <option value="">— pick category —</option>
+              {CONSUMABLE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Unit <RequiredMarker /></span>
+            <select
+              value={consumableRateForm.unit}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, unit: event.target.value as ConsumableUnit | '' })}
+            >
+              <option value="">— pick unit —</option>
+              {CONSUMABLE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={consumableRateForm.active}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, active: event.target.checked })}
+            />Active
+          </label>
+        </div>
+      ),
+    },
+    {
+      key: 'supplier-private',
+      title: 'Supplier (PRIVATE — admin only)',
+      subtitle: 'Supplier identity is hidden from staff. They only ever see the public label above.',
+      body: (
+        <div className="form-grid">
+          <label><span>Internal nickname</span><input placeholder="For your reference only" value={consumableRateForm.name} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, name: event.target.value })} /></label>
+          <label>
+            <span>Supplier</span>
+            <select
+              value={consumableRateForm.supplierId}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, supplierId: event.target.value })}
+            >
+              <option value="">Select supplier</option>
+              {suppliers.filter((s) => s.active).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+          <label><span>Supplier product code</span><input value={consumableRateForm.productCode} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, productCode: event.target.value })} /></label>
+          <label>
+            <span>Dispatch region</span>
+            <select
+              value={consumableRateForm.region}
+              onChange={(event) => setConsumableRateForm({ ...consumableRateForm, region: event.target.value as PaperRegion | '' })}
+            >
+              <option value="">— pick region —</option>
+              {PAPER_REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r === 'DBN' ? 'Durban (DBN)' : r === 'JHB' ? 'Joburg (JHB)' : r === 'CT' ? 'Cape Town (CT)' : r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label><span>Contract valid from</span><input type="date" value={consumableRateForm.validFrom} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, validFrom: event.target.value })} /></label>
+          <label><span>Contract valid to</span><input type="date" value={consumableRateForm.validTo} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, validTo: event.target.value })} /></label>
+        </div>
+      ),
+    },
+    {
+      key: 'pricing-private',
+      title: 'Pricing (PRIVATE — admin only)',
+      subtitle: 'Cost is what you pay the supplier. Charge is what the calculator uses. The gap is your margin on this consumable.',
+      missingRequired: [
+        ...(consumableRateForm.costPerUnit && Number(consumableRateForm.costPerUnit) > 0 ? [] : ['Cost per unit']),
+        ...(consumableRateForm.chargePerUnit && Number(consumableRateForm.chargePerUnit) > 0 ? [] : ['Charge per unit']),
+      ],
+      body: (
+        <div className="form-grid">
+          <label>
+            <span>Cost per {consumableRateForm.unit || 'unit'} (R) <RequiredMarker /></span>
+            <input type="number" min="0" step="0.0001" placeholder="what you pay supplier" value={consumableRateForm.costPerUnit} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, costPerUnit: event.target.value })} />
+          </label>
+          <label>
+            <span>Charge per {consumableRateForm.unit || 'unit'} (R) <RequiredMarker /></span>
+            <input type="number" min="0" step="0.0001" placeholder="what calculator charges" value={consumableRateForm.chargePerUnit} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, chargePerUnit: event.target.value })} />
+          </label>
+          {consumableRateForm.costPerUnit && consumableRateForm.chargePerUnit && Number(consumableRateForm.chargePerUnit) > 0 && Number(consumableRateForm.costPerUnit) > 0 ? (
+            <div style={{ gridColumn: '1 / -1', padding: '8px 12px', borderRadius: 6, background: 'rgba(34,168,101,0.08)', border: '1px solid #22a865', fontSize: 13 }}>
+              <strong>Margin:</strong>{' '}R{(Number(consumableRateForm.chargePerUnit) - Number(consumableRateForm.costPerUnit)).toLocaleString(undefined, { maximumFractionDigits: 4 })} per {consumableRateForm.unit || 'unit'}
+              {' '}({((Number(consumableRateForm.chargePerUnit) / Number(consumableRateForm.costPerUnit) - 1) * 100).toFixed(1)}% markup)
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'notes',
+      title: 'Notes',
+      body: (
+        <div className="form-grid">
+          <label className="full-span"><span>Notes</span><textarea value={consumableRateForm.notes} onChange={(event) => setConsumableRateForm({ ...consumableRateForm, notes: event.target.value })} /></label>
+        </div>
+      ),
+    },
+  ];
+
   const costProfileSections: FormWizardSection[] = [
     {
       key: 'core',
@@ -309,8 +553,8 @@ export function CostInputsPage({
   return (
     <>
       <div className="calculator-tabs">
-        <button className={tab === 'paperRates' ? 'tab-button active' : 'tab-button'} onClick={() => setTab('paperRates')}>
-          Paper Rates
+        <button className={tab === 'materials' ? 'tab-button active' : 'tab-button'} onClick={() => setTab('materials')}>
+          Materials
         </button>
         <button className={tab === 'costProfiles' ? 'tab-button active' : 'tab-button'} onClick={() => setTab('costProfiles')}>
           Cost Profiles
@@ -318,93 +562,212 @@ export function CostInputsPage({
       </div>
 
       <div className="calculator-shell">
-        {tab === 'paperRates' ? (
+        {/* ───────────── Phase 127.2 — UNIFIED MATERIALS TAB ─────────────
+            Replaces the old Paper Rates + Consumables split. One list,
+            one filter row, one Add flow. Internally still PaperRate +
+            ConsumableRate (so the calculator engine is untouched);
+            just merged for display + dispatched on Edit / Add. */}
+        {tab === 'materials' ? (
           <>
-            {paperRatesMode === 'form' ? (
+            {/* Form modes — paper form or consumable form. */}
+            {materialsMode === 'paperForm' ? (
               <FormWizard
-                title={paperRateEditingId ? 'Edit Paper Rate' : 'New Paper Rate'}
-                subtitle="Set the live ton pricing and paper specification the quote calculator will use."
+                title={paperRateEditingId ? 'Edit Paper' : 'New Paper'}
+                subtitle="Paper-specific fields (GSM, suitable-for, region). Staff only see the public label."
                 message={paperRateMessage || undefined}
                 sections={paperRateSections}
-                onSave={onSavePaperRate}
-                onCancel={() => {
-                  onResetPaperRate();
-                  setPaperRatesMode('list');
-                }}
+                onSave={() => { onSavePaperRate(); setMaterialsMode('list'); }}
+                onCancel={() => { onResetPaperRate(); setMaterialsMode('list'); }}
                 isEditing={!!paperRateEditingId}
-                saveLabel="Save Paper Rate"
+                saveLabel="Save Paper"
               />
-            ) : (
+            ) : materialsMode === 'consumableForm' ? (
+              <FormWizard
+                title={consumableRateEditingId ? 'Edit Material' : 'New Material'}
+                subtitle="Cost master for any non-paper input. Staff only see the public label."
+                message={consumableRateMessage || undefined}
+                sections={consumableRateSections}
+                onSave={() => { onSaveConsumableRate(); setMaterialsMode('list'); }}
+                onCancel={() => { onResetConsumableRate(); setMaterialsMode('list'); }}
+                isEditing={!!consumableRateEditingId}
+                saveLabel="Save Material"
+              />
+            ) : materialsMode === 'pickCategory' ? (
+              /* Category picker — first step of Add Material. */
               <section className="card">
                 <SectionTitle
-                  title="Paper Rates"
-                  subtitle={`${filteredPaperRates.length} rate(s) shown`}
-                  action={
+                  title="What kind of material?"
+                  subtitle="Pick one. The form adapts to what's relevant."
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>
+                  {MATERIAL_CATEGORIES.map((cat) => (
                     <button
-                      className="secondary-button"
+                      key={cat}
+                      type="button"
                       onClick={() => {
-                        onResetPaperRate();
-                        setPaperRatesMode('form');
+                        if (cat === 'Paper') {
+                          onResetPaperRate();
+                          setMaterialsMode('paperForm');
+                        } else {
+                          onResetConsumableRate();
+                          setConsumableRateForm({
+                            ...consumableRateForm,
+                            name: '',
+                            supplierId: '',
+                            productCode: '',
+                            category: cat as ConsumableCategory,
+                            unit: '',
+                            publicLabel: '',
+                            costPerUnit: '',
+                            chargePerUnit: '',
+                            region: '',
+                            validFrom: '',
+                            validTo: '',
+                            notes: '',
+                            active: true,
+                          });
+                          setMaterialsMode('consumableForm');
+                        }
+                      }}
+                      style={{
+                        border: '1px solid var(--jp-divider, #e5e7eb)',
+                        borderRadius: 10,
+                        padding: '18px 16px',
+                        background: 'var(--jp-paper, #fff)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
                       }}
                     >
-                      Add New Paper Rate
+                      <strong style={{ fontSize: 16 }}>{cat}</strong>
+                      <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>
+                        {cat === 'Paper' ? 'Per-ton, GSM, suitable-for tags' :
+                         cat === 'Glue' ? 'Per kg / L / drum' :
+                         cat === 'Tape' ? 'Per roll / case' :
+                         cat === 'Ink' ? 'Per kg / L' :
+                         cat === 'Stitching Wire' ? 'Per kg / case' :
+                         cat === 'Solvent' ? 'Per L / drum' :
+                         'Pick a unit and price'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <button className="ghost-button" onClick={() => setMaterialsMode('list')}>← Cancel</button>
+                </div>
+              </section>
+            ) : (
+              /* Default list view — combined paper + consumables. */
+              <section className="card">
+                <SectionTitle
+                  title="Materials"
+                  subtitle={`${unifiedMaterials.length} material${unifiedMaterials.length === 1 ? '' : 's'} shown`}
+                  action={
+                    <button className="secondary-button" onClick={() => setMaterialsMode('pickCategory')}>
+                      + Add Material
                     </button>
                   }
                 />
                 <div className="filters-grid">
-                  <label><span>Search</span><input value={paperRateFilters.search} onChange={(event) => setPaperRateFilters({ ...paperRateFilters, search: event.target.value })} /></label>
-                  <label><span>Active</span><select value={paperRateFilters.active} onChange={(event) => setPaperRateFilters({ ...paperRateFilters, active: event.target.value })}><option value="all">All</option><option value="yes">Active</option><option value="no">Inactive</option></select></label>
+                  <label>
+                    <span>Category</span>
+                    <select
+                      value={materialCategoryFilter}
+                      onChange={(e) => setMaterialCategoryFilter(e.target.value as 'All' | MaterialCategory)}
+                    >
+                      <option value="All">All</option>
+                      {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Search</span>
+                    <input
+                      placeholder="label, supplier, category..."
+                      value={materialSearch}
+                      onChange={(e) => setMaterialSearch(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Active</span>
+                    <select
+                      value={materialActiveFilter}
+                      onChange={(e) => setMaterialActiveFilter(e.target.value as 'all' | 'yes' | 'no')}
+                    >
+                      <option value="all">All</option>
+                      <option value="yes">Active</option>
+                      <option value="no">Inactive</option>
+                    </select>
+                  </label>
                 </div>
-                {filteredPaperRates.length ? (
+                {unifiedMaterials.length ? (
                   <div className="table-wrap">
                     <table>
                       <thead>
                         <tr>
+                          <th>Category</th>
                           <th>Public label</th>
-                          <th>Suitable for</th>
-                          <th>Form</th>
-                          <th>GSM</th>
+                          <th>Unit</th>
                           <th title="Private — admin only">Supplier</th>
                           <th title="Private — admin only">Region</th>
-                          <th title="Private — admin only">Cost/Ton</th>
-                          <th title="Private — admin only">Charge/Ton</th>
-                          <th title="Private — admin only">Margin/Ton</th>
+                          <th title="Private — admin only">Cost</th>
+                          <th title="Private — admin only">Charge</th>
+                          <th title="Private — admin only">Margin</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredPaperRates.map((rate) => {
-                          const charge = rate.chargePerTon ?? rate.pricePerTon;
-                          const margin = charge - rate.pricePerTon;
-                          const marginPct = rate.pricePerTon > 0 ? (margin / rate.pricePerTon) * 100 : 0;
+                        {unifiedMaterials.map((m) => {
+                          const margin = m.charge - m.cost;
+                          const marginPct = m.cost > 0 ? (margin / m.cost) * 100 : 0;
+                          const isPaper = m.source === 'paper';
                           return (
-                            <tr key={rate.id}>
+                            <tr key={m.id}>
                               <td>
-                                <strong>{rate.publicLabel || `${rate.gsm}gsm ${rate.paperType}` || rate.name}</strong>
-                                {rate.requiresSlitting ? <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fde68a', color: '#78350f', fontWeight: 700, letterSpacing: '0.05em' }}>SLIT</span> : null}
+                                <span style={{
+                                  fontSize: 10,
+                                  padding: '2px 8px',
+                                  borderRadius: 999,
+                                  background: isPaper ? '#dbeafe' : '#fef3c7',
+                                  color: isPaper ? '#1e40af' : '#92400e',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.05em',
+                                }}>{m.category.toUpperCase()}</span>
                               </td>
                               <td>
-                                {(rate.useCases && rate.useCases.length > 0)
-                                  ? rate.useCases.join(' · ')
-                                  : (rate.useCase || '—')}
+                                <strong>{m.publicLabel}</strong>
+                                {m.paperRate?.requiresSlitting ? <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fde68a', color: '#78350f', fontWeight: 700, letterSpacing: '0.05em' }}>SLIT</span> : null}
                               </td>
-                              <td>{rate.form || '—'}</td>
-                              <td>{rate.gsm}</td>
-                              <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{rate.supplierName || '—'}</td>
-                              <td style={{ fontSize: 12 }}>{rate.region || '—'}</td>
-                              <td>R{formatNumber(rate.pricePerTon, 0)}</td>
-                              <td><strong>R{formatNumber(charge, 0)}</strong></td>
+                              <td>{m.unit || '—'}</td>
+                              <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{m.supplierName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{m.region || '—'}</td>
+                              <td>R{formatNumber(m.cost, isPaper ? 0 : 2)}</td>
+                              <td><strong>R{formatNumber(m.charge, isPaper ? 0 : 2)}</strong></td>
                               <td style={{ color: margin > 0 ? '#22a865' : margin < 0 ? '#dc2626' : 'inherit', fontWeight: 600 }}>
-                                {margin === 0 ? '—' : `R${formatNumber(margin, 0)} (${marginPct.toFixed(1)}%)`}
+                                {margin === 0 ? '—' : `R${formatNumber(margin, isPaper ? 0 : 2)} (${marginPct.toFixed(1)}%)`}
                               </td>
-                              <td><button className="table-button" onClick={() => { onEditPaperRate(rate); setPaperRatesMode('form'); }}>Edit</button></td>
+                              <td>
+                                <button
+                                  className="table-button"
+                                  onClick={() => {
+                                    if (m.source === 'paper' && m.paperRate) {
+                                      onEditPaperRate(m.paperRate);
+                                      setMaterialsMode('paperForm');
+                                    } else if (m.source === 'consumable' && m.consumableRate) {
+                                      onEditConsumableRate(m.consumableRate);
+                                      setMaterialsMode('consumableForm');
+                                    }
+                                  }}
+                                >Edit</button>
+                              </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
                   </div>
-                ) : <EmptyState title="No paper rates yet" body="Add live paper prices here so the calculator pulls the right ton rate." />}
+                ) : <EmptyState title="No materials yet" body="Add paper, glue, tape, ink, or any other input here. Tap + Add Material above." />}
               </section>
             )}
           </>

@@ -295,6 +295,11 @@ import {
   PaperFilters,
   PaperFormState,
   PaperLog,
+  ConsumableCategory,
+  ConsumableRate,
+  ConsumableRateFilters,
+  ConsumableRateFormState,
+  ConsumableUnit,
   PaperRate,
   PaperRateFilters,
   PaperRateFormState,
@@ -568,6 +573,23 @@ const createInitialPaperRateForm = (): PaperRateFormState => ({
   gsm: '',
   pricePerTon: '',
   chargePerTon: '',
+  validFrom: '',
+  validTo: '',
+  notes: '',
+  active: true,
+});
+
+// Phase 127.1 — Consumables (glue/tape/ink/etc.) parallel to PaperRate.
+const createInitialConsumableRateForm = (): ConsumableRateFormState => ({
+  name: '',
+  supplierId: '',
+  productCode: '',
+  category: '',
+  unit: '',
+  publicLabel: '',
+  costPerUnit: '',
+  chargePerUnit: '',
+  region: '',
   validFrom: '',
   validTo: '',
   notes: '',
@@ -1674,6 +1696,11 @@ function App() {
   const [paperRateEditingId, setPaperRateEditingId] = useState<string | null>(null);
   const [paperRateMessage, setPaperRateMessage] = useState('');
   const [paperRateFilters, setPaperRateFilters] = useState<PaperRateFilters>({ search: '', active: 'all' });
+  // Phase 127.1 — Consumable rates (glue/tape/ink/etc.).
+  const [consumableRateForm, setConsumableRateForm] = useState(createInitialConsumableRateForm);
+  const [consumableRateEditingId, setConsumableRateEditingId] = useState<string | null>(null);
+  const [consumableRateMessage, setConsumableRateMessage] = useState('');
+  const [consumableRateFilters, setConsumableRateFilters] = useState<ConsumableRateFilters>({ search: '', active: 'all', category: 'all' });
 
   const [costProfileForm, setCostProfileForm] = useState(createInitialCostProfileForm);
   const [costProfileEditingId, setCostProfileEditingId] = useState<string | null>(null);
@@ -2665,6 +2692,14 @@ function App() {
     return matchesSearch && matchesActive;
   }), [data.paperRates, paperRateFilters]);
 
+  // Phase 127.1 — Consumable rates.
+  const filteredConsumableRates = useMemo(() => (data.consumableRates ?? []).filter((rate) => {
+    const matchesSearch = !consumableRateFilters.search || [rate.name, rate.supplierName, rate.publicLabel ?? '', rate.category, rate.productCode ?? ''].some((value) => matchesText(value, consumableRateFilters.search));
+    const matchesActive = consumableRateFilters.active === 'all' || (consumableRateFilters.active === 'yes' ? rate.active : !rate.active);
+    const matchesCategory = consumableRateFilters.category === 'all' || rate.category === consumableRateFilters.category;
+    return matchesSearch && matchesActive && matchesCategory;
+  }), [data.consumableRates, consumableRateFilters]);
+
   const filteredCostProfiles = useMemo(() => data.costProfiles.filter((profile) => {
     const matchesSearch = !costProfileFilters.search || matchesText(profile.name, costProfileFilters.search);
     const matchesActive = costProfileFilters.active === 'all' || (costProfileFilters.active === 'yes' ? profile.active : !profile.active);
@@ -3427,6 +3462,8 @@ function App() {
     toast.success('Settings saved');
   }
   function resetPaperRateEditor() { setPaperRateForm(createInitialPaperRateForm()); setPaperRateEditingId(null); setPaperRateMessage(''); }
+  // Phase 127.1 — Consumable editor reset.
+  function resetConsumableRateEditor() { setConsumableRateForm(createInitialConsumableRateForm()); setConsumableRateEditingId(null); setConsumableRateMessage(''); }
   function resetCostProfileEditor() { setCostProfileForm(createInitialCostProfileForm()); setCostProfileEditingId(null); setCostProfileMessage(''); }
   function resetStockEditor() { setStockForm(createInitialFinishedStockForm()); setStockEditingId(null); setStockMessage(''); }
   // Phase 93 — Traded Goods reset helpers.
@@ -7039,6 +7076,69 @@ function App() {
       setData((current) => ({ ...current, paperRates: [{ id: `paper-${Date.now()}`, ...payload }, ...current.paperRates] }));
     }
     resetPaperRateEditor();
+  }
+
+  // Phase 127.1 — Consumable rate save + edit. Same admin-only confidentiality
+  // pattern as PaperRate. publicLabel + costPerUnit + chargePerUnit required.
+  function handleSaveConsumableRate() {
+    if (!consumableRateForm.publicLabel.trim() || !consumableRateForm.costPerUnit || !consumableRateForm.chargePerUnit) {
+      setConsumableRateMessage('Public label, cost per unit, and charge per unit are required.');
+      return;
+    }
+    if (!consumableRateForm.category || !consumableRateForm.unit) {
+      setConsumableRateMessage('Category and unit are required.');
+      return;
+    }
+    const linkedSupplier = consumableRateForm.supplierId ? suppliersById.get(consumableRateForm.supplierId) : undefined;
+    const payload = {
+      name: consumableRateForm.name || consumableRateForm.publicLabel,
+      supplierId: linkedSupplier?.id ?? '',
+      supplierName: linkedSupplier?.name ?? '',
+      productCode: consumableRateForm.productCode || undefined,
+      category: consumableRateForm.category as ConsumableCategory,
+      unit: consumableRateForm.unit as ConsumableUnit,
+      publicLabel: consumableRateForm.publicLabel,
+      costPerUnit: Number(consumableRateForm.costPerUnit),
+      chargePerUnit: Number(consumableRateForm.chargePerUnit),
+      region: consumableRateForm.region || undefined,
+      validFrom: consumableRateForm.validFrom || undefined,
+      validTo: consumableRateForm.validTo || undefined,
+      notes: consumableRateForm.notes,
+      active: consumableRateForm.active,
+    };
+    if (consumableRateEditingId) {
+      setData((current) => ({
+        ...current,
+        consumableRates: (current.consumableRates ?? []).map((rate) =>
+          rate.id === consumableRateEditingId ? { ...rate, ...payload } : rate),
+      }));
+    } else {
+      setData((current) => ({
+        ...current,
+        consumableRates: [{ id: `cons-${Date.now()}`, ...payload }, ...(current.consumableRates ?? [])],
+      }));
+    }
+    resetConsumableRateEditor();
+  }
+
+  function editConsumableRate(rate: ConsumableRate) {
+    setConsumableRateEditingId(rate.id);
+    setConsumableRateForm({
+      name: rate.name,
+      supplierId: rate.supplierId,
+      productCode: rate.productCode || '',
+      category: rate.category,
+      unit: rate.unit,
+      publicLabel: rate.publicLabel || '',
+      costPerUnit: String(rate.costPerUnit),
+      chargePerUnit: String(rate.chargePerUnit ?? rate.costPerUnit),
+      region: rate.region || '',
+      validFrom: rate.validFrom || '',
+      validTo: rate.validTo || '',
+      notes: rate.notes,
+      active: rate.active,
+    });
+    setView('costInputs');
   }
 
   function handleSaveCostProfile() {
@@ -12203,6 +12303,7 @@ function App() {
         <CostInputsPage
           suppliers={data.suppliers}
           paperRates={data.paperRates}
+          consumableRates={data.consumableRates ?? []}
           costProfiles={data.costProfiles}
           paperRateForm={paperRateForm}
           setPaperRateForm={setPaperRateForm}
@@ -12214,6 +12315,16 @@ function App() {
           setPaperRateFilters={setPaperRateFilters}
           filteredPaperRates={filteredPaperRates}
           onEditPaperRate={editPaperRate}
+          consumableRateForm={consumableRateForm}
+          setConsumableRateForm={setConsumableRateForm}
+          consumableRateEditingId={consumableRateEditingId}
+          consumableRateMessage={consumableRateMessage}
+          onSaveConsumableRate={handleSaveConsumableRate}
+          onResetConsumableRate={resetConsumableRateEditor}
+          consumableRateFilters={consumableRateFilters}
+          setConsumableRateFilters={setConsumableRateFilters}
+          filteredConsumableRates={filteredConsumableRates}
+          onEditConsumableRate={editConsumableRate}
           costProfileForm={costProfileForm}
           setCostProfileForm={setCostProfileForm}
           costProfileEditingId={costProfileEditingId}

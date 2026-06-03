@@ -1873,6 +1873,98 @@ export type PaperRegion = 'DBN' | 'JHB' | 'CT' | 'Other';
 
 export const PAPER_REGIONS: PaperRegion[] = ['DBN', 'JHB', 'CT', 'Other'];
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 127.1 — Consumable Rate (Glue, Tape, Ink, Stitching wire, etc.)
+ * ----------------------------------------------------------------------
+ * Parallel structure to PaperRate. Holds the cost/charge/supplier-private
+ * pricing for anything that goes INTO a bag that isn't paper. Same admin
+ * confidentiality rules: staff see only `publicLabel`, never supplier or
+ * the per-unit cost. The existing per-bag rates in CostProfile keep
+ * working for cheap consumables you don't want to itemise.
+ * ───────────────────────────────────────────────────────────────────────*/
+
+export type ConsumableCategory =
+  | 'Glue'
+  | 'Tape'
+  | 'Stitching Wire'
+  | 'Ink'
+  | 'Solvent'
+  | 'Other';
+
+export const CONSUMABLE_CATEGORIES: ConsumableCategory[] = [
+  'Glue',
+  'Tape',
+  'Stitching Wire',
+  'Ink',
+  'Solvent',
+  'Other',
+];
+
+/** Unit the consumable is bought / consumed in. */
+export type ConsumableUnit =
+  | 'kg'
+  | 'L'
+  | 'roll'
+  | 'case'
+  | 'bag'
+  | 'drum'
+  | 'pail'
+  | 'unit';
+
+export const CONSUMABLE_UNITS: ConsumableUnit[] = [
+  'kg', 'L', 'roll', 'case', 'bag', 'drum', 'pail', 'unit',
+];
+
+export interface ConsumableRate {
+  id: string;
+  /** Private internal nickname. */
+  name: string;
+  /** PRIVATE. */
+  supplierId: string;
+  supplierName: string;
+  /** PRIVATE. Supplier product code. */
+  productCode?: string;
+  /** What category of consumable. Drives admin grouping. */
+  category: ConsumableCategory;
+  /** Unit the cost/charge is quoted in. */
+  unit: ConsumableUnit;
+  /** PUBLIC label — the only identifier non-admin staff see. */
+  publicLabel?: string;
+  /** PRIVATE. Cost we pay per unit. */
+  costPerUnit: number;
+  /** PRIVATE. Charge per unit used by the calculator. Falls back to
+   *  costPerUnit if not set. */
+  chargePerUnit?: number;
+  /** PRIVATE. Dispatch region (where multi-region pricing applies). */
+  region?: PaperRegion;
+  validFrom?: string;
+  validTo?: string;
+  notes: string;
+  active: boolean;
+}
+
+export interface ConsumableRateFormState {
+  name: string;
+  supplierId: string;
+  productCode: string;
+  category: ConsumableCategory | '';
+  unit: ConsumableUnit | '';
+  publicLabel: string;
+  costPerUnit: string;
+  chargePerUnit: string;
+  region: PaperRegion | '';
+  validFrom: string;
+  validTo: string;
+  notes: string;
+  active: boolean;
+}
+
+export interface ConsumableRateFilters {
+  search: string;
+  active: string;
+  category: string;
+}
+
 export interface PaperRate {
   id: string;
   name: string;
@@ -7840,6 +7932,9 @@ export interface AppData {
   invoices: Invoice[];
   productionSpecs: ProductionSpec[];
   paperRates: PaperRate[];
+  /** Phase 127.1 — Consumable rates (glue/tape/ink/etc.). Optional so
+   *  legacy saved state still loads cleanly. */
+  consumableRates?: ConsumableRate[];
   costProfiles: CostProfile[];
   inkRates: InkRate[];
   finishingOperations: FinishingOperation[];

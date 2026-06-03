@@ -874,6 +874,8 @@ export function loadAppData(): AppData {
       invoices: (parsed.invoices ?? []) as AppData['invoices'],
       productionSpecs: (parsed.productionSpecs ?? []) as AppData['productionSpecs'],
       paperRates: (parsed.paperRates ?? []).map(normalizePaperRate),
+      // Phase 127.1 — Consumable rates (glue/tape/ink/etc.).
+      consumableRates: parsed.consumableRates ?? [],
       costProfiles: parsed.costProfiles ?? [],
       // Phase 15 work-ticket masters — local-only for now, no normalizer.
       inkRates: parsed.inkRates ?? [],
