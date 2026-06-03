@@ -20,7 +20,7 @@
  * computation, no new persistence.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import {
   AppData,
@@ -234,73 +234,291 @@ export function ControlCentrePage({ data, profile, allowedViews, onNavigate }: C
 
   const totalIssues = cards.reduce((s, c) => s + c.items.length, 0);
 
+  // ─────────────────────── Phase 125.1 — Action-first redesign ──
+  // Audience: CEO + office managers landing on the dashboard. Want a
+  // single glance: "what's on fire today" + "what's the next thing I
+  // should tap." Same pattern as My Stuff + Admin Hub.
+
+  // Smart greeting — cascade through fullName → email local-part.
+  const greetingName = (() => {
+    const trimmed = (profile?.fullName || '').trim();
+    if (trimmed && !trimmed.includes('@')) {
+      const first = trimmed.split(/\s+/)[0];
+      if (first) return first.charAt(0).toUpperCase() + first.slice(1);
+    }
+    const email = profile?.email || '';
+    if (email.includes('@')) {
+      const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+      if (local) {
+        const first = local.split(/\s+/)[0];
+        return first.charAt(0).toUpperCase() + first.slice(1);
+      }
+    }
+    return 'there';
+  })();
+  const timeOfDay = (() => {
+    const h = new Date().getHours();
+    if (h < 5) return 'evening';
+    if (h < 12) return 'morning';
+    if (h < 17) return 'afternoon';
+    return 'evening';
+  })();
+
+  const urgentCard = cards.find((c) => c.key === 'urgent');
+  const urgentItems = urgentCard?.items ?? [];
+  const nonUrgentCards = cards.filter((c) => c.key !== 'urgent');
+
+  const HERO_AMBER = '#f59e0b';
+  const HERO_AMBER_TINT = 'rgba(245, 158, 11, 0.08)';
+  const HERO_GREEN = '#22a865';
+  const HERO_GREEN_TINT = 'rgba(34, 168, 101, 0.08)';
+  const HERO_RED = '#dc2626';
+  const cardBase: React.CSSProperties = {
+    border: '1px solid var(--jp-divider, #e5e7eb)',
+    borderRadius: 10,
+    padding: '14px 16px',
+    background: 'var(--jp-paper, #fff)',
+  };
+  const tapRowBase: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '12px 14px',
+    background: 'var(--jp-paper, #fff)',
+    border: '1px solid var(--jp-divider, #e5e7eb)',
+    borderRadius: 10,
+    width: '100%',
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontSize: 14,
+  };
+
+  // Collapsible state per category. Auto-open when items > 0.
+  const [openMap, setOpenMap] = useState<Record<string, boolean | undefined>>({});
+  function isOpen(card: CentreCard): boolean {
+    const explicit = openMap[card.key];
+    if (typeof explicit === 'boolean') return explicit;
+    return card.items.length > 0; // default-open when work waiting
+  }
+
+  // Quick Action tile config. 4 most-used creative starts.
+  const quickActions: Array<{ key: string; banner: string; title: string; meta: string; goto: View; severe?: boolean }> = [
+    { key: 'quote', banner: 'SALES', title: 'New quote', meta: `${data.quoteEstimates.length} this period`, goto: 'quotes' },
+    { key: 'invoice', banner: 'BILLING', title: 'New invoice', meta: overdueInvoices.length > 0 ? `${overdueInvoices.length} overdue` : `${data.invoices.length} total`, goto: 'invoices', severe: overdueInvoices.length > 0 },
+    { key: 'job', banner: 'PRODUCTION', title: 'New job card', meta: overdueJobs.length > 0 ? `${overdueJobs.length} overdue` : `${data.jobs.filter((j: JobCard) => j.status !== 'Completed').length} active`, goto: 'jobs', severe: overdueJobs.length > 0 },
+    { key: 'ncr', banner: 'QUALITY', title: 'Log NCR', meta: openNcrs.length > 0 ? `${openNcrs.length} open` : 'All closed', goto: 'nonConformance', severe: openNcrs.length > 0 },
+  ];
+
   return (
     <div className="page-stack">
       <SectionTitle
-        title={`Good ${greeting()}, ${profile?.fullName?.split(' ')[0] || ''}`}
+        title={`Good ${timeOfDay}, ${greetingName}`}
         subtitle={totalIssues === 0
-          ? `Nothing on fire today. Quiet ${formatDate(today)}.`
-          : `${totalIssues} thing${totalIssues === 1 ? '' : 's'} need attention across the business — pick a card to expand.`}
+          ? `Nothing on fire. Quiet ${formatDate(today)}.`
+          : `${totalIssues} thing${totalIssues === 1 ? '' : 's'} need your attention across the business.`}
       />
 
-      <div className="control-centre-grid">
-        {cards.map((card) => {
-          const count = card.items.length;
-          const open = count > 0; // auto-expand when there's work
-          return (
-            <details key={card.key} className={`card control-centre-card ${count === 0 ? 'is-empty' : ''}`} open={open}>
-              <summary className="control-centre-summary">
-                <span className="control-centre-title">
-                  <strong>{card.title}</strong>
-                </span>
-                {count > 0 ? (
-                  <span className={`control-centre-count ${count >= 5 ? 'is-loud' : ''}`}>{count}</span>
-                ) : (
-                  <span className="control-centre-count is-zero" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em' }}>OK</span>
-                )}
-              </summary>
-              {count === 0 ? (
-                <p className="muted control-centre-empty">Nothing to action — good work.</p>
-              ) : (
-                <ul className="control-centre-list">
-                  {card.items.map((item, idx) => (
-                    <li key={idx} className="control-centre-row">
-                      <div className="control-centre-row-main">
-                        <span>{item.label}</span>
-                        {item.meta ? <span className="muted control-centre-row-meta">{item.meta}</span> : null}
-                      </div>
-                      {item.badge ? <span className={item.badgeClass || 'badge'}>{item.badge}</span> : null}
-                      {item.goto ? (
-                        <button type="button" className="ghost-button control-centre-row-go" onClick={() => onNavigate(item.goto!)}>Open</button>
-                      ) : null}
-                    </li>
-                  ))}
-                  {card.viewAll ? (
-                    <li className="control-centre-row control-centre-view-all">
-                      <button type="button" className="ghost-button" onClick={() => onNavigate(card.viewAll!)}>View all</button>
-                    </li>
+      {/* ───────────── DO TODAY (amber hero) ─────────────
+          Cross-cutting items waiting on the signed-in user. Each tap
+          jumps to the page where it can be actioned. */}
+      {urgentItems.length > 0 && (
+        <div style={{ ...cardBase, borderColor: HERO_AMBER, background: HERO_AMBER_TINT, borderLeft: `6px solid ${HERO_AMBER}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 42, height: 42, borderRadius: 999,
+              background: HERO_AMBER, color: '#fff', fontSize: 22, fontWeight: 800,
+            }}>{urgentItems.length}</span>
+            <h2 style={{ margin: 0, fontSize: 20, color: '#92400e' }}>Do today</h2>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {urgentItems.map((item, idx) => {
+              const isDanger = item.badgeClass?.includes('danger');
+              const chipColor = isDanger ? HERO_RED : HERO_AMBER;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  style={tapRowBase}
+                  onClick={() => item.goto && onNavigate(item.goto)}
+                  disabled={!item.goto}
+                >
+                  {item.badge ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: 44, height: 44, padding: '0 10px', borderRadius: 10,
+                      background: chipColor, color: '#fff',
+                      fontSize: item.badge.length > 4 ? 12 : 18, fontWeight: 800, flexShrink: 0,
+                      letterSpacing: item.badge.length > 4 ? '0.04em' : 'normal',
+                    }}>{item.badge}</span>
                   ) : null}
-                </ul>
+                  <span style={{ flex: 1 }}>
+                    <strong style={{ display: 'block', fontSize: 15 }}>{item.label}</strong>
+                    {item.meta ? <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{item.meta}</span> : null}
+                  </span>
+                  {item.goto ? <span style={{ color: chipColor, fontWeight: 700, fontSize: 22 }}>{'>'}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────── ALL CLEAR (green) ───────────── */}
+      {urgentItems.length === 0 && (
+        <div style={{ ...cardBase, borderColor: HERO_GREEN, background: HERO_GREEN_TINT, borderLeft: `6px solid ${HERO_GREEN}`, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '6px 12px', borderRadius: 6,
+            background: HERO_GREEN, color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
+          }}>ALL CLEAR</span>
+          <div>
+            <strong style={{ fontSize: 16, color: '#065f46' }}>Nothing on fire across the business.</strong>
+            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #475569)' }}>Quiet {formatDate(today)}.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────── QUICK ACTIONS — 4 tiles ───────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+        {quickActions.map((qa) => (
+          <button
+            key={qa.key}
+            type="button"
+            onClick={() => onNavigate(qa.goto)}
+            style={{
+              ...cardBase,
+              textAlign: 'left',
+              cursor: 'pointer',
+              borderLeft: `4px solid ${qa.severe ? HERO_RED : 'var(--jp-divider, #e5e7eb)'}`,
+              padding: '14px 16px',
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', color: qa.severe ? HERO_RED : 'var(--jp-ink-3, #64748b)' }}>{qa.banner}</span>
+            <strong style={{ fontSize: 16 }}>{qa.title}</strong>
+            <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{qa.meta}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ───────────── CATEGORY SECTIONS — collapsible ─────────────
+          Cash flow / Production / Food safety / HR / Stock / SARS.
+          Auto-expanded when items > 0. Left border turns amber when
+          there's attention; red when items contain danger badges. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {nonUrgentCards.map((card) => {
+          const count = card.items.length;
+          const open = isOpen(card);
+          const hasDanger = card.items.some((i) => i.badgeClass?.includes('danger'));
+          const borderColor = count === 0 ? 'var(--jp-divider, #e5e7eb)' : (hasDanger ? HERO_RED : HERO_AMBER);
+          return (
+            <div
+              key={card.key}
+              style={{
+                ...cardBase,
+                borderLeft: `4px solid ${borderColor}`,
+                padding: '12px 16px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setOpenMap((m) => ({ ...m, [card.key]: !open }))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  width: '100%', background: 'transparent', border: 'none',
+                  padding: 0, cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <strong style={{ flex: 1, fontSize: 15 }}>{card.title}</strong>
+                {count > 0 ? (
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 999,
+                    background: hasDanger ? HERO_RED : HERO_AMBER, color: '#fff',
+                    fontSize: 11, fontWeight: 800, letterSpacing: '0.05em',
+                  }}>{hasDanger ? `${count} ATTENTION` : `${count} WAITING`}</span>
+                ) : (
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 999,
+                    background: 'var(--jp-divider, #e5e7eb)', color: 'var(--jp-ink-3, #475569)',
+                    fontSize: 11, fontWeight: 800, letterSpacing: '0.05em',
+                  }}>OK</span>
+                )}
+                <span style={{ color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, fontSize: 18, width: 18, textAlign: 'center' }}>{open ? '−' : '+'}</span>
+              </button>
+
+              {open && (
+                <div style={{ marginTop: 10 }}>
+                  {count === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>Nothing to action — good work.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {card.items.map((item, idx) => {
+                        const isDanger = item.badgeClass?.includes('danger');
+                        const chipColor = isDanger ? HERO_RED : HERO_AMBER;
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '8px 10px',
+                              border: '1px solid var(--jp-divider, #e5e7eb)',
+                              borderRadius: 8, background: 'var(--jp-paper-soft, #fafafa)',
+                            }}
+                          >
+                            {item.badge ? (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: 38, height: 28, padding: '0 8px', borderRadius: 6,
+                                background: chipColor, color: '#fff',
+                                fontSize: item.badge.length > 4 ? 10 : 13, fontWeight: 800,
+                                letterSpacing: item.badge.length > 4 ? '0.04em' : 'normal', flexShrink: 0,
+                              }}>{item.badge}</span>
+                            ) : null}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13 }}>{item.label}</div>
+                              {item.meta ? <div style={{ fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{item.meta}</div> : null}
+                            </div>
+                            {item.goto ? (
+                              <button
+                                type="button"
+                                onClick={() => onNavigate(item.goto!)}
+                                style={{
+                                  padding: '6px 12px', fontSize: 12, fontWeight: 700,
+                                  borderRadius: 6, border: '1px solid var(--jp-divider, #d1d5db)',
+                                  background: 'var(--jp-paper, #fff)', cursor: 'pointer',
+                                }}
+                              >Open</button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                      {card.viewAll ? (
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(card.viewAll!)}
+                          style={{
+                            alignSelf: 'flex-start', padding: '6px 12px', fontSize: 12,
+                            borderRadius: 6, border: '1px solid var(--jp-divider, #d1d5db)',
+                            background: 'transparent', cursor: 'pointer', marginTop: 4,
+                          }}
+                        >View all</button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               )}
-            </details>
+            </div>
           );
         })}
       </div>
 
-      <p className="muted" style={{ fontSize: '0.78rem', marginTop: 12 }}>
-        Cards auto-collapse when nothing needs your attention. Want the classic dashboard widgets back? They're still under{' '}
+      <p className="muted" style={{ fontSize: '0.78rem', marginTop: 16 }}>
+        Classic dashboard view available under{' '}
         <button type="button" className="ghost-button" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => onNavigate('morningDigest')}>Morning Digest</button>
         {' '}or{' '}
         <button type="button" className="ghost-button" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => onNavigate('reports')}>Reports</button>.
       </p>
     </div>
   );
-}
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return 'evening';
-  if (h < 12) return 'morning';
-  if (h < 17) return 'afternoon';
-  return 'evening';
 }
