@@ -1613,7 +1613,7 @@ const createInitialProductForm = (): ProductFormState => ({
 });
 
 function App() {
-  const { session, profile, loading: authLoading, recoveryMode, clearRecoveryMode } = useAuth();
+  const { session, profile, loading: authLoading, recoveryMode, clearRecoveryMode, refreshProfile } = useAuth();
   const { profiles, loading: profilesLoading, saveProfile, createUser } = useProfiles(profile?.role === 'admin');
   const { data, setData, loading } = useProductionData(!authLoading && Boolean(session));
   // Internal staff names — used for client account-manager + handover dropdowns.
@@ -14118,6 +14118,9 @@ function App() {
             const employee = data.employees.find((e) => e.id === employeeId);
             try {
               await saveProfile({ ...profile, linkedEmployeeId: employeeId });
+              // Phase 124.3 — re-fetch the auth profile so the linked
+              // employee shows up immediately without a page reload.
+              await refreshProfile();
               toast.success(employee
                 ? `Linked to ${employee.firstName} ${employee.lastName}`
                 : 'Linked');

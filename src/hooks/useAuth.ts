@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { normalizeDashboardWidgets, normalizeProfilePermissions, UserProfile } from '../types';
+import { InboxCategory, normalizeDashboardWidgets, normalizeProfilePermissions, PartnerScope, UserProfile } from '../types';
 import { supabase } from '../utils/supabase';
 
 interface AuthState {
@@ -29,12 +29,29 @@ async function loadProfile(userId: string): Promise<UserProfile | null> {
     username: data.username ?? '',
     phoneNumber: data.phone_number ?? '',
     clientId: data.client_id ?? '',
-    accountType: data.account_type === 'client' ? 'client' : 'internal',
+    accountType: data.account_type === 'client'
+      ? 'client'
+      : (data.account_type === 'external_partner' ? 'external_partner' : 'internal'),
     publicDisplayName: data.public_display_name ?? data.full_name ?? '',
     publicDisplayRole: data.public_display_role ?? data.role ?? '',
     role: (data.role ?? 'ops') as UserProfile['role'],
     permissions: normalizeProfilePermissions(data.role ?? 'ops', data.permissions),
     dashboardWidgets: normalizeDashboardWidgets(data.role ?? 'ops', data.dashboard_widgets),
+    // Phase 124.3 — previously dropped. Without these on the profile, the
+    // staff portal can't find the linked Employee, the inbox doesn't filter,
+    // partner-scoping breaks, and the stock-redact + approval-PIN features
+    // silently revert to defaults.
+    linkedEmployeeId: data.linked_employee_id ?? undefined,
+    inboxCategories: Array.isArray(data.inbox_categories) && data.inbox_categories.length > 0
+      ? (data.inbox_categories as InboxCategory[])
+      : undefined,
+    partnerScope: Array.isArray(data.partner_scope) && data.partner_scope.length > 0
+      ? (data.partner_scope as PartnerScope[])
+      : undefined,
+    canPostInvoices: Boolean(data.can_post_invoices),
+    pricingEditor: Boolean(data.pricing_editor),
+    stockVisibility: (data.stock_visibility === 'restricted' ? 'restricted' : 'full'),
+    approvalPin: data.approval_pin ?? undefined,
   };
 }
 
@@ -126,8 +143,21 @@ export function useAuth() {
     setState((current) => ({ ...current, recoveryMode: false }));
   }
 
+  /**
+   * Phase 124.3 — Force-refresh the cached profile from Supabase. Called
+   * after the user links themselves to an Employee (or any other in-app
+   * profile patch) so the UI reflects the change without requiring a
+   * full page reload.
+   */
+  const refreshProfile = useCallback(async () => {
+    if (!state.session?.user) return;
+    const fresh = await loadProfile(state.session.user.id);
+    if (fresh) setState((current) => ({ ...current, profile: fresh }));
+  }, [state.session?.user?.id]);
+
   return {
     ...state,
     clearRecoveryMode,
+    refreshProfile,
   };
 }
