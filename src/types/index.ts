@@ -1825,14 +1825,87 @@ export interface DeliveryNoteLineItem {
   invoiceLineItemId?: string;
 }
 
+/**
+ * Phase 126.1 — Paper purpose.
+ *
+ * What this paper is BOUGHT FOR. Drives the calculator's "what paper do I
+ * use here" picker (e.g. when quoting a bag's body the picker only shows
+ * Paper Bags + Slitting; when quoting a handle patch the picker only shows
+ * Handle Patch). 'Other' is the catch-all so we never block adding a new
+ * line just because the taxonomy hasn't caught up.
+ */
+export type PaperUseCase =
+  | 'Paper Bags'
+  | 'Slitting'
+  | 'Rope'
+  | 'Handle Patch'
+  | 'Greaseproof Paper'
+  | 'Other';
+
+export const PAPER_USE_CASES: PaperUseCase[] = [
+  'Paper Bags',
+  'Slitting',
+  'Rope',
+  'Handle Patch',
+  'Greaseproof Paper',
+  'Other',
+];
+
+/** Paper form factor — reels (jumbo, slit on our side) vs sheets (pre-cut). */
+export type PaperForm = 'Reels' | 'Sheets';
+
 export interface PaperRate {
   id: string;
   name: string;
+  /**
+   * Phase 126.1 — PRIVATE (admin + pricingEditor only). Supplier identity
+   * is treated as confidential. Staff using the calculator must NOT see
+   * which supplier a paper comes from.
+   */
   supplierId: string;
   supplierName: string;
+  /**
+   * Phase 126.1 — Supplier's product grade / code (e.g. "PrimePak U").
+   * Private. Useful for re-ordering and for the paper-margin analytic.
+   */
+  productCode?: string;
+  /**
+   * Phase 126.1 — What we BUY this paper for. Drives the calculator's
+   * grouped picker so users only see relevant papers per use case.
+   */
+  useCase?: PaperUseCase;
+  /**
+   * Phase 126.1 — Reels (slit on our side from jumbo) vs Sheets (pre-cut).
+   */
+  form?: PaperForm;
+  /**
+   * Phase 126.1 — PUBLIC label. The ONLY identifier non-admin staff see
+   * in the calculator. e.g. "70gsm Unbleached Kraft", "40gsm Greaseproof".
+   * If empty, the public picker falls back to gsm + paperType.
+   */
+  publicLabel?: string;
   paperType: string;
   gsm: string;
+  /**
+   * Phase 126.1 — Legacy "price per ton" column. Now stores the COST
+   * (what we pay the supplier). Kept as `pricePerTon` for DB compatibility;
+   * the new `chargePerTon` below is what the calculator actually uses.
+   */
   pricePerTon: number;
+  /**
+   * Phase 126.1 — What the calculator charges per ton. Admin sets this
+   * above `pricePerTon` to absorb fuel / forex / supplier hikes between
+   * contract renewals. The difference (charge − cost) is paper margin
+   * and only shows on Aman's profile.
+   * Defaults to pricePerTon if not set so legacy rows still calc.
+   */
+  chargePerTon?: number;
+  /**
+   * Phase 126.1 — Optional contract validity. Lets us flag a rate as
+   * stale on the admin page when the contract window expires.
+   */
+  validFrom?: string;
+  validTo?: string;
   notes: string;
   active: boolean;
 }
@@ -8531,9 +8604,25 @@ export interface PricingTierFormState {
 export interface PaperRateFormState {
   name: string;
   supplierId: string;
+  /** Phase 126.1 — Supplier's product code (e.g. "PrimePak U"). Private. */
+  productCode: string;
+  /** Phase 126.1 — Use case grouping. Drives the calculator picker. */
+  useCase: PaperUseCase | '';
+  /** Phase 126.1 — Reels vs Sheets. */
+  form: PaperForm | '';
+  /** Phase 126.1 — What non-admin staff see in the calculator picker. */
+  publicLabel: string;
   paperType: string;
   gsm: string;
+  /** Phase 126.1 — Cost per ton (what we pay supplier). Stored as
+   *  pricePerTon in DB for compatibility. */
   pricePerTon: string;
+  /** Phase 126.1 — Charge per ton (what the calculator uses). */
+  chargePerTon: string;
+  /** Phase 126.1 — Contract valid-from date. */
+  validFrom: string;
+  /** Phase 126.1 — Contract valid-to date. */
+  validTo: string;
   notes: string;
   active: boolean;
 }

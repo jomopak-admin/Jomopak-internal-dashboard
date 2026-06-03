@@ -148,7 +148,10 @@ export function computeWorkTicket(
   if (!paperRate) warnings.push('No paper rate selected — paper cost is zero.');
   if (sheetArea === 0) warnings.push('Sheet area is zero — paper & ink calc will be zero.');
   const paperKg = sheetArea * (gsm / 1000) * sheets;
-  const paperCost = paperRate ? paperKg * (paperRate.pricePerTon / 1000) : 0;
+  // Phase 126.1 — Use chargePerTon (quote rate) when set; fall back to
+  // pricePerTon (legacy / supplier cost) so historic tickets keep matching.
+  const paperRateForTicket = paperRate ? (paperRate.chargePerTon ?? paperRate.pricePerTon) : 0;
+  const paperCost = paperRate ? paperKg * (paperRateForTicket / 1000) : 0;
 
   // Pre-press: plate per colour + origination once.
   if (!plate) warnings.push('No plate cost selected — pre-press is zero.');

@@ -557,9 +557,17 @@ const createInitialJobForm = (): JobFormState => ({
 const createInitialPaperRateForm = (): PaperRateFormState => ({
   name: '',
   supplierId: '',
+  // Phase 126.1 — Cost/charge split + use case + public label.
+  productCode: '',
+  useCase: '',
+  form: '',
+  publicLabel: '',
   paperType: '',
   gsm: '',
   pricePerTon: '',
+  chargePerTon: '',
+  validFrom: '',
+  validTo: '',
   notes: '',
   active: true,
 });
@@ -6985,18 +6993,28 @@ function App() {
   }
 
   function handleSavePaperRate() {
-    if (!paperRateForm.name || !paperRateForm.pricePerTon) {
-      setPaperRateMessage('Paper rate name and price per ton are required.');
+    // Phase 126.1 — Public label is now the required "what it's called"
+    // field. Cost AND charge are both required (cost = what we pay,
+    // charge = what the calculator uses).
+    if (!paperRateForm.publicLabel.trim() || !paperRateForm.pricePerTon || !paperRateForm.chargePerTon) {
+      setPaperRateMessage('Public label, cost per ton, and charge per ton are required.');
       return;
     }
     const linkedSupplier = paperRateForm.supplierId ? suppliersById.get(paperRateForm.supplierId) : undefined;
     const payload = {
-      name: paperRateForm.name,
+      name: paperRateForm.name || paperRateForm.publicLabel,
       supplierId: linkedSupplier?.id ?? '',
       supplierName: linkedSupplier?.name ?? '',
+      productCode: paperRateForm.productCode || undefined,
+      useCase: paperRateForm.useCase || undefined,
+      form: paperRateForm.form || undefined,
+      publicLabel: paperRateForm.publicLabel,
       paperType: paperRateForm.paperType,
       gsm: paperRateForm.gsm,
       pricePerTon: Number(paperRateForm.pricePerTon),
+      chargePerTon: Number(paperRateForm.chargePerTon),
+      validFrom: paperRateForm.validFrom || undefined,
+      validTo: paperRateForm.validTo || undefined,
       notes: paperRateForm.notes,
       active: paperRateForm.active,
     };
@@ -10891,9 +10909,16 @@ function App() {
     setPaperRateForm({
       name: rate.name,
       supplierId: rate.supplierId,
+      productCode: rate.productCode || '',
+      useCase: rate.useCase || '',
+      form: rate.form || '',
+      publicLabel: rate.publicLabel || '',
       paperType: rate.paperType,
       gsm: rate.gsm,
       pricePerTon: String(rate.pricePerTon),
+      chargePerTon: String(rate.chargePerTon ?? rate.pricePerTon),
+      validFrom: rate.validFrom || '',
+      validTo: rate.validTo || '',
       notes: rate.notes,
       active: rate.active,
     });

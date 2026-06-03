@@ -9,6 +9,9 @@ import {
   PaperRate,
   PaperRateFilters,
   PaperRateFormState,
+  PaperForm,
+  PaperUseCase,
+  PAPER_USE_CASES,
   Supplier,
 } from '../../types';
 import { formatNumber } from '../../utils/calculations';
@@ -75,14 +78,55 @@ export function CostInputsPage({
   const paperRateSections: FormWizardSection[] = [
     {
       key: 'identity',
-      title: 'Rate identity',
-      subtitle: 'How operators recognise this rate in the calculator.',
+      title: 'What staff see (PUBLIC)',
+      subtitle: 'This is the ONLY label non-admin staff see in the calculator. Use a generic descriptor — never the supplier brand.',
       missingRequired: [
-        ...(paperRateForm.name.trim() ? [] : ['Name']),
+        ...(paperRateForm.publicLabel.trim() ? [] : ['Public label']),
       ],
       body: (
         <div className="form-grid">
-          <label><span>Name <RequiredMarker /></span><input value={paperRateForm.name} onChange={(event) => setPaperRateForm({ ...paperRateForm, name: event.target.value })} /></label>
+          <label>
+            <span>Public label <RequiredMarker /></span>
+            <input
+              placeholder="e.g. 70gsm Unbleached Kraft"
+              value={paperRateForm.publicLabel}
+              onChange={(event) => setPaperRateForm({ ...paperRateForm, publicLabel: event.target.value })}
+            />
+          </label>
+          <label>
+            <span>Use case</span>
+            <select
+              value={paperRateForm.useCase}
+              onChange={(event) => setPaperRateForm({ ...paperRateForm, useCase: event.target.value as PaperUseCase | '' })}
+            >
+              <option value="">— pick a use case —</option>
+              {PAPER_USE_CASES.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Form</span>
+            <select
+              value={paperRateForm.form}
+              onChange={(event) => setPaperRateForm({ ...paperRateForm, form: event.target.value as PaperForm | '' })}
+            >
+              <option value="">— pick form —</option>
+              <option value="Reels">Reels</option>
+              <option value="Sheets">Sheets</option>
+            </select>
+          </label>
+          <label><span>GSM</span><input value={paperRateForm.gsm} onChange={(event) => setPaperRateForm({ ...paperRateForm, gsm: event.target.value })} /></label>
+          <label><span>Material descriptor</span><input placeholder="e.g. Unbleached Kraft" value={paperRateForm.paperType} onChange={(event) => setPaperRateForm({ ...paperRateForm, paperType: event.target.value })} /></label>
+          <label className="checkbox-row"><input type="checkbox" checked={paperRateForm.active} onChange={(event) => setPaperRateForm({ ...paperRateForm, active: event.target.checked })} />Active</label>
+        </div>
+      ),
+    },
+    {
+      key: 'supplier-private',
+      title: 'Supplier (PRIVATE — admin only)',
+      subtitle: 'Supplier identity is hidden from staff. They only ever see the public label above.',
+      body: (
+        <div className="form-grid">
+          <label><span>Internal nickname</span><input placeholder="For your reference only" value={paperRateForm.name} onChange={(event) => setPaperRateForm({ ...paperRateForm, name: event.target.value })} /></label>
           <label>
             <span>Supplier</span>
             <select
@@ -95,22 +139,30 @@ export function CostInputsPage({
               ))}
             </select>
           </label>
-          <label className="checkbox-row"><input type="checkbox" checked={paperRateForm.active} onChange={(event) => setPaperRateForm({ ...paperRateForm, active: event.target.checked })} />Active</label>
+          <label><span>Supplier product code</span><input placeholder="e.g. PrimePak U" value={paperRateForm.productCode} onChange={(event) => setPaperRateForm({ ...paperRateForm, productCode: event.target.value })} /></label>
+          <label><span>Contract valid from</span><input type="date" value={paperRateForm.validFrom} onChange={(event) => setPaperRateForm({ ...paperRateForm, validFrom: event.target.value })} /></label>
+          <label><span>Contract valid to</span><input type="date" value={paperRateForm.validTo} onChange={(event) => setPaperRateForm({ ...paperRateForm, validTo: event.target.value })} /></label>
         </div>
       ),
     },
     {
-      key: 'spec-price',
-      title: 'Specification & price',
-      subtitle: 'The paper this rate applies to and the live ton price.',
+      key: 'pricing-private',
+      title: 'Pricing (PRIVATE — admin only)',
+      subtitle: 'Cost is what you pay the supplier. Charge is what the calculator uses for quotes. The gap is your paper margin.',
       missingRequired: [
-        ...(paperRateForm.pricePerTon && Number(paperRateForm.pricePerTon) > 0 ? [] : ['Price per ton']),
+        ...(paperRateForm.pricePerTon && Number(paperRateForm.pricePerTon) > 0 ? [] : ['Cost per ton']),
+        ...(paperRateForm.chargePerTon && Number(paperRateForm.chargePerTon) > 0 ? [] : ['Charge per ton']),
       ],
       body: (
         <div className="form-grid">
-          <label><span>Paper type</span><input value={paperRateForm.paperType} onChange={(event) => setPaperRateForm({ ...paperRateForm, paperType: event.target.value })} /></label>
-          <label><span>GSM</span><input value={paperRateForm.gsm} onChange={(event) => setPaperRateForm({ ...paperRateForm, gsm: event.target.value })} /></label>
-          <label><span>Price per ton <RequiredMarker /></span><input type="number" min="0" step="0.01" value={paperRateForm.pricePerTon} onChange={(event) => setPaperRateForm({ ...paperRateForm, pricePerTon: event.target.value })} /></label>
+          <label><span>Cost per ton (R) <RequiredMarker /></span><input type="number" min="0" step="0.01" placeholder="what you pay supplier" value={paperRateForm.pricePerTon} onChange={(event) => setPaperRateForm({ ...paperRateForm, pricePerTon: event.target.value })} /></label>
+          <label><span>Charge per ton (R) <RequiredMarker /></span><input type="number" min="0" step="0.01" placeholder="what calculator charges" value={paperRateForm.chargePerTon} onChange={(event) => setPaperRateForm({ ...paperRateForm, chargePerTon: event.target.value })} /></label>
+          {paperRateForm.pricePerTon && paperRateForm.chargePerTon && Number(paperRateForm.chargePerTon) > 0 && Number(paperRateForm.pricePerTon) > 0 ? (
+            <div style={{ gridColumn: '1 / -1', padding: '8px 12px', borderRadius: 6, background: 'rgba(34,168,101,0.08)', border: '1px solid #22a865', fontSize: 13 }}>
+              <strong>Paper margin:</strong>{' '}R{(Number(paperRateForm.chargePerTon) - Number(paperRateForm.pricePerTon)).toLocaleString(undefined, { maximumFractionDigits: 0 })} per ton
+              {' '}({((Number(paperRateForm.chargePerTon) / Number(paperRateForm.pricePerTon) - 1) * 100).toFixed(1)}% markup)
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -257,8 +309,41 @@ export function CostInputsPage({
                 {filteredPaperRates.length ? (
                   <div className="table-wrap">
                     <table>
-                      <thead><tr><th>Name</th><th>Supplier</th><th>Type</th><th>GSM</th><th>Price/Ton</th><th>Actions</th></tr></thead>
-                      <tbody>{filteredPaperRates.map((rate) => <tr key={rate.id}><td>{rate.name}</td><td>{rate.supplierName || 'Not linked'}</td><td>{rate.paperType}</td><td>{rate.gsm}</td><td>{formatNumber(rate.pricePerTon, 2)}</td><td><button className="table-button" onClick={() => { onEditPaperRate(rate); setPaperRatesMode('form'); }}>Edit</button></td></tr>)}</tbody>
+                      <thead>
+                        <tr>
+                          <th>Public label</th>
+                          <th>Use case</th>
+                          <th>Form</th>
+                          <th>GSM</th>
+                          <th title="Private — admin only">Supplier</th>
+                          <th title="Private — admin only">Cost/Ton</th>
+                          <th title="Private — admin only">Charge/Ton</th>
+                          <th title="Private — admin only">Margin/Ton</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPaperRates.map((rate) => {
+                          const charge = rate.chargePerTon ?? rate.pricePerTon;
+                          const margin = charge - rate.pricePerTon;
+                          const marginPct = rate.pricePerTon > 0 ? (margin / rate.pricePerTon) * 100 : 0;
+                          return (
+                            <tr key={rate.id}>
+                              <td><strong>{rate.publicLabel || `${rate.gsm}gsm ${rate.paperType}` || rate.name}</strong></td>
+                              <td>{rate.useCase || '—'}</td>
+                              <td>{rate.form || '—'}</td>
+                              <td>{rate.gsm}</td>
+                              <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{rate.supplierName || '—'}</td>
+                              <td>R{formatNumber(rate.pricePerTon, 0)}</td>
+                              <td><strong>R{formatNumber(charge, 0)}</strong></td>
+                              <td style={{ color: margin > 0 ? '#22a865' : margin < 0 ? '#dc2626' : 'inherit', fontWeight: 600 }}>
+                                {margin === 0 ? '—' : `R${formatNumber(margin, 0)} (${marginPct.toFixed(1)}%)`}
+                              </td>
+                              <td><button className="table-button" onClick={() => { onEditPaperRate(rate); setPaperRatesMode('form'); }}>Edit</button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
                     </table>
                   </div>
                 ) : <EmptyState title="No paper rates yet" body="Add live paper prices here so the calculator pulls the right ton rate." />}

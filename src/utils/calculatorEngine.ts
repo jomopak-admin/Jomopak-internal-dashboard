@@ -209,7 +209,12 @@ function computeLine(
   const areaPerBagSqM = (recommendedPaperWidthMm / 1000) * (recommendedSheetHeightMm / 1000);
   const paperKgPerBag = areaPerBagSqM * (num(paperRate?.gsm) / 1000);
   const paperKgPerBagWithWaste = costProfile ? paperKgPerBag * (1 + costProfile.wastagePercent / 100) : 0;
-  const paperPerBag = paperRate ? paperKgPerBagWithWaste * (paperRate.pricePerTon / 1000) : 0;
+  // Phase 126.1 — Use chargePerTon (what the calculator quotes at) when
+  // set, fall back to pricePerTon (legacy/supplier cost) so historic data
+  // continues to compute. The cost-vs-charge gap is recognised as paper
+  // margin elsewhere — never absorbed silently.
+  const paperRateForQuote = paperRate ? (paperRate.chargePerTon ?? paperRate.pricePerTon) : 0;
+  const paperPerBag = paperRate ? paperKgPerBagWithWaste * (paperRateForQuote / 1000) : 0;
 
   const handlePerBag = handleCost(line.handleType, costProfile);
 
