@@ -10,6 +10,8 @@ import {
   PaperRateFilters,
   PaperRateFormState,
   PaperForm,
+  PaperRegion,
+  PAPER_REGIONS,
   PAPER_USE_CASES,
   Supplier,
 } from '../../types';
@@ -173,6 +175,20 @@ export function CostInputsPage({
             </select>
           </label>
           <label><span>Supplier product code</span><input placeholder="e.g. PrimePak U" value={paperRateForm.productCode} onChange={(event) => setPaperRateForm({ ...paperRateForm, productCode: event.target.value })} /></label>
+          <label>
+            <span>Dispatch region</span>
+            <select
+              value={paperRateForm.region}
+              onChange={(event) => setPaperRateForm({ ...paperRateForm, region: event.target.value as PaperRegion | '' })}
+            >
+              <option value="">— pick region —</option>
+              {PAPER_REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r === 'DBN' ? 'Durban (DBN)' : r === 'JHB' ? 'Joburg (JHB)' : r === 'CT' ? 'Cape Town (CT)' : r}
+                </option>
+              ))}
+            </select>
+          </label>
           <label><span>Contract valid from</span><input type="date" value={paperRateForm.validFrom} onChange={(event) => setPaperRateForm({ ...paperRateForm, validFrom: event.target.value })} /></label>
           <label><span>Contract valid to</span><input type="date" value={paperRateForm.validTo} onChange={(event) => setPaperRateForm({ ...paperRateForm, validTo: event.target.value })} /></label>
         </div>
@@ -349,6 +365,7 @@ export function CostInputsPage({
                           <th>Form</th>
                           <th>GSM</th>
                           <th title="Private — admin only">Supplier</th>
+                          <th title="Private — admin only">Region</th>
                           <th title="Private — admin only">Cost/Ton</th>
                           <th title="Private — admin only">Charge/Ton</th>
                           <th title="Private — admin only">Margin/Ton</th>
@@ -374,6 +391,7 @@ export function CostInputsPage({
                               <td>{rate.form || '—'}</td>
                               <td>{rate.gsm}</td>
                               <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{rate.supplierName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{rate.region || '—'}</td>
                               <td>R{formatNumber(rate.pricePerTon, 0)}</td>
                               <td><strong>R{formatNumber(charge, 0)}</strong></td>
                               <td style={{ color: margin > 0 ? '#22a865' : margin < 0 ? '#dc2626' : 'inherit', fontWeight: 600 }}>

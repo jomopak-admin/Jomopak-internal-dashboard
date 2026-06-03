@@ -1863,6 +1863,16 @@ export const PAPER_USE_CASES: PaperUseCase[] = [
 /** Paper form factor — reels (jumbo, slit on our side) vs sheets (pre-cut). */
 export type PaperForm = 'Reels' | 'Sheets';
 
+/**
+ * Phase 126.4 — Sappi (and other big mills) price by their dispatch
+ * warehouse. JomoPak sources from whichever region has stock, so each
+ * (paper × region) combo gets its own rate row. Calculator picks the
+ * cheapest available for the matching public label.
+ */
+export type PaperRegion = 'DBN' | 'JHB' | 'CT' | 'Other';
+
+export const PAPER_REGIONS: PaperRegion[] = ['DBN', 'JHB', 'CT', 'Other'];
+
 export interface PaperRate {
   id: string;
   name: string;
@@ -1899,6 +1909,12 @@ export interface PaperRate {
    * Phase 126.1 — Reels (slit on our side from jumbo) vs Sheets (pre-cut).
    */
   form?: PaperForm;
+  /**
+   * Phase 126.4 — Supplier dispatch region. Sappi prices by warehouse
+   * (DBN / JHB / CT). Private — admin only. Calculator picks the
+   * cheapest matching region when multiple are available.
+   */
+  region?: PaperRegion;
   /**
    * Phase 126.1 — PUBLIC label. The ONLY identifier non-admin staff see
    * in the calculator. e.g. "70gsm Unbleached Kraft", "40gsm Greaseproof".
@@ -8635,6 +8651,8 @@ export interface PaperRateFormState {
   requiresSlitting: boolean;
   /** Phase 126.1 — Reels vs Sheets. */
   form: PaperForm | '';
+  /** Phase 126.4 — Supplier dispatch region (DBN/JHB/CT/Other). */
+  region: PaperRegion | '';
   /** Phase 126.1 — What non-admin staff see in the calculator picker. */
   publicLabel: string;
   paperType: string;

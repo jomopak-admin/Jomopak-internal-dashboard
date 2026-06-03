@@ -237,6 +237,7 @@ function normalizePaperRate(raw: any): PaperRate {
     useCase: raw.useCase ?? undefined,
     requiresSlitting: Boolean(raw.requiresSlitting),
     form: raw.form ?? undefined,
+    region: raw.region ?? undefined,
     publicLabel: raw.publicLabel ?? undefined,
     paperType: raw.paperType ?? '',
     gsm: raw.gsm ?? '',
