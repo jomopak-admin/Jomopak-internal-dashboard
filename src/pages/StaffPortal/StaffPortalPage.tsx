@@ -66,9 +66,15 @@ interface StaffPortalPageProps {
   onCreateVisitorBooking?: (payload: import('../../types').VisitorBookingFormState & { hostName: string }) => void;
   /** Cancel a booking before the visit happens. */
   onCancelVisitorBooking?: (bookingId: string) => void;
+  /**
+   * Phase 121 — Optional URL to a "how to use My Stuff" video the admin
+   * has uploaded. Shown as a friendly link at the bottom of the page so
+   * staff with limited reading can still learn the page by watching.
+   */
+  helpVideoUrl?: string;
 }
 
-export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking }: StaffPortalPageProps) {
+export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl }: StaffPortalPageProps) {
   const fullName = profile.fullName || profile.email || '';
   const today = new Date().toISOString().slice(0, 10);
 
@@ -202,9 +208,219 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
       .slice(0, 6);
   }, [payrollRuns, linkedEmployee]);
 
+  /**
+   * Phase 121 — STAFF PORTAL REDESIGN.
+   *
+   * Audience: factory floor staff in South Africa, varying literacy and
+   * English fluency. Design goals (Aman's direction):
+   *   • Action items must "stare staff in the face" — no excuse to miss.
+   *   • Big icons + colour as primary signal, text secondary.
+   *   • Plain English, verb-led. No jargon ("SOP" → "work instruction",
+   *     "acknowledge" → "I've read it").
+   *   • Hide what's empty. Don't show "Nothing here yet" cards taking up
+   *     screen real-estate next to genuine action items.
+   *   • One urgent stack at the top. Quick actions below. History last.
+   *   • Help-video link at the bottom for anyone who can't read fluently.
+   *
+   * Layout:
+   *   1. Hello banner
+   *   2. "DO THESE FIRST" — only renders when items exist. Big orange
+   *      header, each item a tall tap-card with emoji + count + button.
+   *   3. Quick Actions — 3 fat tiles: Apply for leave / See my pay /
+   *      Read instructions. Always visible if employee linked. Each tile
+   *      shows the relevant number ("12 leave days") so they don't have
+   *      to dig.
+   *   4. Expandable detail sections — Messages, Training, Work
+   *      instructions, Leave history, Manager letters, Pay history.
+   *      Each is collapsed by default; tap to expand. Active ones with
+   *      urgent items auto-expand. Sections with nothing in them just
+   *      don't render at all.
+   *   5. Optional: Availability + Visitor bookings (host-side workflow).
+   *   6. "Watch the how-to video" link at the bottom.
+   */
+
+  // Count what's waiting per category — drives the "DO THESE FIRST" hero.
+  const newNoticeCount = visibleNotices.filter((n) => {
+    // A "new" notice is one posted in the last 7 days.
+    const posted = new Date(n.postedAt).getTime();
+    return Date.now() - posted < 7 * 24 * 60 * 60 * 1000;
+  }).length;
+  const trainingTodoCount = pendingTraining.length;
+  const sopTodoCount = pendingSops.length;
+  const managerTodoCount = myWarnings.filter((w) => isWarningType(w.type) && !w.acknowledged).length;
+  const totalTodo = trainingTodoCount + sopTodoCount + managerTodoCount;
+
+  // Collapsible state per detail section. Default-open only when there's
+  // something the user must do.
+  const [openMessages, setOpenMessages] = useState(false);
+  const [openTraining, setOpenTraining] = useState(trainingTodoCount > 0);
+  const [openSops, setOpenSops] = useState(sopTodoCount > 0);
+  const [openLeave, setOpenLeave] = useState(false);
+  const [openManager, setOpenManager] = useState(managerTodoCount > 0);
+  const [openPay, setOpenPay] = useState(false);
+
+  // Shared styles — declared inline so this card doesn't depend on
+  // any new global CSS.
+  const HERO_AMBER = '#f59e0b';
+  const HERO_AMBER_TINT = 'rgba(245, 158, 11, 0.08)';
+  const HERO_GREEN = '#22a865';
+  const HERO_GREEN_TINT = 'rgba(34, 168, 101, 0.08)';
+  const cardBase: React.CSSProperties = {
+    border: '1px solid var(--jp-divider, #e5e7eb)',
+    borderRadius: 10,
+    padding: '14px 16px',
+    background: 'var(--jp-paper, #fff)',
+  };
+  const tapRowBase: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '14px 14px',
+    background: 'var(--jp-paper, #fff)',
+    border: '1px solid var(--jp-divider, #e5e7eb)',
+    borderRadius: 10,
+    width: '100%',
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontSize: 15,
+  };
+
   return (
-    <section className="card">
-      <SectionTitle title={`Hi ${fullName.split(' ')[0] || 'there'}`} subtitle="Everything you need to keep on top of — notices, training, payslips." />
+    <section className="card" style={{ padding: '16px 18px' }}>
+      <SectionTitle
+        title={`Hi ${fullName.split(' ')[0] || 'there'}`}
+        subtitle={totalTodo > 0 ? `You have ${totalTodo} thing${totalTodo === 1 ? '' : 's'} to do today.` : 'Nothing waiting for you. Have a good day.'}
+      />
+
+      {/* ───────────────── 1. DO THESE FIRST ─────────────────
+          Big orange hero. Only renders when there's action.
+          Each row is full-width and large so it's hard to miss. */}
+      {totalTodo > 0 && (
+        <div style={{ ...cardBase, borderColor: HERO_AMBER, background: HERO_AMBER_TINT, borderLeft: `6px solid ${HERO_AMBER}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 42,
+              height: 42,
+              borderRadius: 999,
+              background: HERO_AMBER,
+              color: '#fff',
+              fontSize: 22,
+              fontWeight: 800,
+            }}>{totalTodo}</span>
+            <h2 style={{ margin: 0, fontSize: 20, color: '#92400e' }}>Do these first</h2>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {trainingTodoCount > 0 && (
+              <button type="button" style={tapRowBase} onClick={() => setOpenTraining(true)}>
+                <span style={{ fontSize: 32, lineHeight: 1 }}>🎓</span>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: 16 }}>{trainingTodoCount} training{trainingTodoCount === 1 ? '' : 's'} to sign</strong>
+                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>Show your manager you understood it</span>
+                </span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+              </button>
+            )}
+            {sopTodoCount > 0 && (
+              <button type="button" style={tapRowBase} onClick={() => setOpenSops(true)}>
+                <span style={{ fontSize: 32, lineHeight: 1 }}>📋</span>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: 16 }}>{sopTodoCount} work instruction{sopTodoCount === 1 ? '' : 's'} to read</strong>
+                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>How we do things here. Read and tap "I've read it"</span>
+                </span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+              </button>
+            )}
+            {managerTodoCount > 0 && (
+              <button type="button" style={tapRowBase} onClick={() => setOpenManager(true)}>
+                <span style={{ fontSize: 32, lineHeight: 1 }}>💬</span>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: 16 }}>{managerTodoCount} letter{managerTodoCount === 1 ? '' : 's'} from your manager</strong>
+                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>Read it and sign. This is on your record.</span>
+                </span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+              </button>
+            )}
+            {newNoticeCount > 0 && (
+              <button type="button" style={tapRowBase} onClick={() => setOpenMessages(true)}>
+                <span style={{ fontSize: 32, lineHeight: 1 }}>📣</span>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: 16 }}>{newNoticeCount} new message{newNoticeCount === 1 ? '' : 's'}</strong>
+                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>From the office</span>
+                </span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────── 2. ALL CLEAR (only when nothing to do) ───────────────── */}
+      {totalTodo === 0 && (
+        <div style={{ ...cardBase, borderColor: HERO_GREEN, background: HERO_GREEN_TINT, borderLeft: `6px solid ${HERO_GREEN}`, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 36, lineHeight: 1 }}>✅</span>
+          <div>
+            <strong style={{ fontSize: 16, color: '#065f46' }}>All caught up</strong>
+            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #475569)' }}>Nothing waiting for you right now.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────── 3. QUICK ACTIONS ─────────────────
+          Three fat tiles staff can always find: leave, pay, instructions.
+          Numbers visible up front so they don't have to dig. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 18 }}>
+        {linkedEmployee && (
+          <button
+            type="button"
+            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+            onClick={() => { setOpenLeave(true); setLeaveStart(new Date().toISOString().slice(0, 10)); setLeaveEnd(new Date().toISOString().slice(0, 10)); setShowLeaveForm(true); }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 32, lineHeight: 1 }}>🏖️</span>
+              <div style={{ flex: 1 }}>
+                <strong style={{ fontSize: 16 }}>Apply for leave</strong>
+                <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days available</div>
+              </div>
+            </div>
+          </button>
+        )}
+        {linkedEmployee && myPayslips.length > 0 && (
+          <button
+            type="button"
+            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+            onClick={() => setOpenPay(true)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 32, lineHeight: 1 }}>💰</span>
+              <div style={{ flex: 1 }}>
+                <strong style={{ fontSize: 16 }}>See my pay</strong>
+                <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>Last: {myPayslips[0].run.periodLabel}</div>
+              </div>
+            </div>
+          </button>
+        )}
+        <button
+          type="button"
+          style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+          onClick={() => setOpenSops(true)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 32, lineHeight: 1 }}>📋</span>
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: 16 }}>Read work instructions</strong>
+              <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{pendingSops.length > 0 ? `${pendingSops.length} new to read` : 'All read'}</div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* ───────────────── 4. EXPANDABLE DETAIL SECTIONS ─────────────────
+          Each section is a tap-to-expand header + content. Sections with
+          no data don't render at all. Sections with action items have
+          been auto-expanded above (openTraining/openSops/openManager). */}
 
       <div className="portal-grid">
         {/* Phase 106.3 — Availability picker. Visible to every staff
@@ -442,68 +658,116 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
           </div>
         )}
 
-        {/* ────────── Notices ────────── */}
-        <div className="portal-card">
-          <h3>📣 Notice board</h3>
-          {visibleNotices.length === 0 ? (
-            <div className="portal-empty">Nothing new — check back later.</div>
-          ) : (
-            visibleNotices.map((n) => (
-              <div key={n.id} className="portal-row">
-                <div className="portal-row-main">
-                  <strong>{n.pinned ? '📌 ' : ''}{n.title}</strong>
-                  <span>{formatDate(n.postedAt)} · {n.postedByName}</span>
-                  <span style={{ color: 'var(--jp-text)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{n.body}</span>
-                </div>
+        {/* ────────── Messages from the office ──────────
+            Hidden entirely when there are zero notices, so we never
+            show "Nothing here yet" cards eating space. */}
+        {visibleNotices.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setOpenMessages((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>📣</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Messages from the office</h3>
+              <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{visibleNotices.length} message{visibleNotices.length === 1 ? '' : 's'}</span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openMessages ? '▾' : '▸'}</span>
+            </button>
+            {openMessages && (
+              <div style={{ padding: '0 16px 14px' }}>
+                {visibleNotices.map((n) => (
+                  <div key={n.id} className="portal-row">
+                    <div className="portal-row-main">
+                      <strong>{n.pinned ? '📌 ' : ''}{n.title}</strong>
+                      <span>{formatDate(n.postedAt)} · {n.postedByName}</span>
+                      <span style={{ color: 'var(--jp-text)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{n.body}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* ────────── Training to acknowledge ────────── */}
-        <div className="portal-card">
-          <h3>🎓 Training to sign off</h3>
-          {pendingTraining.length === 0 ? (
-            <div className="portal-empty">All caught up — nice work.</div>
-          ) : (
-            pendingTraining.map((t) => (
-              <div key={t.id} className="portal-row">
-                <div className="portal-row-main">
-                  <strong>{t.topic}</strong>
-                  <span>Trained {formatDate(t.trainingDate)} by {t.trainerName || '—'}</span>
-                </div>
-                <button className="secondary-button" onClick={() => onAcknowledgeTraining(t.id)}>I acknowledge</button>
+        {/* ────────── Training to sign ──────────
+            Hidden when nothing pending. Auto-expanded if there is. */}
+        {pendingTraining.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden', borderLeft: `4px solid ${HERO_AMBER}` }}>
+            <button
+              type="button"
+              onClick={() => setOpenTraining((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>🎓</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Training to sign</h3>
+              <span style={{ fontSize: 12, fontWeight: 700, color: HERO_AMBER }}>{pendingTraining.length} to do</span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openTraining ? '▾' : '▸'}</span>
+            </button>
+            {openTraining && (
+              <div style={{ padding: '0 16px 14px' }}>
+                {pendingTraining.map((t) => (
+                  <div key={t.id} className="portal-row">
+                    <div className="portal-row-main">
+                      <strong>{t.topic}</strong>
+                      <span>Trained {formatDate(t.trainingDate)} by {t.trainerName || '—'}</span>
+                    </div>
+                    <button className="secondary-button" onClick={() => onAcknowledgeTraining(t.id)}>I&apos;ve done it</button>
+                  </div>
+                ))}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* ────────── SOPs to acknowledge ────────── */}
-        <div className="portal-card">
-          <h3>📋 SOPs to read & acknowledge</h3>
-          {pendingSops.length === 0 ? (
-            <div className="portal-empty">You've acknowledged every active SOP.</div>
-          ) : (
-            pendingSops.map((s) => (
-              <div key={s.id} className="portal-row">
-                <div className="portal-row-main">
-                  <strong>{s.title} <span className="muted">v{s.version}</span></strong>
-                  <span>{s.category} · approved {formatDate(s.approvedDate)}</span>
-                  {s.documentUrl ? <a href={s.documentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Open document ↗</a> : null}
-                </div>
-                <button className="secondary-button" onClick={() => onAcknowledgeSop(s.id, fullName)}>I've read it</button>
+        {/* ────────── Work instructions ──────────
+            SOP is jargon; staff call them "work instructions". */}
+        {pendingSops.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden', borderLeft: `4px solid ${HERO_AMBER}` }}>
+            <button
+              type="button"
+              onClick={() => setOpenSops((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>📋</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Work instructions to read</h3>
+              <span style={{ fontSize: 12, fontWeight: 700, color: HERO_AMBER }}>{pendingSops.length} to read</span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openSops ? '▾' : '▸'}</span>
+            </button>
+            {openSops && (
+              <div style={{ padding: '0 16px 14px' }}>
+                {pendingSops.map((s) => (
+                  <div key={s.id} className="portal-row">
+                    <div className="portal-row-main">
+                      <strong>{s.title} <span className="muted">v{s.version}</span></strong>
+                      <span>{s.category} · approved {formatDate(s.approvedDate)}</span>
+                      {s.documentUrl ? <a href={s.documentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Open document ↗</a> : null}
+                    </div>
+                    <button className="secondary-button" onClick={() => onAcknowledgeSop(s.id, fullName)}>I&apos;ve read it</button>
+                  </div>
+                ))}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* ────────── My leave (Phase 47 self-service) ────────── */}
-        <div className="portal-card">
-          <h3>🏖️ My leave</h3>
-          {!linkedEmployee ? (
-            <div className="portal-empty">Your profile isn't linked to an employee record yet. Ask an admin to link it (Permissions page) so leave balances appear here.</div>
-          ) : (
-            <>
+        {/* ────────── My leave ──────────
+            Only renders when linkedEmployee exists. We don't show the
+            "your profile isn't linked" admin-jargon error any more —
+            admin should see that in their own dashboard, not the staff. */}
+        {linkedEmployee && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setOpenLeave((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>🏖️</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>My leave</h3>
+              <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days left</span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openLeave ? '▾' : '▸'}</span>
+            </button>
+            {openLeave && (
+              <div style={{ padding: '0 16px 14px' }}>
               <div className="portal-row">
                 <div className="portal-row-main">
                   <strong>Annual</strong>
@@ -552,17 +816,31 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                   <span className={`portal-pill ${r.status === 'Approved' || r.status === 'Taken' ? 'ok' : (r.status === 'Pending' ? 'due' : '')}`}>{r.status}</span>
                 </div>
               ))}
-            </>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* ────────── From your manager (warnings / commendations / notes) ────────── */}
-        <div className="portal-card">
-          <h3>💬 From your manager</h3>
-          {myWarnings.length === 0 ? (
-            <div className="portal-empty">No notes from your manager right now.</div>
-          ) : (
-            myWarnings.map((w) => {
+        {/* ────────── Letters from your manager ──────────
+            "Warnings / commendations / notes" — staff understand
+            "letter from the boss". Hidden when nothing. */}
+        {myWarnings.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden', borderLeft: managerTodoCount > 0 ? `4px solid ${HERO_AMBER}` : '4px solid transparent' }}>
+            <button
+              type="button"
+              onClick={() => setOpenManager((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>💬</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Letters from your manager</h3>
+              <span style={{ fontSize: 12, fontWeight: managerTodoCount > 0 ? 700 : 400, color: managerTodoCount > 0 ? HERO_AMBER : 'var(--jp-ink-3, #64748b)' }}>
+                {managerTodoCount > 0 ? `${managerTodoCount} to sign` : `${myWarnings.length} letter${myWarnings.length === 1 ? '' : 's'}`}
+              </span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openManager ? '▾' : '▸'}</span>
+            </button>
+            {openManager && (
+              <div style={{ padding: '0 16px 14px' }}>
+                {myWarnings.map((w) => {
               const needsAck = isWarningType(w.type) && !w.acknowledged;
               return (
                 <div key={w.id} className="portal-row" style={{ display: 'block' }}>
@@ -597,32 +875,72 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                       <button className="secondary-button" style={{ marginTop: 6 }} onClick={() => setShowSignPadFor(w.id)}>Acknowledge & sign</button>
                     )
                   ) : null}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ────────── Recent payslips ────────── */}
-        <div className="portal-card">
-          <h3>💰 My payslips</h3>
-          {!linkedEmployee ? (
-            <div className="portal-empty">Your profile isn't linked to an employee record yet. Ask an admin to link it on the Permissions page so payslips appear here.</div>
-          ) : myPayslips.length === 0 ? (
-            <div className="portal-empty">No payslips for you yet.</div>
-          ) : (
-            myPayslips.map(({ run, payslip }) => (
-              <div key={`${run.id}-${payslip.id}`} className="portal-row">
-                <div className="portal-row-main">
-                  <strong>{run.periodLabel}</strong>
-                  <span>Pay date {formatDate(run.payDate)} · Net R{payslip.netPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <span className={`portal-pill ${run.status === 'Paid' ? 'ok' : 'due'}`}>{run.status}</span>
+                  </div>
+                );
+              })}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        )}
+
+        {/* ────────── My pay history ──────────
+            Hidden if no linked employee or no payslips. */}
+        {linkedEmployee && myPayslips.length > 0 && (
+          <div className="portal-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setOpenPay((v) => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 24 }}>💰</span>
+              <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>My pay history</h3>
+              <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{myPayslips.length} pay{myPayslips.length === 1 ? 'slip' : 'slips'}</span>
+              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openPay ? '▾' : '▸'}</span>
+            </button>
+            {openPay && (
+              <div style={{ padding: '0 16px 14px' }}>
+                {myPayslips.map(({ run, payslip }) => (
+                  <div key={`${run.id}-${payslip.id}`} className="portal-row">
+                    <div className="portal-row-main">
+                      <strong>{run.periodLabel}</strong>
+                      <span>Pay date {formatDate(run.payDate)} · Net R{payslip.netPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <span className={`portal-pill ${run.status === 'Paid' ? 'ok' : 'due'}`}>{run.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ───────────────── 6. HELP VIDEO LINK ─────────────────
+          Quiet card at the bottom. Anyone unsure of how to use the
+          page can watch a video instead of reading. helpVideoUrl is
+          optional — comes from Settings (Aman will upload his videos). */}
+      {helpVideoUrl && (
+        <a
+          href={helpVideoUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginTop: 18,
+            padding: '12px 16px',
+            borderRadius: 10,
+            background: 'rgba(59, 130, 246, 0.06)',
+            border: '1px dashed #3b82f6',
+            color: '#1e40af',
+            textDecoration: 'none',
+            fontSize: 14,
+          }}
+        >
+          <span style={{ fontSize: 28 }}>▶️</span>
+          <span><strong>Watch how to use this page</strong><div style={{ fontSize: 12, color: '#475569' }}>Step-by-step video</div></span>
+        </a>
+      )}
     </section>
   );
 }

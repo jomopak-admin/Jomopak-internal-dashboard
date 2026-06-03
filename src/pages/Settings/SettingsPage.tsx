@@ -90,6 +90,7 @@ type SettingsTab =
   | 'numbering'
   | 'banks'
   | 'visitorAccess'
+  | 'helpVideos'
   | 'apiAccess'
   | 'access';
 
@@ -108,6 +109,7 @@ const TABS: Array<{ key: SettingsTab; label: string; subtitle: string }> = [
   { key: 'numbering', label: 'Document numbering', subtitle: 'Prefix + next number + padding for invoices, quotes, DNs, POs, job cards, bills, payslips.' },
   { key: 'banks', label: 'Bank accounts', subtitle: 'Company bank accounts used for EFT exports and shown on invoice footers.' },
   { key: 'visitorAccess', label: 'Visitor access', subtitle: 'Which areas reception can grant without host approval, and how long until an unanswered request escalates.' },
+  { key: 'helpVideos', label: 'Help videos', subtitle: 'Paste a video URL per page. Staff see a "Watch how to use this page" link at the bottom of that page.' },
   { key: 'apiAccess', label: 'API access', subtitle: 'Secure read-only API for connecting JomoPak to other systems (Aman OS, dashboards, website). You control what’s shared.' },
   { key: 'access', label: 'Page access', subtitle: 'Which roles can open this Settings page at all.' },
 ];
@@ -340,6 +342,11 @@ export function SettingsPage(props: SettingsPageProps) {
           <BankAccountsTab
             accounts={settings.bankAccounts ?? DEFAULT_BANK_ACCOUNTS}
             onChange={onSetBankAccounts}
+          />
+        ) : activeTab === 'helpVideos' ? (
+          <HelpVideosTab
+            helpVideos={settingsForm.helpVideos}
+            patchHelpVideo={(key, url) => setSettingsForm({ ...settingsForm, helpVideos: { ...settingsForm.helpVideos, [key]: url } })}
           />
         ) : (
           <AccessTab />
@@ -2351,6 +2358,181 @@ function BankAccountsTab({ accounts, onChange }: BankAccountsTabProps) {
       <button type="button" className="ghost-button" onClick={add} style={{ marginTop: '0.75rem' }}>
         + Add bank account
       </button>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Phase 121 — Help Videos tab.
+ *
+ * Aman's instruction: low-literacy / low-skill staff should NEVER have an
+ * excuse like "I didn't know how to use it". The dashboard renders a
+ * "▶ Watch how to use this page" link at the bottom of every staff-facing
+ * page when a video URL is set here. Pages without a URL hide the link
+ * entirely, so the cards roll out gradually as Aman films each video.
+ *
+ * The list below is curated — only staff-facing / factory-floor pages are
+ * shown. Office-facing pages (Sales, Finance, Admin Hub etc.) don't have
+ * help-video slots because their users don't need them.
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface HelpVideoPage {
+  /** Page identifier — matches the View name used elsewhere. */
+  key: string;
+  /** Friendly display name in this Settings tab. */
+  label: string;
+  /** Emoji shown next to the label so the page is instantly recognisable. */
+  emoji: string;
+  /** Short subtitle telling Aman what the video should cover. */
+  hint?: string;
+}
+
+interface HelpVideoGroup {
+  title: string;
+  description: string;
+  pages: HelpVideoPage[];
+}
+
+/**
+ * Curated list — staff-facing and factory-floor pages that benefit from
+ * video help. Office pages omitted on purpose.
+ */
+const HELP_VIDEO_GROUPS: HelpVideoGroup[] = [
+  {
+    title: 'Staff portal',
+    description: 'The page every staff member lands on. Most important video.',
+    pages: [
+      { key: 'myPortal', label: 'My Stuff', emoji: '👤', hint: 'How to read messages, sign training, apply for leave, see pay.' },
+    ],
+  },
+  {
+    title: 'Reception & visitors',
+    description: 'Reception staff and the kiosk surface.',
+    pages: [
+      { key: 'visitorKiosk', label: 'Visitor kiosk', emoji: '🚪', hint: 'Sign visitors in and out. How to verify them.' },
+      { key: 'visitorApprovalRequests', label: 'Visitor approval requests', emoji: '🛎️', hint: 'How to handle host approval requests.' },
+    ],
+  },
+  {
+    title: 'Drivers & dispatch',
+    description: 'Driver POD app and dispatch flow.',
+    pages: [
+      { key: 'driverPod', label: 'Driver POD (mobile)', emoji: '🚚', hint: 'Capture proof of delivery, signature, photos.' },
+      { key: 'dispatchRuns', label: 'Dispatch runs', emoji: '📦', hint: 'Plan load, hand to driver, complete.' },
+      { key: 'dispatch', label: 'Dispatch records', emoji: '📋', hint: 'Record what left the building.' },
+    ],
+  },
+  {
+    title: 'Production floor',
+    description: 'Where production staff log work.',
+    pages: [
+      { key: 'jobs', label: 'Job Cards', emoji: '🛠️', hint: 'Update job status, capture quantities, mark complete.' },
+      { key: 'productionSchedule', label: 'Production schedule', emoji: '📅', hint: 'Read the daily run list.' },
+      { key: 'workTicket', label: 'Work tickets', emoji: '🎫', hint: 'How a work ticket is filled in.' },
+      { key: 'production', label: 'Production logs', emoji: '📝', hint: 'Recording quantities + waste.' },
+      { key: 'waste', label: 'Waste log', emoji: '🗑️', hint: 'How to log waste cleanly.' },
+    ],
+  },
+  {
+    title: 'Warehouse & stock',
+    description: 'For warehouse and receiving staff.',
+    pages: [
+      { key: 'finishedStock', label: 'Finished goods stock', emoji: '📦', hint: 'Update FG stock counts.' },
+      { key: 'materials', label: 'Materials receiving', emoji: '📥', hint: 'Receiving paper / chemicals / consumables.' },
+      { key: 'stockMovements', label: 'Stock movements', emoji: '🔁', hint: 'Move stock between locations.' },
+      { key: 'stockTake', label: 'Stock take', emoji: '✅', hint: 'How to do a stock count.' },
+      { key: 'spares', label: 'Spares & tools', emoji: '🔧', hint: 'Issue spares, check out tools.' },
+    ],
+  },
+  {
+    title: 'Quality & safety',
+    description: 'Compliance work that floor staff touch.',
+    pages: [
+      { key: 'nonConformance', label: 'Non-conformance (NCR)', emoji: '⚠️', hint: 'Log an NCR + CAPA.' },
+      { key: 'firstAidRegister', label: 'First aid register', emoji: '🩹', hint: 'Record a first-aid incident.' },
+      { key: 'incidentRegister', label: 'Incident register', emoji: '🚨', hint: 'Log a workplace incident.' },
+      { key: 'cleaningLogs', label: 'Cleaning logs', emoji: '🧹', hint: 'Daily cleaning sign-off.' },
+      { key: 'chemicalRegister', label: 'Chemical register', emoji: '🧪', hint: 'Issue + receive chemicals.' },
+      { key: 'foodSafeMaterials', label: 'Food-safe materials', emoji: '🥪', hint: 'How food-safe materials get logged.' },
+      { key: 'toolboxTalks', label: 'Toolbox talks', emoji: '📣', hint: 'Record a toolbox talk + attendance.' },
+    ],
+  },
+];
+
+interface HelpVideosTabProps {
+  helpVideos: Record<string, string>;
+  patchHelpVideo: (key: string, url: string) => void;
+}
+
+function HelpVideosTab({ helpVideos, patchHelpVideo }: HelpVideosTabProps) {
+  // Count how many videos are set so Aman gets a "X of Y pages have a
+  // video" progress feel.
+  const totalSlots = HELP_VIDEO_GROUPS.reduce((n, g) => n + g.pages.length, 0);
+  const filledSlots = Object.values(helpVideos).filter((v) => v && v.trim()).length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(59, 130, 246, 0.06)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+        <strong style={{ display: 'block', marginBottom: 4 }}>How this works</strong>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--jp-ink-3, #475569)' }}>
+          Paste a video URL (YouTube unlisted, Vimeo, etc.) for any of the staff-facing pages below. Staff see a friendly &ldquo;▶ Watch how to use this page&rdquo; link at the bottom of that page. Empty boxes mean no link is shown — film at your own pace.
+        </p>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>
+          <strong>{filledSlots}</strong> of <strong>{totalSlots}</strong> pages have a video.
+        </div>
+      </div>
+
+      {HELP_VIDEO_GROUPS.map((group) => (
+        <div key={group.title}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--jp-ink-2, #334155)' }}>{group.title}</h3>
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{group.description}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {group.pages.map((page) => {
+              const url = helpVideos[page.key] ?? '';
+              const hasUrl = !!url.trim();
+              return (
+                <div
+                  key={page.key}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '40px 1fr auto',
+                    gap: 12,
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--jp-divider, #e2e8f0)',
+                    background: hasUrl ? 'rgba(34, 168, 101, 0.04)' : 'var(--jp-paper, #fff)',
+                  }}
+                >
+                  <span style={{ fontSize: 24, lineHeight: 1 }}>{page.emoji}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ display: 'block' }}>{page.label}</strong>
+                    {page.hint ? <span style={{ display: 'block', fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{page.hint}</span> : null}
+                    <input
+                      type="url"
+                      placeholder="Paste a YouTube / Vimeo URL"
+                      value={url}
+                      onChange={(e) => patchHelpVideo(page.key, e.target.value)}
+                      style={{ width: '100%', marginTop: 6, padding: '6px 8px', fontSize: 13 }}
+                    />
+                  </div>
+                  {hasUrl ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12, color: 'var(--jp-orange, #db5a1f)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                      title="Open video in a new tab"
+                    >Preview ↗</a>
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'var(--jp-ink-3, #94a3b8)', whiteSpace: 'nowrap' }}>No video</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

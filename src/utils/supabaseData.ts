@@ -135,6 +135,10 @@ function mapAppSettings(row: any): AppSettings {
     brandLogos: Array.isArray(row.brand_logos ?? row.brandLogos)
       ? (row.brand_logos ?? row.brandLogos)
       : undefined,
+    // Phase 121 — Help video URLs per page. jsonb on the row.
+    helpVideos: row.help_videos && typeof row.help_videos === 'object'
+      ? row.help_videos
+      : undefined,
     updatedAt: row.updated_at ?? row.updatedAt ?? '',
     updatedBy: row.updated_by ?? row.updatedBy ?? '',
   });
@@ -4203,6 +4207,8 @@ export async function syncAppData(data: AppData): Promise<void> {
       beneficiaries: data.appSettings.beneficiaries ?? [],
       // Phase 115 — Brand logo library.
       brand_logos: data.appSettings.brandLogos ?? [],
+      // Phase 121 — Help video URLs per page.
+      help_videos: data.appSettings.helpVideos ?? {},
       updated_at: data.appSettings.updatedAt || new Date().toISOString(),
       updated_by: data.appSettings.updatedBy || null,
     }]),

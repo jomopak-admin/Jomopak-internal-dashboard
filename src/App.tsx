@@ -1455,6 +1455,9 @@ const buildSettingsForm = (settings: AppSettings): AppSettingsFormState => ({
     settings.standardMarginPercent !== undefined && settings.standardMarginPercent !== null
       ? String(settings.standardMarginPercent)
       : '',
+  // Phase 121 — Help videos: copy the map into form state (empty object
+  // if unset so the input stays controlled).
+  helpVideos: settings.helpVideos ? { ...settings.helpVideos } : {},
 });
 
 const createInitialProductionSpecForm = (): ProductionSpecFormState => ({
@@ -3391,6 +3394,11 @@ function App() {
       standardMarginPercent: numeric(
         settingsForm.standardMarginPercent,
         data.appSettings.standardMarginPercent ?? 35,
+      ),
+      // Phase 121 — help videos persist from Settings → Help videos.
+      // Strip empty entries so the saved object stays clean.
+      helpVideos: Object.fromEntries(
+        Object.entries(settingsForm.helpVideos || {}).filter(([, url]) => url && url.trim()),
       ),
       updatedAt: new Date().toISOString(),
       updatedBy: profile?.fullName || profile?.email || data.appSettings.updatedBy,
@@ -13978,6 +13986,8 @@ function App() {
           employees={data.employees}
           warnings={data.staffWarnings ?? []}
           leaveRequests={data.leaveRequests ?? []}
+          // Phase 121 — Help video URL for this page (Settings → Help videos).
+          helpVideoUrl={data.appSettings.helpVideos?.myPortal}
           onAcknowledgeTraining={handleAcknowledgeTraining}
           onAcknowledgeSop={handleAcknowledgeSop}
           onAcknowledgeWarning={handleAcknowledgeWarning}

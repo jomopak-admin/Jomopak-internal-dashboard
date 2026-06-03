@@ -6363,6 +6363,12 @@ export interface AppSettings {
    *  the SARS-compliant treatment under deemed-supply rules. Per-deposit
    *  override is still available on capture. Settings → Accounting. */
   depositTaxTreatment?: DepositTaxTreatment;
+  /** Phase 121 — Help videos per page. Key = page identifier (matches
+   *  the View type for that page). Value = video URL (YouTube/Vimeo
+   *  unlisted). When set, the matching page renders a "▶ Watch how to
+   *  use this page" link at the bottom. Empty / missing keys hide the
+   *  link entirely. Drives the low-literacy-friendly help layer. */
+  helpVideos?: Record<string, string>;
   /** Phase 110.2 — Accounting defaults (VAT rates, payment terms, default
    *  retained-earnings account). Sits alongside sarsConfig — sarsConfig
    *  drives SARS filings, this drives bookkeeping behaviour. */
@@ -6931,6 +6937,10 @@ export interface AppSettingsFormState {
   /** Phase 92 — company-wide standard margin %, edited as a string so the
    *  input stays controlled. Persisted back to AppSettings.standardMarginPercent. */
   standardMarginPercent: string;
+  /** Phase 121 — Help-video URLs keyed by page. Editable in Settings →
+   *  Help videos; rendered as "Watch how to use this page" at the bottom
+   *  of the matching page. */
+  helpVideos: Record<string, string>;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
