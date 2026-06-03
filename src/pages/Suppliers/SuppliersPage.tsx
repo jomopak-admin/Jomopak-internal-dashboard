@@ -427,7 +427,7 @@ export function SuppliersPage({
   return (
     <>
       <SectionTitle
-        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Suppliers</button> : null}
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>Back to Suppliers</button> : null}
 
         action={
           mode === 'list' ? (
@@ -552,7 +552,7 @@ export function SuppliersPage({
                             )}
                         </td>
                         <td>{supplier.active ? 'Active' : 'Inactive'}</td>
-                        <td><button className="table-button" aria-label={`Edit ${supplier.name}`} onClick={() => handleStartEdit(supplier)}>✎</button></td>
+                        <td><button className="table-button" aria-label={`Edit ${supplier.name}`} onClick={() => handleStartEdit(supplier)}></button></td>
                       </tr>
                     );
                   })}

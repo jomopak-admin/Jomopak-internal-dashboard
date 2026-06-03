@@ -135,7 +135,7 @@ export function AccountsPayablePage({ supplierBills, suppliers, ledgerAccounts, 
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit bill ${draft.billNumber}` : 'New supplier bill'}
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <h3>Bill details</h3>
@@ -199,7 +199,7 @@ export function AccountsPayablePage({ supplierBills, suppliers, ledgerAccounts, 
                       </select>
                     </td>
                     <td><input value={p.reference} onChange={(e) => updatePayment(p.id, { reference: e.target.value })} /></td>
-                    <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removePayment(p.id)}>✕</button></td>
+                    <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removePayment(p.id)}></button></td>
                   </tr>
                 ))}
               </tbody>

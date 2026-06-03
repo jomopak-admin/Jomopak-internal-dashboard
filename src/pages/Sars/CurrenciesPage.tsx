@@ -92,7 +92,7 @@ export function CurrenciesPage({ currencyConfig, invoices, supplierBills, ledger
           <button className="ghost-button" onClick={addRate} style={{ borderStyle: 'dashed' }}>+ Add currency</button>
         </div>
         <table className="data-table">
-          <thead><tr><th>Currency</th><th style={{ textAlign: 'right' }}>Rate → {currencyConfig.baseCurrency}</th><th>As of</th><th></th></tr></thead>
+          <thead><tr><th>Currency</th><th style={{ textAlign: 'right' }}>Rate {currencyConfig.baseCurrency}</th><th>As of</th><th></th></tr></thead>
           <tbody>
             {rates.length === 0 ? <tr><td colSpan={4} className="muted">No foreign currencies. Add one.</td></tr> :
               rates.map((r, idx) => (
@@ -100,7 +100,7 @@ export function CurrenciesPage({ currencyConfig, invoices, supplierBills, ledger
                   <td><input style={{ width: 90 }} value={r.code} onChange={(e) => updateRate(idx, { code: e.target.value.toUpperCase() })} placeholder="USD" /></td>
                   <td><input type="number" style={{ width: 120, textAlign: 'right' }} value={r.rateToBase} onChange={(e) => updateRate(idx, { rateToBase: Number(e.target.value) })} /></td>
                   <td><input type="date" value={r.asOf} onChange={(e) => updateRate(idx, { asOf: e.target.value })} /></td>
-                  <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeRate(idx)}>✕</button></td>
+                  <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeRate(idx)}></button></td>
                 </tr>
               ))}
           </tbody>

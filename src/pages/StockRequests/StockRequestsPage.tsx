@@ -199,7 +199,7 @@ export function StockRequestsPage({ requests, spareParts, suppliers, currentUser
   return (
     <>
       <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New request</button> : null}
-        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard
@@ -292,8 +292,8 @@ export function StockRequestsPage({ requests, spareParts, suppliers, currentUser
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <textarea rows={2} value={actionNotes} onChange={(e) => setActionNotes(e.target.value)} placeholder="Notes (optional)" />
                                 <div style={{ display: 'flex', gap: 4 }}>
-                                  <button className="table-button" onClick={() => { onApprove(r.id, actionNotes); resetAction(); }}>✓ Approve</button>
-                                  <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); resetAction(); }}>✗ Decline</button>
+                                  <button className="table-button" onClick={() => { onApprove(r.id, actionNotes); resetAction(); }}>Approve</button>
+                                  <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); resetAction(); }}>Decline</button>
                                   <button className="table-button" onClick={resetAction}>Cancel</button>
                                 </div>
                               </div>
@@ -307,7 +307,7 @@ export function StockRequestsPage({ requests, spareParts, suppliers, currentUser
                             actionFor === r.id ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                 {canFulfilFromStock ? (
-                                  <button className="table-button" onClick={() => { onIssueFromStock(r.id, actionNotes); resetAction(); }}>✓ Issue {r.quantity} from stock</button>
+                                  <button className="table-button" onClick={() => { onIssueFromStock(r.id, actionNotes); resetAction(); }}>Issue {r.quantity} from stock</button>
                                 ) : linked ? (
                                   <div className="table-subtext" style={{ color: 'var(--jp-orange)' }}>
                                     Not enough on hand to fulfill from stock ({onHand} available, {r.quantity} needed) — raise a PO instead.
@@ -324,8 +324,8 @@ export function StockRequestsPage({ requests, spareParts, suppliers, currentUser
                                     const sup = suppliers.find((s) => s.id === actionSupplierId);
                                     onRaisePurchaseOrder(r.id, actionSupplierId, sup?.name || '', Number(actionCost) || 0, actionNotes);
                                     resetAction();
-                                  }}>📋 Raise PO</button>
-                                  <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); resetAction(); }}>✗ Decline</button>
+                                  }}>Raise PO</button>
+                                  <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); resetAction(); }}>Decline</button>
                                   <button className="table-button" onClick={resetAction}>Cancel</button>
                                 </div>
                               </div>
@@ -336,7 +336,7 @@ export function StockRequestsPage({ requests, spareParts, suppliers, currentUser
 
                           {/* Mark received once PO arrives */}
                           {canBuy && r.status === 'PO Created' ? (
-                            <button className="table-button" onClick={() => { if (confirm('Mark PO as received?')) onMarkReceived(r.id); }}>📥 Received</button>
+                            <button className="table-button" onClick={() => { if (confirm('Mark PO as received?')) onMarkReceived(r.id); }}>Received</button>
                           ) : null}
 
                           {/* Edit available for the requester while pending */}

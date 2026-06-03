@@ -3,8 +3,8 @@
  *
  * SMETA-mandatory module. One row per incident: injury / near-miss /
  * property damage / IOD / environmental. Captures the full chain — what
- * happened → immediate action → root cause → corrective action → IOD
- * submission → return-to-work — plus signed-off photo evidence.
+ * happened immediate action root cause corrective action IOD
+ * submission return-to-work — plus signed-off photo evidence.
  *
  * Doesn't replace the existing First Aid Register (Phase 82). First Aid
  * stays the lightweight "treatment given" log; Incident Register is the
@@ -261,7 +261,7 @@ export function IncidentRegisterPage(props: Props) {
                     <td><div>{e.personName}</div>{e.personRole ? <div className="table-subtext">{e.personRole}</div> : null}</td>
                     <td>{e.bodyPartAffected || '—'}</td>
                     <td>{formatNumber(e.daysLost, 0)}</td>
-                    <td>{e.incidentType === 'IOD' || e.incidentType === 'Lost time injury' ? (e.iodSubmitted ? '✓' : '✗') : '—'}</td>
+                    <td>{e.incidentType === 'IOD' || e.incidentType === 'Lost time injury' ? (e.iodSubmitted ? '' : '') : '—'}</td>
                     <td>{e.closedAt ? `Closed ${formatDate(e.closedAt)}` : <span style={{ color: '#b8860b' }}>Open</span>}</td>
                     <td><button type="button" className="ghost-button" onClick={() => onEdit(e)}>Edit</button></td>
                   </tr>

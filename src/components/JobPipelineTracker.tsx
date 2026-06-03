@@ -53,7 +53,7 @@ export function JobPipelineTracker({
   function cycleStatus(stageKey: string, item: PipelineItem) {
     if (readOnly) return;
     const now = new Date().toISOString();
-    // pending → done → blocked → pending
+    // pending done blocked pending
     if (item.status === 'pending') {
       patchItem(stageKey, item.key, {
         status: 'done',
@@ -123,9 +123,9 @@ export function JobPipelineTracker({
                       disabled={readOnly}
                       onClick={() => cycleStatus(stage.key, item)}
                       aria-label={`Toggle ${item.label}`}
-                      title="Tap to cycle: pending → done → blocked"
+                      title="Tap to cycle: pending done blocked"
                     >
-                      {item.status === 'done' ? '✓' : item.status === 'blocked' ? '!' : ''}
+                      {item.status === 'done' ? '' : item.status === 'blocked' ? '!' : ''}
                     </button>
                     <div className="job-pipeline-item-body">
                       <div className="job-pipeline-item-label">{item.label}</div>
@@ -160,7 +160,7 @@ export function JobPipelineTracker({
 
       {!readOnly ? (
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Tap any tick: <strong>○</strong> pending → <strong>✓</strong> done → <strong>!</strong> blocked → back to pending. Blocker
+          Tap any tick: <strong></strong> pending <strong></strong> done <strong>!</strong> blocked back to pending. Blocker
           notes age automatically — a blocker stuck &gt; 5 days raises a notification.
         </p>
       ) : null}

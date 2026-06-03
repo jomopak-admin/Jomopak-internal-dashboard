@@ -88,7 +88,7 @@ export function PpeIssuePage({ records, employees, filters, setFilters, form, se
     [employees],
   );
 
-  /** Pick an Employee → snapshot their name + role onto the form so the
+  /** Pick an Employee snapshot their name + role onto the form so the
    *  printable and history rows stay correct even if the employee is
    *  later renamed or has their job title changed. */
   function pickEmployee(employeeId: string) {
@@ -215,7 +215,7 @@ export function PpeIssuePage({ records, employees, filters, setFilters, form, se
   return (
     <>
       <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Issue PPE</button> : null}
-        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard
@@ -274,7 +274,7 @@ export function PpeIssuePage({ records, employees, filters, setFilters, form, se
                         <td>{formatDate(r.issuedDate)}</td>
                         <td>
                           <span className={r.status === 'Lost' || r.status === 'Damaged' ? 'badge badge-danger' : r.status === 'Issued' ? 'badge badge-success' : 'badge'}>{r.status}</span>
-                          {r.employeeSignatureDataUrl ? <div className="table-subtext" style={{ color: 'var(--jp-orange)' }}>✓ Signed</div> : null}
+                          {r.employeeSignatureDataUrl ? <div className="table-subtext" style={{ color: 'var(--jp-orange)' }}>Signed</div> : null}
                         </td>
                         <td>{r.replacementDueDate ? formatDate(r.replacementDueDate) : '—'}</td>
                         <td><button className="table-button" onClick={() => { onEdit(r); setMode('form'); }}>Edit</button></td>

@@ -95,7 +95,7 @@ export function ShipmentsPage({ shipments, suppliers, onSave, onReceiveIntoStock
       <div className="page-stack shipments-shell">
         <SectionTitle
           title={editingId ? `Edit shipment ${draft.shipmentNumber}` : 'New shipment'}
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <h3>Shipment details</h3>
@@ -146,7 +146,7 @@ export function ShipmentsPage({ shipments, suppliers, onSave, onReceiveIntoStock
                   <td><input style={{ width: 70 }} value={l.unit} onChange={(e) => updateLine(l.id, { unit: e.target.value })} /></td>
                   <td><input type="number" style={{ width: 90, textAlign: 'right' }} value={l.unitCost} onChange={(e) => updateLine(l.id, { unitCost: Number(e.target.value) })} /></td>
                   <td style={{ textAlign: 'right' }}>{formatNumber((Number(l.quantity) || 0) * (Number(l.unitCost) || 0), 2)}</td>
-                  <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeLine(l.id)}>✕</button></td>
+                  <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeLine(l.id)}></button></td>
                 </tr>
               ))}
             </tbody>

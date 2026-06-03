@@ -911,7 +911,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
     {
       key: 'changeover',
       title: 'Product changeover checklist',
-      subtitle: 'Required when moving from one job to another, especially non-food → food.',
+      subtitle: 'Required when moving from one job to another, especially non-food food.',
       contextActive: isChangeoverComplete(jobForm.changeoverChecklist),
       body: (() => {
         const isFood = isFoodPackagingLevel(jobForm.foodContactLevel);
@@ -1052,7 +1052,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
   return (
     <>
       <SectionTitle
-        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Job Cards</button> : null}
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>Back to Job Cards</button> : null}
 
         action={
           mode === 'list' ? (
@@ -1299,7 +1299,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
                               onClick={() => onCreateDelivery(job)}
                               title="Create a delivery note from this job"
                             >
-                              → Delivery
+                              Delivery
                             </button>
                           ) : null}
                           {onCreateInvoice ? (
@@ -1308,7 +1308,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
                               onClick={() => onCreateInvoice(job)}
                               title="Create an invoice from this job"
                             >
-                              → Invoice
+                              Invoice
                             </button>
                           ) : null}
                           {onPrintJobCard ? (
@@ -1335,7 +1335,7 @@ export function JobCardsPage(props: JobCardsPageProps) {
                               onClick={() => { if (confirm(`Mark job ${job.jobNumber} as Completed?`)) onMarkComplete(job); }}
                               title="Mark this job as Completed — closes it out and moves it off the open list"
                             >
-                              ✓ Done
+                              Done
                             </button>
                           ) : null}
                         </div>

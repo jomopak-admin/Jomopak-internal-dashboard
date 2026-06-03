@@ -131,7 +131,7 @@ export function StockMovementsPage({ stockIssues }: StockMovementsPageProps) {
       <section className="card">
         <SectionTitle
           title="Per-receiver tally"
-          subtitle={month === 'all' ? 'All-time totals.' : 'Selected month vs previous month. ⚠ = jumped 3× or more, or 10+ where last month was zero.'}
+          subtitle={month === 'all' ? 'All-time totals.' : 'Selected month vs previous month. = jumped 3× or more, or 10+ where last month was zero.'}
         />
         {receiverStats.length === 0 ? (
           <EmptyState title="No issues in this period" body="Stock movements will show up here as soon as items are issued." />
@@ -158,7 +158,7 @@ export function StockMovementsPage({ stockIssues }: StockMovementsPageProps) {
                       <td style={{ textAlign: 'right' }}>{formatNumber(r.qtyThis)}</td>
                       <td style={{ textAlign: 'right' }}>{r.highValueThis || '—'}</td>
                       {month !== 'all' && <td style={{ textAlign: 'right' }}>{r.issuesPrev}</td>}
-                      <td>{anomaly ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>⚠ Investigate</span> : <span className="muted">normal</span>}</td>
+                      <td>{anomaly ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>Investigate</span> : <span className="muted">normal</span>}</td>
                     </tr>
                   );
                 })}
@@ -199,8 +199,8 @@ export function StockMovementsPage({ stockIssues }: StockMovementsPageProps) {
                       <td>{i.issuedToName || '—'}</td>
                       <td>{i.issuedByName || '—'}</td>
                       <td>{i.approverName || (i.highValueAtIssue ? <span style={{ color: '#b91c1c' }}>missing</span> : '—')}</td>
-                      <td>{i.signatureDataUrl ? '✓' : <span style={{ color: '#b91c1c' }}>NO</span>}</td>
-                      <td>{i.highValueAtIssue ? '⚠ yes' : '—'}</td>
+                      <td>{i.signatureDataUrl ? '' : <span style={{ color: '#b91c1c' }}>NO</span>}</td>
+                      <td>{i.highValueAtIssue ? 'yes' : '—'}</td>
                       <td className="table-subtext">{i.notes || '—'}</td>
                     </tr>
                   );

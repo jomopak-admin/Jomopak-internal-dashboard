@@ -79,7 +79,7 @@ export function ChartOfAccountsPage({ ledgerAccounts, onSave, onDelete }: ChartO
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit account ${draft.code}` : 'New ledger account'}
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">
@@ -138,7 +138,7 @@ export function ChartOfAccountsPage({ ledgerAccounts, onSave, onDelete }: ChartO
                     <td><strong>{a.code}</strong></td>
                     <td>{a.name}{!a.active ? <span className="muted"> · inactive</span> : null}</td>
                     <td className="muted">{a.subType || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>{a.vatApplicable ? '✓' : '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{a.vatApplicable ? '' : '—'}</td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <button className="link-button" onClick={() => startEdit(a)}>Edit</button>
                       {' · '}

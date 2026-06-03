@@ -110,7 +110,7 @@ export function GeneralLedgerPage({ journalEntries, ledgerAccounts, invoices, su
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit journal ${draft.entryNumber}` : 'New journal entry'}
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <div className="accounting-grid">
@@ -144,7 +144,7 @@ export function GeneralLedgerPage({ journalEntries, ledgerAccounts, invoices, su
                     <td><input value={l.description} onChange={(e) => updateLine(l.id, { description: e.target.value })} /></td>
                     <td><input type="number" className="payroll-input" value={l.debit} onChange={(e) => updateLine(l.id, { debit: Number(e.target.value), credit: 0 })} /></td>
                     <td><input type="number" className="payroll-input" value={l.credit} onChange={(e) => updateLine(l.id, { credit: Number(e.target.value), debit: 0 })} /></td>
-                    <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeLine(l.id)}>✕</button></td>
+                    <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeLine(l.id)}></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -161,7 +161,7 @@ export function GeneralLedgerPage({ journalEntries, ledgerAccounts, invoices, su
           <button className="ghost-button" style={{ borderStyle: 'dashed', marginTop: '0.5rem' }} onClick={addLine}>+ Add line</button>
           <div className="accounting-actions" style={{ alignItems: 'center', gap: '1rem' }}>
             <span className={totals.balanced ? 'gl-balanced' : 'amount-due'}>
-              {totals.balanced ? '✓ Balanced' : `Out by ${formatNumber(Math.abs(totals.debit - totals.credit), 2)}`}
+              {totals.balanced ? 'Balanced' : `Out by ${formatNumber(Math.abs(totals.debit - totals.credit), 2)}`}
             </span>
             <button className="primary-button" onClick={save} disabled={!totals.balanced}>Save journal</button>
           </div>

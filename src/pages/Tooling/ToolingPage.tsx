@@ -12,7 +12,7 @@
  * supersedes-link (when replacing an older version), client sign-off
  * (signer + date + on-screen signature pad + uploaded signed sample).
  *
- * Shared UI: photos (uses PhotoUploader → photos bucket), supplier +
+ * Shared UI: photos (uses PhotoUploader photos bucket), supplier +
  * internal vs external storage, cost + paid trail, status badge, notes,
  * runCount / lastUsedAt usage trail.
  */
@@ -392,7 +392,7 @@ export function ToolingPage(props: ToolingPageProps) {
     <>
       <SectionTitle
         backAction={mode === 'form'
-          ? <button className="ghost-button" onClick={handleBackToList}>← Back to {labelPlural}</button>
+          ? <button className="ghost-button" onClick={handleBackToList}>Back to {labelPlural}</button>
           : null}
         action={mode === 'list'
           ? (
@@ -503,7 +503,7 @@ export function ToolingPage(props: ToolingPageProps) {
                       {!isDie && (
                         <td>
                           v{t.designVersion || 1}
-                          {t.signedOffByName && <div className="table-subtext">✓ {t.signedOffByName}</div>}
+                          {t.signedOffByName && <div className="table-subtext">{t.signedOffByName}</div>}
                         </td>
                       )}
                       <td>
@@ -550,14 +550,14 @@ function printToolingRegister(
   ].filter(Boolean) as string[];
   const isDie = toolType === 'die';
   const headers = isDie
-    ? ['☐', 'Code', 'Name', 'Client', 'Dimensions', 'Location / supplier', 'Status', 'Runs', 'Last used', 'Auditor notes']
-    : ['☐', 'Code', 'Name', 'Client', 'Version', 'Signed off', 'Location / supplier', 'Status', 'Runs', 'Auditor notes'];
+    ? ['', 'Code', 'Name', 'Client', 'Dimensions', 'Location / supplier', 'Status', 'Runs', 'Last used', 'Auditor notes']
+    : ['', 'Code', 'Name', 'Client', 'Version', 'Signed off', 'Location / supplier', 'Status', 'Runs', 'Auditor notes'];
   const rowsHtml = rows.map((t) => {
     const where = t.location === 'External' ? (t.supplierName || '—') : (t.internalLocation || 'Internal');
     if (isDie) {
       const dims = t.dimensions ? `${t.dimensions.widthMm} × ${t.dimensions.heightMm} × ${t.dimensions.depthMm} mm` : '—';
       return `<tr>
-        <td style="text-align:center;font-size:14px">☐</td>
+        <td style="text-align:center;font-size:14px"></td>
         <td><strong>${t.code}</strong></td>
         <td>${escapeHtml(t.name)}</td>
         <td>${escapeHtml(t.clientName || 'Generic')}</td>
@@ -570,12 +570,12 @@ function printToolingRegister(
       </tr>`;
     }
     return `<tr>
-      <td style="text-align:center;font-size:14px">☐</td>
+      <td style="text-align:center;font-size:14px"></td>
       <td><strong>${t.code}</strong></td>
       <td>${escapeHtml(t.name)}</td>
       <td>${escapeHtml(t.clientName || '—')}</td>
       <td>v${t.designVersion || 1}</td>
-      <td>${t.signedOffByName ? `✓ ${escapeHtml(t.signedOffByName)}<div style="font-size:11px;color:#666">${t.signedOffAt ? t.signedOffAt.slice(0, 10) : ''}</div>` : '—'}</td>
+      <td>${t.signedOffByName ? `${escapeHtml(t.signedOffByName)}<div style="font-size:11px;color:#666">${t.signedOffAt ? t.signedOffAt.slice(0, 10) : ''}</div>` : '—'}</td>
       <td>${escapeHtml(where)}</td>
       <td>${escapeHtml(t.status)}</td>
       <td style="text-align:right">${t.runCount}</td>

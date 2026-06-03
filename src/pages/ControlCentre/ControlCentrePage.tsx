@@ -65,7 +65,6 @@ interface ItemRow {
 interface CentreCard {
   key: string;
   title: string;
-  emoji: string;
   items: ItemRow[];
   /** Optional total count if more items exist than we surface. */
   totalCount?: number;
@@ -212,14 +211,16 @@ export function ControlCentrePage({ data, profile, allowedViews, onNavigate }: C
     sarsDeadlines30d.slice(0, 5).forEach((f: any) => compliance.push({ label: `${f.type || 'SARS'} · ${f.periodLabel || ''}`.trim(), meta: `due ${formatDate(f.dueDate)} (${daysUntil(f.dueDate, today)} days)`, badge: daysUntil(f.dueDate, today) <= 7 ? 'Soon' : 'Plan', badgeClass: daysUntil(f.dueDate, today) <= 7 ? 'badge badge-danger' : 'badge', goto: 'sarsCentre' }));
     if (sopsOverdueReview.length > 0 && !foodSafety.some((i) => i.goto === 'sopRegister')) compliance.push({ label: `${sopsOverdueReview.length} SOP${sopsOverdueReview.length === 1 ? '' : 's'} overdue for review`, badge: String(sopsOverdueReview.length), goto: 'sopRegister' });
 
+    // Phase 121 — Per Aman: no emojis anywhere. Card identity is just
+    // text + colour-coded counts.
     return [
-      { key: 'urgent', emoji: '🚨', title: 'Urgent today', items: urgent, viewAll: undefined },
-      { key: 'cashflow', emoji: '💰', title: 'Cash flow', items: cashflow, viewAll: 'cashFlow' },
-      { key: 'production', emoji: '🏭', title: 'Production', items: production, viewAll: 'jobs' },
-      { key: 'foodsafety', emoji: '🍃', title: 'Food safety', items: foodSafety, viewAll: 'foodSafetyControlCentre' },
-      { key: 'hr', emoji: '👥', title: 'People & HR', items: hr, viewAll: 'employees' },
-      { key: 'stock', emoji: '📦', title: 'Stock', items: stock, viewAll: 'spares' },
-      { key: 'compliance', emoji: '📋', title: 'Compliance / SARS', items: compliance, viewAll: 'sarsCentre' },
+      { key: 'urgent', title: 'Urgent today', items: urgent, viewAll: undefined },
+      { key: 'cashflow', title: 'Cash flow', items: cashflow, viewAll: 'cashFlow' },
+      { key: 'production', title: 'Production', items: production, viewAll: 'jobs' },
+      { key: 'foodsafety', title: 'Food safety', items: foodSafety, viewAll: 'foodSafetyControlCentre' },
+      { key: 'hr', title: 'People & HR', items: hr, viewAll: 'employees' },
+      { key: 'stock', title: 'Stock', items: stock, viewAll: 'spares' },
+      { key: 'compliance', title: 'Compliance / SARS', items: compliance, viewAll: 'sarsCentre' },
     ];
   }, [
     role, canApproveLeave, canApproveClaim, canApproveStockReq, canBuyStock,
@@ -250,13 +251,12 @@ export function ControlCentrePage({ data, profile, allowedViews, onNavigate }: C
             <details key={card.key} className={`card control-centre-card ${count === 0 ? 'is-empty' : ''}`} open={open}>
               <summary className="control-centre-summary">
                 <span className="control-centre-title">
-                  <span className="control-centre-emoji">{card.emoji}</span>
                   <strong>{card.title}</strong>
                 </span>
                 {count > 0 ? (
                   <span className={`control-centre-count ${count >= 5 ? 'is-loud' : ''}`}>{count}</span>
                 ) : (
-                  <span className="control-centre-count is-zero">✓</span>
+                  <span className="control-centre-count is-zero" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em' }}>OK</span>
                 )}
               </summary>
               {count === 0 ? (
@@ -271,7 +271,7 @@ export function ControlCentrePage({ data, profile, allowedViews, onNavigate }: C
                       </div>
                       {item.badge ? <span className={item.badgeClass || 'badge'}>{item.badge}</span> : null}
                       {item.goto ? (
-                        <button type="button" className="ghost-button control-centre-row-go" onClick={() => onNavigate(item.goto!)}>→</button>
+                        <button type="button" className="ghost-button control-centre-row-go" onClick={() => onNavigate(item.goto!)}>Open</button>
                       ) : null}
                     </li>
                   ))}

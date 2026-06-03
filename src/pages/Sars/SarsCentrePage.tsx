@@ -295,7 +295,7 @@ export function SarsCentrePage({
         <SectionTitle
           title={`${SARS_OBLIGATION_SHORT[draft.obligationType]} · ${draft.periodLabel}`}
           subtitle={SARS_OBLIGATION_LABELS[draft.obligationType]}
-          backAction={<button className="ghost-button" onClick={() => { setMode('overview'); setDraft(null); }}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => { setMode('overview'); setDraft(null); }}>Back</button>}
         />
 
         <section className="card">
@@ -315,7 +315,7 @@ export function SarsCentrePage({
           <section className="card">
             <div className="sars-card-head">
               <h3>VAT201 worksheet</h3>
-              <button className="ghost-button" onClick={recalcVat}>↻ Recalculate from accounting data</button>
+              <button className="ghost-button" onClick={recalcVat}>Recalculate from accounting data</button>
             </div>
             <p className="muted" style={{ marginTop: 0 }}>
               Auto-filled from issued ZAR invoices and supplier bills dated in this period. Adjust any figure before you submit on eFiling.
@@ -336,7 +336,7 @@ export function SarsCentrePage({
               <h3>Figures</h3>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {draft.obligationType === 'EMP201' && (
-                  <button className="ghost-button" onClick={recalcEmp201}>↻ Recalculate from payroll</button>
+                  <button className="ghost-button" onClick={recalcEmp201}>Recalculate from payroll</button>
                 )}
                 <button className="ghost-button" onClick={addFigure} style={{ borderStyle: 'dashed' }}>+ Add line</button>
               </div>
@@ -353,7 +353,7 @@ export function SarsCentrePage({
                     <tr key={f.id}>
                       <td><input value={f.label} onChange={(e) => updateFigure(f.id, { label: e.target.value })} placeholder="e.g. PAYE" /></td>
                       <td><input type="number" style={{ width: 120, textAlign: 'right' }} value={f.amount} onChange={(e) => updateFigure(f.id, { amount: Number(e.target.value) })} /></td>
-                      <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeFigure(f.id)}>✕</button></td>
+                      <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => removeFigure(f.id)}></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -519,7 +519,7 @@ export function SarsCentrePage({
           <p style={{ color: 'var(--muted, #5b6b7a)' }}>
             The annual OID return (W.As.8) reconciles your COIDA wage assessment.
             Surface this filing once the COIDA module is in. For now, capture your
-            COIDA reference and total annual earnings in Settings → Employer details.
+            COIDA reference and total annual earnings in Settings Employer details.
           </p>
           <p style={{ fontSize: '0.85rem', color: 'var(--muted, #5b6b7a)' }}>
             Due: end of April each year. Filed via the CompEasy portal.

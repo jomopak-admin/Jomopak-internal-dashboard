@@ -370,7 +370,7 @@ export function PriceListPage({
                     <td>{o.mode === 'fixedPrice' ? `Fixed ${money(o.fixedUnitPrice, 3)}` : `${formatNumber(o.marginPercent, 1)}% margin`}</td>
                     <td>{o.minQuantity > 0 ? formatNumber(o.minQuantity, 0) : 'All'}</td>
                     <td className="muted" style={{ fontSize: '0.72rem' }}>{o.note || '—'}</td>
-                    <td><button className="table-button" aria-label={`Remove deal for ${o.clientName}`} onClick={() => onDeleteClientPrice(o.id)}>✕</button></td>
+                    <td><button className="table-button" aria-label={`Remove deal for ${o.clientName}`} onClick={() => onDeleteClientPrice(o.id)}></button></td>
                   </tr>
                 ))}
               </tbody>

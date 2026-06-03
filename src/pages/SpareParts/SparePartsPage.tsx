@@ -295,7 +295,7 @@ export function SparePartsPage({
               onChange={(e) => setSpareForm({ ...spareForm, isHighValue: e.target.checked })}
             />
             <span>
-              <strong>⚠ High-value item</strong> — requires a foreman/ops PIN to issue.
+              <strong>High-value item</strong> — requires a foreman/ops PIN to issue.
               Use for theft-prone consumables (premium ink drums, branded uniforms,
               valuable tools).
             </span>
@@ -318,7 +318,7 @@ export function SparePartsPage({
   return (
     <>
       <SectionTitle
-        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Spares & Consumables</button> : null}
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>Back to Spares & Consumables</button> : null}
 
         action={
           mode === 'list' ? (
@@ -378,7 +378,7 @@ export function SparePartsPage({
                     <tr key={part.id}>
                       <td>
                         <strong>{part.partName}</strong>
-                        {part.isHighValue ? <span style={{ marginLeft: 6, fontSize: '0.65rem', padding: '1px 5px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 999 }}>⚠ HIGH VALUE</span> : null}
+                        {part.isHighValue ? <span style={{ marginLeft: 6, fontSize: '0.65rem', padding: '1px 5px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 999 }}>HIGH VALUE</span> : null}
                         <div className="table-subtext">
                           {part.partCode} · {part.category || 'No category'}
                           {part.productionUse ? '' : ' · Non-production'}
@@ -504,7 +504,7 @@ export function SparePartsPage({
               and signal the requirement to the operator. */}
           {activeIssueItem.isHighValue && (
             <div className="card subtle-card" style={{ background: '#fef3c7', border: '1px solid #f59e0b', marginTop: 10 }}>
-              <p style={{ margin: 0, fontWeight: 600 }}>⚠ High-value item — foreman approval required</p>
+              <p style={{ margin: 0, fontWeight: 600 }}>High-value item — foreman approval required</p>
               <p className="muted" style={{ margin: '4px 0 8px', fontSize: '0.82rem' }}>
                 A foreman / ops / admin user must enter their 4-digit approval PIN. The PIN
                 is set per profile via Permissions. Both names are stored on the issue.

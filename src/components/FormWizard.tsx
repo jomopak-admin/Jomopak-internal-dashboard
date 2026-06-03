@@ -155,7 +155,7 @@ export function FormWizard({
               aria-current={state === 'active' ? 'step' : undefined}
             >
               <span className="form-step-num" aria-hidden="true">
-                {state === 'complete' ? '✓' : index + 1}
+                {state === 'complete' ? '' : index + 1}
               </span>
               <span className="form-step-label">{section.title}</span>
             </button>
@@ -181,7 +181,7 @@ export function FormWizard({
             >
               <header className="form-section-header">
                 <span className="form-section-num" aria-hidden="true">
-                  {state === 'complete' ? '✓' : index + 1}
+                  {state === 'complete' ? '' : index + 1}
                 </span>
                 <div className="form-section-title-block">
                   <h4 className="form-section-title" id={`form-section-${section.key}-title`}>

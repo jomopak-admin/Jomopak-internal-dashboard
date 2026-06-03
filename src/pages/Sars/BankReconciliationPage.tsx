@@ -224,7 +224,7 @@ export function BankReconciliationPage({
         <SectionTitle
           title="Import bank statement"
           subtitle="Upload a CSV exported from your bank, map the columns, and import."
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <div className="accounting-toolbar">
@@ -352,7 +352,7 @@ export function BankReconciliationPage({
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={t.reconciled} onChange={(e) => onUpdate({ ...t, reconciled: e.target.checked })} />
                       </td>
-                      <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(t.id)}>✕</button></td>
+                      <td><button className="link-button" style={{ color: 'var(--jp-alert)' }} onClick={() => onDelete(t.id)}></button></td>
                     </tr>
                   );
                 })}

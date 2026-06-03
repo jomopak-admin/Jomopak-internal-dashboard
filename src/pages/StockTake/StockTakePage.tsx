@@ -2,21 +2,21 @@
  * Stock Take — periodic physical count vs system, with variance + reconcile.
  *
  * Phase 63 — expanded to cover everything it takes to run a factory:
- *   • All                        → walks the entire register in one go
- *   • General Stock              → spares + consumables + ink + glue +
+ *   • All                        walks the entire register in one go
+ *   • General Stock              spares + consumables + ink + glue +
  *                                   uniform + kitchen + cleaning + office
  *                                   (i.e. anything in the spare_parts
  *                                   register, regardless of category)
- *   • Chemicals                  → counts on-site quantity from MSDS register
- *   • Paper / Raw Materials      → counts material receipt quantityAvailable
- *   • Finished Goods             → counts finished stock quantityAvailable
+ *   • Chemicals                  counts on-site quantity from MSDS register
+ *   • Paper / Raw Materials      counts material receipt quantityAvailable
+ *   • Finished Goods             counts finished stock quantityAvailable
  *
  * When the scope is General Stock, an optional Category filter lets the
  * stocktaker scope to just one slice (e.g. count just inks today, kitchen
  * tomorrow). The category list mirrors STOCK_ITEM_CATEGORIES.
  *
- * Flow: pick a scope → optional category filter → tick the items you're
- * counting → type the physical count → Save. The saved count shows each
+ * Flow: pick a scope optional category filter tick the items you're
+ * counting type the physical count Save. The saved count shows each
  * line's system vs counted vs variance. "Reconcile" writes the counted
  * figures back to the live stock and locks the count.
  */
@@ -277,7 +277,7 @@ export function StockTakePage({
                             <strong>{item.label}</strong>
                             {' '}<span className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 6px', border: '1px solid #cbd5e1', borderRadius: 999 }}>{item.source}</span>
                             <div className="muted" style={{ fontSize: '0.78rem' }}>{item.detail}</div>
-                            {item.location ? <div className="muted" style={{ fontSize: '0.72rem' }}>📍 {item.location}</div> : null}
+                            {item.location ? <div className="muted" style={{ fontSize: '0.72rem' }}>{item.location}</div> : null}
                           </div>
                         </div>
                       </td>
@@ -435,7 +435,7 @@ function printCountSheet(
   const showSys = options.showSystemQty;
   const rowsHtml = rows.map((item) => `
     <tr>
-      <td style="text-align:center;font-size:14px;width:28px">☐</td>
+      <td style="text-align:center;font-size:14px;width:28px"></td>
       <td style="width:48px">
         ${item.photoUrl
           ? `<img src="${item.photoUrl}" alt="" style="width:40px;height:40px;object-fit:cover;border:1px solid #ddd;border-radius:4px" />`
@@ -444,7 +444,7 @@ function printCountSheet(
       <td>
         <strong>${escapeHtml(item.label)}</strong>
         <div style="font-size:11px;color:#555">${escapeHtml(item.detail)} · ${escapeHtml(item.source)}</div>
-        ${item.location ? `<div style="font-size:11px;color:#555">📍 ${escapeHtml(item.location)}</div>` : ''}
+        ${item.location ? `<div style="font-size:11px;color:#555">${escapeHtml(item.location)}</div>` : ''}
       </td>
       ${showSys ? `<td style="text-align:right">${formatNumber(item.systemQty)} ${escapeHtml(item.unit)}</td>` : ''}
       <td style="text-align:right;min-width:90px;border-bottom:1px solid #333">&nbsp;</td>
@@ -473,7 +473,7 @@ function printCountSheet(
     <table>
       <thead>
         <tr>
-          <th>☐</th>
+          <th></th>
           <th>Photo</th>
           <th>Item</th>
           ${showSys ? '<th style="text-align:right">System</th>' : ''}

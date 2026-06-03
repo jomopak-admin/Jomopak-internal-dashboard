@@ -32,7 +32,7 @@ interface EmployeesPageProps {
   companyName?: string;
   companyUifReference?: string;
   /** Phase 114 — Full company block so the UI-19 print can pick up the
-   *  uploaded brand logo + letterhead from Settings → Branding. */
+   *  uploaded brand logo + letterhead from Settings Branding. */
   company?: AppSettingsCompany;
   /** Phase 96 — HR documents (Doc Vault rows where ownerType='employee'). */
   documents?: DocumentRecord[];
@@ -123,8 +123,8 @@ ${buildLetterhead(company, { rightTitle: 'UI-19', rightSubtitle: 'UIF declaratio
 
 <h2>Reason for termination (tick one and add details)</h2>
 <table><tbody>
-  <tr><td>☐ Resigned</td><td>☐ Dismissed</td><td>☐ Retrenched</td></tr>
-  <tr><td>☐ Contract expired</td><td>☐ Death</td><td>☐ Other (specify):</td></tr>
+  <tr><td>Resigned</td><td>Dismissed</td><td>Retrenched</td></tr>
+  <tr><td>Contract expired</td><td>Death</td><td>Other (specify):</td></tr>
 </tbody></table>
 <p class="muted">Notes: ${e.notes || '—'}</p>
 
@@ -207,7 +207,7 @@ export function EmployeesPage({ employees, onSave, onDelete, companyName, compan
       <div className="page-stack accounting-shell">
         <SectionTitle
           title={editingId ? `Edit ${draft.firstName} ${draft.lastName}` : 'New employee'}
-          backAction={<button className="ghost-button" onClick={() => setMode('list')}>← Back</button>}
+          backAction={<button className="ghost-button" onClick={() => setMode('list')}>Back</button>}
         />
         <section className="card">
           <h3>Personal</h3>
@@ -590,7 +590,7 @@ function SortableTh<K extends string>({
     <th style={{ textAlign: align, cursor: 'pointer', userSelect: 'none' }} onClick={() => onToggle(k)}>
       {label}
       <span style={{ opacity: isActive ? 1 : 0.3, marginLeft: '0.25rem' }}>
-        {isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+        {isActive ? (sortDir === 'asc' ? '' : '') : ''}
       </span>
     </th>
   );

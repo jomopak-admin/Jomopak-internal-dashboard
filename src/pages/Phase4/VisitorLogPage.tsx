@@ -184,7 +184,7 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
   return (
     <>
       <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>Log visitor</button> : null}
-        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard
@@ -218,10 +218,10 @@ export function VisitorLogPage({ records, filters, setFilters, form, setForm, ed
                         </div>
                         <div className="muted" style={{ fontSize: '0.76rem', marginTop: 2 }}>
                           Signed in {r.timeIn || '—'}
-                          {r.phoneNumber ? ` · ☎ ${r.phoneNumber}` : ''}
-                          {r.vehicleRegistration ? ` · 🚚 ${r.vehicleRegistration}` : ''}
-                          {r.enteredFoodContactArea ? ' · ⚠ Food-contact area' : ''}
-                          {!r.hygieneAcknowledged ? ' · ⚠ No hygiene ack' : ''}
+                          {r.phoneNumber ? ` · ${r.phoneNumber}` : ''}
+                          {r.vehicleRegistration ? ` · ${r.vehicleRegistration}` : ''}
+                          {r.enteredFoodContactArea ? ' · Food-contact area' : ''}
+                          {!r.hygieneAcknowledged ? ' · No hygiene ack' : ''}
                         </div>
                       </div>
                       <span className="badge badge-warning">Pending</span>

@@ -135,7 +135,7 @@ export function LeavePage({ requests, employees, canApprove, filters, setFilters
     <>
       <SectionTitle
         backAction={mode === 'form'
-          ? <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>
+          ? <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>
           : null}
         action={mode === 'list' ? (
           <div style={{ display: 'flex', gap: 8 }}>
@@ -250,8 +250,8 @@ export function LeavePage({ requests, employees, canApprove, filters, setFilters
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <textarea rows={2} value={actionNotes} onChange={(e) => setActionNotes(e.target.value)} placeholder="Notes (optional)" />
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="table-button" onClick={() => { onApprove(r.id, actionNotes); setActionFor(null); setActionNotes(''); }}>✓ Approve</button>
-                                <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); setActionFor(null); setActionNotes(''); }}>✗ Decline</button>
+                                <button className="table-button" onClick={() => { onApprove(r.id, actionNotes); setActionFor(null); setActionNotes(''); }}>Approve</button>
+                                <button className="table-button danger" onClick={() => { onDecline(r.id, actionNotes); setActionFor(null); setActionNotes(''); }}>Decline</button>
                                 <button className="table-button" onClick={() => { setActionFor(null); setActionNotes(''); }}>Cancel</button>
                               </div>
                             </div>

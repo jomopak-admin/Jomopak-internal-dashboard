@@ -269,7 +269,7 @@ export function ProductsPage({
   return (
     <>
       <SectionTitle
-        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>← Back to Products</button> : null}
+        backAction={mode === 'form' ? <button className="ghost-button" onClick={handleBackToList}>Back to Products</button> : null}
 
         action={
           mode === 'list' ? (
@@ -304,7 +304,7 @@ export function ProductsPage({
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Product</th><th>Category</th><th>Supply</th>{canSeeSupplier && <th>Preferred supplier</th>}<th>Branding</th><th>Unit</th><th>Actions</th></tr></thead>
-                <tbody>{filteredProducts.map((product) => <tr key={product.id}><td><strong>{product.name}</strong><div className="table-subtext">{product.sku || 'No SKU'}</div></td><td>{product.category}</td><td>{product.supplyType}</td>{canSeeSupplier && <td>{product.defaultSupplierName || 'Not set'}</td>}<td>{product.brandingAllowed ? 'Yes' : 'No'}</td><td>{product.defaultUnit}</td><td><button className="table-button" aria-label={`Edit ${product.name}`} onClick={() => handleStartEdit(product)}>✎</button></td></tr>)}</tbody>
+                <tbody>{filteredProducts.map((product) => <tr key={product.id}><td><strong>{product.name}</strong><div className="table-subtext">{product.sku || 'No SKU'}</div></td><td>{product.category}</td><td>{product.supplyType}</td>{canSeeSupplier && <td>{product.defaultSupplierName || 'Not set'}</td>}<td>{product.brandingAllowed ? 'Yes' : 'No'}</td><td>{product.defaultUnit}</td><td><button className="table-button" aria-label={`Edit ${product.name}`} onClick={() => handleStartEdit(product)}></button></td></tr>)}</tbody>
               </table>
             </div>
           ) : <EmptyState title="No products yet" body="Add your product catalog so jobs and pricing can reference it." />}

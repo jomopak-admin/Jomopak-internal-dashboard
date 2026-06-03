@@ -3,7 +3,7 @@
  *
  * Full-screen, touch-friendly self check-in / sign-out for visitors. Designed
  * to run on an Android tablet at reception pinned in single-app mode (Android
- * Settings → Security → Screen Pinning, or a kiosk launcher like Fully Kiosk
+ * Settings Security Screen Pinning, or a kiosk launcher like Fully Kiosk
  * / Knox).
  *
  * Two flows:
@@ -306,7 +306,7 @@ export function VisitorKioskPage({
 
       {mode === 'thanks' ? (
         <div className="kiosk-thanks">
-          <div className="kiosk-thanks-tick" aria-hidden>✓</div>
+          <div className="kiosk-thanks-tick" aria-hidden></div>
           <h2 className="kiosk-h1">Thank you</h2>
           <p className="kiosk-sub">{thanksMessage}</p>
           <p className="kiosk-sub" style={{ opacity: 0.6, fontSize: '1rem' }}>Returning to start in a few seconds…</p>

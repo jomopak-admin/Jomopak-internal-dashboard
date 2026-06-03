@@ -145,7 +145,7 @@ export function FinancialStatementsPage({ journalEntries, ledgerAccounts, sarsCo
             </tbody>
           </table>
           <p className={bs.balanced ? 'gl-balanced' : 'amount-due'} style={{ marginTop: '0.6rem' }}>
-            {bs.balanced ? '✓ Balance sheet balances' : `Out of balance by ${formatNumber(Math.abs(bs.totalAssets - (bs.totalLiabilities + bs.totalEquity)), 2)} — check your journals`}
+            {bs.balanced ? 'Balance sheet balances' : `Out of balance by ${formatNumber(Math.abs(bs.totalAssets - (bs.totalLiabilities + bs.totalEquity)), 2)} — check your journals`}
           </p>
         </section>
       )}
@@ -166,7 +166,7 @@ export function FinancialStatementsPage({ journalEntries, ledgerAccounts, sarsCo
             </tfoot>
           </table>
           <p className={Math.abs(tb.totalDebit - tb.totalCredit) < 0.05 ? 'gl-balanced' : 'amount-due'} style={{ marginTop: '0.6rem' }}>
-            {Math.abs(tb.totalDebit - tb.totalCredit) < 0.05 ? '✓ Debits equal credits' : 'Trial balance does not balance — check your journals'}
+            {Math.abs(tb.totalDebit - tb.totalCredit) < 0.05 ? 'Debits equal credits' : 'Trial balance does not balance — check your journals'}
           </p>
         </section>
       )}

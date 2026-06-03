@@ -143,7 +143,7 @@ export function ExpenseClaimsPage({ claims, employees, jobs, currentUserName, ca
   return (
     <>
       <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New claim</button> : null}
-        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard
@@ -204,7 +204,7 @@ export function ExpenseClaimsPage({ claims, employees, jobs, currentUserName, ca
                       <td>{money(c.amount)}</td>
                       <td style={{ maxWidth: 280 }}>
                         <div className="table-subtext" style={{ whiteSpace: 'pre-wrap' }}>{c.description}</div>
-                        {c.receiptUrl ? <a href={c.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Receipt ↗</a> : null}
+                        {c.receiptUrl ? <a href={c.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Receipt </a> : null}
                       </td>
                       <td>
                         <span className={statusBadge(c.status)}>{c.status}</span>
@@ -222,8 +222,8 @@ export function ExpenseClaimsPage({ claims, employees, jobs, currentUserName, ca
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <textarea rows={2} value={actionNotes} onChange={(e) => setActionNotes(e.target.value)} placeholder="Notes (optional)" />
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="table-button" onClick={() => { onApprove(c.id, actionNotes); setActionFor(null); setActionNotes(''); }}>✓ Approve</button>
-                                <button className="table-button danger" onClick={() => { onDecline(c.id, actionNotes); setActionFor(null); setActionNotes(''); }}>✗ Decline</button>
+                                <button className="table-button" onClick={() => { onApprove(c.id, actionNotes); setActionFor(null); setActionNotes(''); }}>Approve</button>
+                                <button className="table-button danger" onClick={() => { onDecline(c.id, actionNotes); setActionFor(null); setActionNotes(''); }}>Decline</button>
                                 <button className="table-button" onClick={() => { setActionFor(null); setActionNotes(''); }}>Cancel</button>
                               </div>
                             </div>
@@ -243,7 +243,7 @@ export function ExpenseClaimsPage({ claims, employees, jobs, currentUserName, ca
                               </div>
                             </div>
                           ) : (
-                            <button className="table-button" onClick={() => { setActionFor(c.id); setActionMethod('Next Payslip'); }}>💰 Pay</button>
+                            <button className="table-button" onClick={() => { setActionFor(c.id); setActionMethod('Next Payslip'); }}>Pay</button>
                           )
                         ) : null}
                       </td>

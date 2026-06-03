@@ -183,15 +183,15 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
                     aria-pressed={on}
                   >
                     <span className="chem-pictogram-emoji" aria-hidden>
-                      {p === 'Explosive' && '💥'}
-                      {p === 'Flammable' && '🔥'}
-                      {p === 'Oxidizing' && '⭕'}
-                      {p === 'Compressed Gas' && '🛢️'}
-                      {p === 'Corrosive' && '🧪'}
-                      {p === 'Toxic' && '☠️'}
-                      {p === 'Harmful' && '⚠️'}
-                      {p === 'Health Hazard' && '🫁'}
-                      {p === 'Environmental Hazard' && '🌿'}
+                      {p === 'Explosive' && ''}
+                      {p === 'Flammable' && ''}
+                      {p === 'Oxidizing' && ''}
+                      {p === 'Compressed Gas' && ''}
+                      {p === 'Corrosive' && ''}
+                      {p === 'Toxic' && ''}
+                      {p === 'Harmful' && ''}
+                      {p === 'Health Hazard' && ''}
+                      {p === 'Environmental Hazard' && ''}
                     </span>
                     <span>{p}</span>
                   </button>
@@ -307,7 +307,7 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
     <>
       <SectionTitle
         backAction={mode === 'form'
-          ? <button className="ghost-button" onClick={handleBackToList}>← Back to register</button>
+          ? <button className="ghost-button" onClick={handleBackToList}>Back to register</button>
           : null}
         action={mode === 'list'
           ? <button className="secondary-button" onClick={handleStartCreate}>Add chemical</button>
@@ -386,15 +386,15 @@ export function ChemicalRegisterPage(props: ChemicalRegisterPageProps) {
                           <span className="chem-pictogram-row" aria-label={entry.ghsPictograms.join(', ') || 'No pictograms'}>
                             {entry.ghsPictograms.length === 0 ? <span className="muted">None</span> : entry.ghsPictograms.map((p) => (
                               <span key={p} className="chem-pictogram-mini" title={p}>
-                                {p === 'Explosive' && '💥'}
-                                {p === 'Flammable' && '🔥'}
-                                {p === 'Oxidizing' && '⭕'}
-                                {p === 'Compressed Gas' && '🛢️'}
-                                {p === 'Corrosive' && '🧪'}
-                                {p === 'Toxic' && '☠️'}
-                                {p === 'Harmful' && '⚠️'}
-                                {p === 'Health Hazard' && '🫁'}
-                                {p === 'Environmental Hazard' && '🌿'}
+                                {p === 'Explosive' && ''}
+                                {p === 'Flammable' && ''}
+                                {p === 'Oxidizing' && ''}
+                                {p === 'Compressed Gas' && ''}
+                                {p === 'Corrosive' && ''}
+                                {p === 'Toxic' && ''}
+                                {p === 'Harmful' && ''}
+                                {p === 'Health Hazard' && ''}
+                                {p === 'Environmental Hazard' && ''}
                               </span>
                             ))}
                           </span>

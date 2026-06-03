@@ -477,7 +477,7 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
     <section className="card">
       <SectionTitle
         title="Stock Statements"
-        subtitle={selectedClient ? `${selectedClient.name} · ${fromDate} → ${toDate}` : 'Pick a stock-holding client and a date range'}
+        subtitle={selectedClient ? `${selectedClient.name} · ${fromDate} ${toDate}` : 'Pick a stock-holding client and a date range'}
         action={
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="ghost-button" onClick={exportCsv} disabled={!selectedClient}>Export CSV</button>
@@ -499,7 +499,7 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
           <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
             <option value="">— pick client —</option>
             {stockHoldingClients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}{c.stockHoldingEnabled ? ' ✓' : ''}</option>
+              <option key={c.id} value={c.id}>{c.name}{c.stockHoldingEnabled ? ' ' : ''}</option>
             ))}
           </select>
         </label>
@@ -508,7 +508,7 @@ export function StockStatementsPage({ clients, finishedStock, releases, company,
       </div>
 
       {!selectedClient ? (
-        <EmptyState title="Pick a client" body="Choose a client above to see their stock statement. Clients marked ✓ are stock-holding accounts." />
+        <EmptyState title="Pick a client" body="Choose a client above to see their stock statement. Clients marked are stock-holding accounts." />
       ) : (
         <>
           <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 12 }}>

@@ -51,7 +51,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   // tablet at the front desk; the Log is the full searchable register;
   // Approvals is the audit + admin-override view.
   { title: 'Reception', views: ['visitorKiosk', 'visitorLog', 'visitorApprovals'] },
-  // Phase 103.7 — osConnector ('API access') moved into Settings → API access
+  // Phase 103.7 — osConnector ('API access') moved into Settings API access
   // tab and is no longer in the sidebar.
   { title: 'Admin', views: ['documentVault', 'tradedGoods', 'permissions', 'settings'] },
 ];
@@ -91,7 +91,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
   }, [view]);
   /* Phase 103.7 — Hard blacklist of views that must NEVER appear in the
    * sidebar regardless of what permissions / NAV_GROUPS say. Currently:
-   *   - 'osConnector' (API access) → lives in Settings → API access tab
+   *   - 'osConnector' (API access) lives in Settings API access tab
    *      and is reachable from the avatar menu. Keeping it out of the
    *      sidebar means there's exactly one path.
    *
@@ -202,7 +202,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
                 >
                   <span>{group.title}</span>
                   <span className="nav-group-meta">
-                    <span className="nav-group-chevron" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+                    <span className="nav-group-chevron" aria-hidden="true">{isOpen ? '' : ''}</span>
                   </span>
                 </button>
                 {isOpen ? (
@@ -235,7 +235,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen((v) => !v)}
             >
-              <span aria-hidden="true">☰</span>
+              <span aria-hidden="true"></span>
             </button>
           )}
           {!kioskMode && onOpenSearch ? (
@@ -245,9 +245,9 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
               onClick={onOpenSearch}
               aria-label="Search (Cmd-K)"
             >
-              <span aria-hidden="true">⌕</span>
+              <span aria-hidden="true"></span>
               <span className="topbar-search-label">Search</span>
-              <kbd>⌘K</kbd>
+              <kbd>K</kbd>
             </button>
           ) : null}
           <div className="topbar-title">
@@ -272,7 +272,7 @@ export function AppLayout({ view, onViewChange, navItems, profile, onSignOut, on
                   <strong>{accountName}</strong>
                   <span className="muted">{accountRole}</span>
                 </span>
-                <span className="account-menu-caret" aria-hidden="true">{accountOpen ? '▴' : '▾'}</span>
+                <span className="account-menu-caret" aria-hidden="true">{accountOpen ? '▴' : ''}</span>
               </button>
               {accountOpen ? (
                 <>

@@ -99,7 +99,7 @@ export function ToolboxTalksPage(props: Props) {
                       <td><input value={a.name} onChange={(e) => updateAttendee(idx, { name: e.target.value })} /></td>
                       <td style={{ minWidth: 220 }}>
                         {a.signatureUrl ? (
-                          <span style={{ color: '#2e6f3e' }}>✓ signed</span>
+                          <span style={{ color: '#2e6f3e' }}>signed</span>
                         ) : (
                           <SignaturePad onChange={(url) => updateAttendee(idx, { signatureUrl: url })} />
                         )}

@@ -78,7 +78,7 @@ export function LabelsPage({
         badge: (p.category || 'STOCK').toUpperCase().slice(0, 16),
         details: [
           p.machineReference || '',
-          p.storageLocation ? `📍 ${p.storageLocation}` : '',
+          p.storageLocation ? `${p.storageLocation}` : '',
         ].filter(Boolean),
       });
     }
@@ -93,8 +93,8 @@ export function LabelsPage({
         details: [
           c.tradeName ? `Trade: ${c.tradeName}` : '',
           c.casNumber ? `CAS ${c.casNumber}` : '',
-          c.storageLocation ? `📍 ${c.storageLocation}` : '',
-          c.ghsPictograms && c.ghsPictograms.length ? `⚠ ${c.ghsPictograms.join(', ')}` : '',
+          c.storageLocation ? `${c.storageLocation}` : '',
+          c.ghsPictograms && c.ghsPictograms.length ? `${c.ghsPictograms.join(', ')}` : '',
         ].filter(Boolean),
       });
     }
@@ -109,7 +109,7 @@ export function LabelsPage({
           m.supplierName ? `Supplier: ${m.supplierName}` : '',
           m.supplierBatchNumber ? `Batch ${m.supplierBatchNumber}` : '',
           m.quantityAvailable ? `Qty ${m.quantityAvailable} ${m.quantityUnit || ''}` : '',
-          m.storageLocation ? `📍 ${m.storageLocation}` : '',
+          m.storageLocation ? `${m.storageLocation}` : '',
         ].filter(Boolean),
       });
     }
@@ -124,7 +124,7 @@ export function LabelsPage({
           f.clientName ? `Client: ${f.clientName}` : '',
           f.jobNumber ? `Job ${f.jobNumber}` : '',
           `Qty ${f.quantityAvailable} ${f.quantityUnit || 'units'}`,
-          f.storageLocation ? `📍 ${f.storageLocation}` : '',
+          f.storageLocation ? `${f.storageLocation}` : '',
         ].filter(Boolean),
       });
     }
@@ -144,7 +144,7 @@ export function LabelsPage({
           t.toolType === 'die' && dimText ? dimText : '',
           t.toolType === 'stereo' && t.designVersion ? `v${t.designVersion}` : '',
           t.location === 'External' && t.supplierName ? `At: ${t.supplierName}` : '',
-          t.location === 'Internal' && t.internalLocation ? `📍 ${t.internalLocation}` : '',
+          t.location === 'Internal' && t.internalLocation ? `${t.internalLocation}` : '',
         ].filter(Boolean),
       });
     }

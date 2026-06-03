@@ -71,7 +71,7 @@ export function JobDetailPanel({
                 onClick={() => { if (confirm(`Mark job ${job.jobNumber} as Completed?`)) onMarkComplete(job); }}
                 title="Close this job out — moves it off the open list"
               >
-                ✓ Mark complete
+                Mark complete
               </button>
             ) : null}
             {onOpenHistory ? (

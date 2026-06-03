@@ -106,7 +106,7 @@ export function NoticesPage({ notices, form, setForm, editingId, message, onSave
   return (
     <>
       <SectionTitle action={mode === 'list' ? <button className="secondary-button" onClick={() => { onReset(); setMode('form'); }}>New notice</button> : null}
-        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>← Back</button>}
+        backAction={mode === 'list' ? null : <button className="ghost-button" onClick={() => { onReset(); setMode('list'); }}>Back</button>}
       />
       {mode === 'form' ? (
         <FormWizard
@@ -131,7 +131,7 @@ export function NoticesPage({ notices, form, setForm, editingId, message, onSave
                 return (
                   <li key={n.id} className={`notice-item ${n.pinned ? 'is-pinned' : ''} ${expired ? 'is-expired' : ''}`}>
                     <div className="notice-head">
-                      <strong>{n.pinned ? '📌 ' : ''}{n.title}</strong>
+                      <strong>{n.pinned ? '' : ''}{n.title}</strong>
                       <span className="muted">{formatDate(n.postedAt)} · {n.postedByName}{expired ? ' · expired' : ''}</span>
                     </div>
                     <p className="notice-body">{n.body}</p>

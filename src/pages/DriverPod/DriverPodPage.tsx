@@ -160,7 +160,7 @@ export function DriverPodPage({
                       <strong>{stop.clientName}</strong>
                       <div className="muted" style={{ fontSize: '0.78rem' }}>{stop.deliveryNoteNumber}</div>
                       {stop.clientAddress && <div style={{ fontSize: '0.78rem' }}>{stop.clientAddress}</div>}
-                      {completed && <div style={{ fontSize: '0.75rem', color: '#166534' }}>✓ {stop.outcome}</div>}
+                      {completed && <div style={{ fontSize: '0.75rem', color: '#166534' }}>{stop.outcome}</div>}
                     </div>
                     <div className="driver-run-stop-actions">
                       {stop.clientAddress && (
@@ -329,7 +329,7 @@ function CaptureFlow({ dispatch, client, profile, existingCount, onCancel, onSub
   return (
     <div className="driver-pod-shell">
       <header className="driver-pod-header">
-        <button className="link-button" onClick={onCancel}>← Back</button>
+        <button className="link-button" onClick={onCancel}>Back</button>
         <strong>Dispatch {dispatch.dispatchNumber}</strong>
         <span>{dispatch.customerName}</span>
       </header>

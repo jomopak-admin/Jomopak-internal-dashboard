@@ -109,7 +109,7 @@ export function SheCommitteePage(props: Props) {
                       <td><input value={a.name} onChange={(e) => updateAttendee(idx, { name: e.target.value })} /></td>
                       <td><input value={a.role} onChange={(e) => updateAttendee(idx, { role: e.target.value })} placeholder="Worker rep / Mgmt / Safety officer" /></td>
                       <td style={{ minWidth: 220 }}>
-                        {a.signatureUrl ? <span style={{ color: '#2e6f3e' }}>✓ signed</span> : <SignaturePad onChange={(url) => updateAttendee(idx, { signatureUrl: url })} />}
+                        {a.signatureUrl ? <span style={{ color: '#2e6f3e' }}>signed</span> : <SignaturePad onChange={(url) => updateAttendee(idx, { signatureUrl: url })} />}
                       </td>
                       <td><button type="button" className="ghost-button" onClick={() => removeAttendee(idx)}>Remove</button></td>
                     </tr>
