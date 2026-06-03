@@ -245,14 +245,9 @@ export function CostInputsPage({
               })}
             </div>
           </label>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={paperRateForm.requiresSlitting}
-              onChange={(e) => setPaperRateForm({ ...paperRateForm, requiresSlitting: e.target.checked })}
-            />
-            Usually needs to be slit before use (jumbo width)
-          </label>
+          {/* Phase 127.3 — Slitting is decided per purchase lot + per job,
+              not at the paper-spec catalogue level. Field removed from the
+              form; flag stays in the data model for future per-lot use. */}
           <label>
             <span>Form</span>
             <select
@@ -735,10 +730,7 @@ export function CostInputsPage({
                                   letterSpacing: '0.05em',
                                 }}>{m.category.toUpperCase()}</span>
                               </td>
-                              <td>
-                                <strong>{m.publicLabel}</strong>
-                                {m.paperRate?.requiresSlitting ? <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fde68a', color: '#78350f', fontWeight: 700, letterSpacing: '0.05em' }}>SLIT</span> : null}
-                              </td>
+                              <td><strong>{m.publicLabel}</strong></td>
                               <td>{m.unit || '—'}</td>
                               <td style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 12 }}>{m.supplierName || '—'}</td>
                               <td style={{ fontSize: 12 }}>{m.region || '—'}</td>
