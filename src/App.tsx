@@ -14110,6 +14110,22 @@ function App() {
             }));
             toast.info('Booking cancelled');
           }}
+          // Phase 124.2 — One-click self-link from the NOT LINKED card.
+          // The portal hands us an employeeId; we patch the profile and
+          // persist. The page re-renders linked on the next render pass.
+          onLinkEmployee={async (employeeId) => {
+            if (!profile) return;
+            const employee = data.employees.find((e) => e.id === employeeId);
+            try {
+              await saveProfile({ ...profile, linkedEmployeeId: employeeId });
+              toast.success(employee
+                ? `Linked to ${employee.firstName} ${employee.lastName}`
+                : 'Linked');
+            } catch (e) {
+              console.error('Link employee failed', e);
+              toast.error('Could not link — try again');
+            }
+          }}
         />
       )}
 

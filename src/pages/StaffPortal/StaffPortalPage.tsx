@@ -12,7 +12,7 @@
  * not linked yet, we fall back to a fullName match.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionTitle } from '../../components/SectionTitle';
 import { SignaturePad } from '../../components/SignaturePad';
 import {
@@ -90,9 +90,16 @@ interface StaffPortalPageProps {
    * The portal further filters to the linked employee's documents.
    */
   documents?: DocumentRecord[];
+  /**
+   * Phase 124.2 — One-click self-link. The "NOT LINKED" card shows an
+   * employee picker so a staff member (or the CEO) can attach their
+   * own Employee record without going via Settings → Permissions.
+   * Calls saveProfile() upstream with linkedEmployeeId set.
+   */
+  onLinkEmployee?: (employeeId: string) => void;
 }
 
-export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl, ppeIssueRecords = [], onRequestPpeReplacement, documents = [] }: StaffPortalPageProps) {
+export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDocuments, payrollRuns, employees, warnings, leaveRequests, onAcknowledgeTraining, onAcknowledgeSop, onAcknowledgeWarning, onApplyForLeave, onUpdateAvailability, myVisitorBookings, onCreateVisitorBooking, onCancelVisitorBooking, helpVideoUrl, ppeIssueRecords = [], onRequestPpeReplacement, documents = [], onLinkEmployee }: StaffPortalPageProps) {
   const fullName = profile.fullName || profile.email || '';
   const today = new Date().toISOString().slice(0, 10);
 
@@ -312,6 +319,25 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
   }, [documents, linkedEmployee]);
   const [openDocs, setOpenDocs] = useState(false);
 
+  // Phase 124.2 — Inline employee picker on the NOT LINKED notice.
+  // Pre-select the best guess if we can find one by name match against
+  // the email local-part, e.g. "aman@..." → "Aman ..." in employees list.
+  const suggestedEmployeeId = useMemo(() => {
+    if (linkedEmployee) return '';
+    const email = (profile.email || '').toLowerCase();
+    const local = email.includes('@') ? email.split('@')[0].replace(/[._-]+/g, ' ').trim() : '';
+    if (!local) return '';
+    const firstWord = local.split(/\s+/)[0];
+    // Prefer firstName start-with match, fall back to last name match.
+    const byFirst = employees.find((e) => (e.firstName || '').toLowerCase().startsWith(firstWord));
+    if (byFirst) return byFirst.id;
+    const byLast = employees.find((e) => (e.lastName || '').toLowerCase().startsWith(firstWord));
+    return byLast?.id || '';
+  }, [linkedEmployee, profile.email, employees]);
+  const [pickEmployeeId, setPickEmployeeId] = useState<string>('');
+  // Promote the suggestion into the picker once employees finish loading.
+  useEffect(() => { if (!pickEmployeeId && suggestedEmployeeId) setPickEmployeeId(suggestedEmployeeId); }, [suggestedEmployeeId, pickEmployeeId]);
+
   // Shared styles — declared inline so this card doesn't depend on
   // any new global CSS.
   const HERO_AMBER = '#f59e0b';
@@ -478,7 +504,7 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
           marginBottom: 16,
           padding: '14px 16px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
             <span style={{
               padding: '6px 10px',
               borderRadius: 6,
@@ -494,12 +520,72 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               <p style={{ margin: '4px 0 0', fontSize: 13, color: '#78350f' }}>
                 Until this is linked, this page can&apos;t show your payslips, leave balance, PPE, contracts, or letters from your manager.
               </p>
-              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--jp-ink-3, #475569)' }}>
-                <strong>Fix it:</strong> ask the admin to open <strong>Settings → Permissions</strong>, find your user, and pick your Employee record under &ldquo;Linked employee&rdquo;.
-                Or, if you have an Employee record already, make sure its <strong>email</strong> field matches the email you sign in with ({profile.email || '—'}). It will auto-link.
-              </p>
             </div>
           </div>
+
+          {/* Phase 124.2 — Inline self-link picker. No need to go to
+              Settings → Permissions; just pick yourself and tap Link. */}
+          {onLinkEmployee && employees.length > 0 ? (
+            <div style={{
+              background: 'var(--jp-paper, #fff)',
+              border: '1px solid #fcd34d',
+              borderRadius: 8,
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ flex: '1 1 240px', minWidth: 220 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)', marginBottom: 4 }}>
+                  I AM
+                </label>
+                <select
+                  value={pickEmployeeId}
+                  onChange={(e) => setPickEmployeeId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: 14,
+                    borderRadius: 6,
+                    border: '1px solid var(--jp-divider, #d1d5db)',
+                    background: 'var(--jp-paper, #fff)',
+                  }}
+                >
+                  <option value="">— pick your Employee record —</option>
+                  {[...employees]
+                    .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.firstName} {e.lastName}{e.employeeNumber ? ` — ${e.employeeNumber}` : ''}{e.jobTitle ? ` (${e.jobTitle})` : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                disabled={!pickEmployeeId}
+                onClick={() => { if (pickEmployeeId) onLinkEmployee(pickEmployeeId); }}
+                style={{
+                  padding: '10px 18px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  border: 'none',
+                  background: pickEmployeeId ? HERO_AMBER : '#d4d4d8',
+                  color: '#fff',
+                  cursor: pickEmployeeId ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Link my account
+              </button>
+            </div>
+          ) : null}
+
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--jp-ink-3, #475569)' }}>
+            Don&apos;t see yourself in the list? Ask the admin to create an Employee record for you first.
+            Once your Employee record has the email <strong>{profile.email || '—'}</strong>, this page will auto-link next time you sign in.
+          </p>
         </div>
       )}
 
