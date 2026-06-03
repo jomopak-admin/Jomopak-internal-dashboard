@@ -338,10 +338,37 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
     fontSize: 15,
   };
 
+  /**
+   * Phase 121.8 — Smarter greeting.
+   * Priority for the first-name display:
+   *   1. Linked Employee's firstName (the canonical source once linked)
+   *   2. profile.fullName split on first space ("Aman Singh" → "Aman")
+   *   3. profile.email local-part before "@" ("aman@jomopak.co.za" → "aman")
+   *   4. "there"
+   * Then capitalises the first letter so "aman" → "Aman".
+   */
+  const greetingName = (() => {
+    if (linkedEmployee?.firstName) return linkedEmployee.firstName;
+    const trimmed = (profile.fullName || '').trim();
+    if (trimmed && !trimmed.includes('@')) {
+      const first = trimmed.split(/\s+/)[0];
+      if (first) return first.charAt(0).toUpperCase() + first.slice(1);
+    }
+    const email = profile.email || '';
+    if (email.includes('@')) {
+      const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+      if (local) {
+        const first = local.split(/\s+/)[0];
+        return first.charAt(0).toUpperCase() + first.slice(1);
+      }
+    }
+    return 'there';
+  })();
+
   return (
     <section className="card" style={{ padding: '16px 18px' }}>
       <SectionTitle
-        title={`Hi ${fullName.split(' ')[0] || 'there'}`}
+        title={`Hi ${greetingName}`}
         subtitle={totalTodo > 0 ? `You have ${totalTodo} thing${totalTodo === 1 ? '' : 's'} to do today.` : 'Nothing waiting for you. Have a good day.'}
       />
 
