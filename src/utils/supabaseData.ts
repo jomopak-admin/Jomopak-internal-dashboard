@@ -40,9 +40,17 @@ import { supabase } from './supabase';
 import { publishableTiles } from './connectorTiles';
 
 const MISSING_TABLE = '42P01';
+const MISSING_COLUMN = '42703';
 
 async function safeSelect(table: string) {
-  const result = await supabase.from(table).select('*').order('created_at', { ascending: false });
+  // Phase 126.1 fix — Several tables (employees, ledger_accounts,
+  // first_aid_aiders, …) don't have a `created_at` column, which made
+  // the unconditional `.order('created_at')` return 400 and crash the
+  // entire data load. Retry without the order clause when that happens.
+  let result = await supabase.from(table).select('*').order('created_at', { ascending: false });
+  if (result.error && result.error.code === MISSING_COLUMN) {
+    result = await supabase.from(table).select('*');
+  }
   if (result.error && result.error.code !== MISSING_TABLE) {
     throw result.error;
   }
