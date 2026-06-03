@@ -93,7 +93,10 @@ export function CostInputsPage({
             />
           </label>
           <label className="full-span">
-            <span>End-uses (tick all that apply)</span>
+            <span>Suitable for (tick every job type this paper could be used for)</span>
+            <p style={{ margin: '2px 0 6px', fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>
+              This is a SUITABILITY tag, not where the paper has to go. Same reel can serve more than one type. When in doubt, tick everything plausible — there&apos;s no penalty. The actual end-use is decided when you issue stock for a job.
+            </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '6px 0' }}>
               {PAPER_USE_CASES.map((u) => {
                 const selected = paperRateForm.useCases.includes(u);
@@ -131,7 +134,7 @@ export function CostInputsPage({
               checked={paperRateForm.requiresSlitting}
               onChange={(e) => setPaperRateForm({ ...paperRateForm, requiresSlitting: e.target.checked })}
             />
-            Needs to be slit before use
+            Usually needs to be slit before use (jumbo width)
           </label>
           <label>
             <span>Form</span>
@@ -342,7 +345,7 @@ export function CostInputsPage({
                       <thead>
                         <tr>
                           <th>Public label</th>
-                          <th>End-uses</th>
+                          <th>Suitable for</th>
                           <th>Form</th>
                           <th>GSM</th>
                           <th title="Private — admin only">Supplier</th>
