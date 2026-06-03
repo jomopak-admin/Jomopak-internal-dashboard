@@ -312,58 +312,73 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
             }}>{totalTodo}</span>
             <h2 style={{ margin: 0, fontSize: 20, color: '#92400e' }}>Do these first</h2>
           </div>
+          {/* Phase 121 — Per Aman: no emojis. Each tap-row uses a colored
+              count chip as the icon, so the NUMBER is the visual signal. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {trainingTodoCount > 0 && (
               <button type="button" style={tapRowBase} onClick={() => setOpenTraining(true)}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>🎓</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, background: HERO_AMBER, color: '#fff', fontSize: 20, fontWeight: 800, flexShrink: 0 }}>{trainingTodoCount}</span>
                 <span style={{ flex: 1 }}>
-                  <strong style={{ display: 'block', fontSize: 16 }}>{trainingTodoCount} training{trainingTodoCount === 1 ? '' : 's'} to sign</strong>
+                  <strong style={{ display: 'block', fontSize: 16 }}>Training{trainingTodoCount === 1 ? '' : 's'} to sign</strong>
                   <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>Show your manager you understood it</span>
                 </span>
-                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>{'>'}</span>
               </button>
             )}
             {sopTodoCount > 0 && (
               <button type="button" style={tapRowBase} onClick={() => setOpenSops(true)}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>📋</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, background: HERO_AMBER, color: '#fff', fontSize: 20, fontWeight: 800, flexShrink: 0 }}>{sopTodoCount}</span>
                 <span style={{ flex: 1 }}>
-                  <strong style={{ display: 'block', fontSize: 16 }}>{sopTodoCount} work instruction{sopTodoCount === 1 ? '' : 's'} to read</strong>
-                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>How we do things here. Read and tap "I've read it"</span>
+                  <strong style={{ display: 'block', fontSize: 16 }}>Work instruction{sopTodoCount === 1 ? '' : 's'} to read</strong>
+                  <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>How we do things here. Read and tap &ldquo;I&apos;ve read it&rdquo;</span>
                 </span>
-                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>{'>'}</span>
               </button>
             )}
             {managerTodoCount > 0 && (
               <button type="button" style={tapRowBase} onClick={() => setOpenManager(true)}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>💬</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, background: HERO_AMBER, color: '#fff', fontSize: 20, fontWeight: 800, flexShrink: 0 }}>{managerTodoCount}</span>
                 <span style={{ flex: 1 }}>
-                  <strong style={{ display: 'block', fontSize: 16 }}>{managerTodoCount} letter{managerTodoCount === 1 ? '' : 's'} from your manager</strong>
+                  <strong style={{ display: 'block', fontSize: 16 }}>Letter{managerTodoCount === 1 ? '' : 's'} from your manager</strong>
                   <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>Read it and sign. This is on your record.</span>
                 </span>
-                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>{'>'}</span>
               </button>
             )}
             {newNoticeCount > 0 && (
               <button type="button" style={tapRowBase} onClick={() => setOpenMessages(true)}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>📣</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, background: HERO_AMBER, color: '#fff', fontSize: 20, fontWeight: 800, flexShrink: 0 }}>{newNoticeCount}</span>
                 <span style={{ flex: 1 }}>
-                  <strong style={{ display: 'block', fontSize: 16 }}>{newNoticeCount} new message{newNoticeCount === 1 ? '' : 's'}</strong>
+                  <strong style={{ display: 'block', fontSize: 16 }}>New message{newNoticeCount === 1 ? '' : 's'}</strong>
                   <span style={{ color: 'var(--jp-ink-3, #64748b)', fontSize: 13 }}>From the office</span>
                 </span>
-                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>→</span>
+                <span style={{ color: HERO_AMBER, fontWeight: 700, fontSize: 22 }}>{'>'}</span>
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ───────────────── 2. ALL CLEAR (only when nothing to do) ───────────────── */}
+      {/* ───────────────── 2. ALL CLEAR (only when nothing to do) ─────────────────
+          No tick / no emoji. Green colour + uppercase ALL CLEAR badge
+          carries the meaning. */}
       {totalTodo === 0 && (
         <div style={{ ...cardBase, borderColor: HERO_GREEN, background: HERO_GREEN_TINT, borderLeft: `6px solid ${HERO_GREEN}`, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 36, lineHeight: 1 }}>✅</span>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px 12px',
+            borderRadius: 6,
+            background: HERO_GREEN,
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+          }}>ALL CLEAR</span>
           <div>
-            <strong style={{ fontSize: 16, color: '#065f46' }}>All caught up</strong>
-            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #475569)' }}>Nothing waiting for you right now.</div>
+            <strong style={{ fontSize: 16, color: '#065f46' }}>Nothing waiting for you right now.</strong>
+            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #475569)' }}>Have a good day.</div>
           </div>
         </div>
       )}
@@ -371,49 +386,40 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
       {/* ───────────────── 3. QUICK ACTIONS ─────────────────
           Three fat tiles staff can always find: leave, pay, instructions.
           Numbers visible up front so they don't have to dig. */}
+      {/* No emojis. Each tile uses an uppercase category banner across
+          the top to identify it, big bold action verb, and the live
+          number so they don't have to dig. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 18 }}>
         {linkedEmployee && (
           <button
             type="button"
-            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
             onClick={() => { setOpenLeave(true); setLeaveStart(new Date().toISOString().slice(0, 10)); setLeaveEnd(new Date().toISOString().slice(0, 10)); setShowLeaveForm(true); }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 32, lineHeight: 1 }}>🏖️</span>
-              <div style={{ flex: 1 }}>
-                <strong style={{ fontSize: 16 }}>Apply for leave</strong>
-                <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days available</div>
-              </div>
-            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>LEAVE</span>
+            <strong style={{ fontSize: 18 }}>Apply for leave</strong>
+            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days available</div>
           </button>
         )}
         {linkedEmployee && myPayslips.length > 0 && (
           <button
             type="button"
-            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+            style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
             onClick={() => setOpenPay(true)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 32, lineHeight: 1 }}>💰</span>
-              <div style={{ flex: 1 }}>
-                <strong style={{ fontSize: 16 }}>See my pay</strong>
-                <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>Last: {myPayslips[0].run.periodLabel}</div>
-              </div>
-            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>PAY</span>
+            <strong style={{ fontSize: 18 }}>See my pay</strong>
+            <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>Last: {myPayslips[0].run.periodLabel}</div>
           </button>
         )}
         <button
           type="button"
-          style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}
+          style={{ ...cardBase, cursor: 'pointer', textAlign: 'left', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `4px solid var(--jp-ink-2, #475569)` }}
           onClick={() => setOpenSops(true)}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 32, lineHeight: 1 }}>📋</span>
-            <div style={{ flex: 1 }}>
-              <strong style={{ fontSize: 16 }}>Read work instructions</strong>
-              <div style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{pendingSops.length > 0 ? `${pendingSops.length} new to read` : 'All read'}</div>
-            </div>
-          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--jp-ink-3, #64748b)' }}>WORK INSTRUCTIONS</span>
+          <strong style={{ fontSize: 18 }}>Read work instructions</strong>
+          <div style={{ fontSize: 13, color: 'var(--jp-ink-3, #64748b)' }}>{pendingSops.length > 0 ? `${pendingSops.length} new to read` : 'All read'}</div>
         </button>
       </div>
 
@@ -668,17 +674,16 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenMessages((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>📣</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Messages from the office</h3>
               <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{visibleNotices.length} message{visibleNotices.length === 1 ? '' : 's'}</span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openMessages ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openMessages ? '−' : '+'}</span>
             </button>
             {openMessages && (
               <div style={{ padding: '0 16px 14px' }}>
                 {visibleNotices.map((n) => (
                   <div key={n.id} className="portal-row">
                     <div className="portal-row-main">
-                      <strong>{n.pinned ? '📌 ' : ''}{n.title}</strong>
+                      <strong>{n.pinned ? <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '2px 6px', borderRadius: 4, background: HERO_AMBER, color: '#fff', marginRight: 6 }}>PINNED</span> : null}{n.title}</strong>
                       <span>{formatDate(n.postedAt)} · {n.postedByName}</span>
                       <span style={{ color: 'var(--jp-text)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{n.body}</span>
                     </div>
@@ -698,10 +703,9 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenTraining((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>🎓</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Training to sign</h3>
               <span style={{ fontSize: 12, fontWeight: 700, color: HERO_AMBER }}>{pendingTraining.length} to do</span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openTraining ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openTraining ? '−' : '+'}</span>
             </button>
             {openTraining && (
               <div style={{ padding: '0 16px 14px' }}>
@@ -728,10 +732,9 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenSops((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>📋</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Work instructions to read</h3>
               <span style={{ fontSize: 12, fontWeight: 700, color: HERO_AMBER }}>{pendingSops.length} to read</span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openSops ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openSops ? '−' : '+'}</span>
             </button>
             {openSops && (
               <div style={{ padding: '0 16px 14px' }}>
@@ -740,7 +743,7 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                     <div className="portal-row-main">
                       <strong>{s.title} <span className="muted">v{s.version}</span></strong>
                       <span>{s.category} · approved {formatDate(s.approvedDate)}</span>
-                      {s.documentUrl ? <a href={s.documentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Open document ↗</a> : null}
+                      {s.documentUrl ? <a href={s.documentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Open document</a> : null}
                     </div>
                     <button className="secondary-button" onClick={() => onAcknowledgeSop(s.id, fullName)}>I&apos;ve read it</button>
                   </div>
@@ -761,10 +764,9 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenLeave((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>🏖️</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>My leave</h3>
               <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{annualBal.available.toFixed(0)} days left</span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openLeave ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openLeave ? '−' : '+'}</span>
             </button>
             {openLeave && (
               <div style={{ padding: '0 16px 14px' }}>
@@ -831,12 +833,11 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenManager((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>💬</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>Letters from your manager</h3>
               <span style={{ fontSize: 12, fontWeight: managerTodoCount > 0 ? 700 : 400, color: managerTodoCount > 0 ? HERO_AMBER : 'var(--jp-ink-3, #64748b)' }}>
                 {managerTodoCount > 0 ? `${managerTodoCount} to sign` : `${myWarnings.length} letter${myWarnings.length === 1 ? '' : 's'}`}
               </span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openManager ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openManager ? '−' : '+'}</span>
             </button>
             {openManager && (
               <div style={{ padding: '0 16px 14px' }}>
@@ -846,7 +847,7 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                 <div key={w.id} className="portal-row" style={{ display: 'block' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <strong>{w.type}{w.category ? ` · ${w.category}` : ''}</strong>
-                    <span className={warningPillClass(w.type)}>{w.acknowledged ? '✓ Signed' : (isWarningType(w.type) ? 'Needs sign-off' : 'FYI')}</span>
+                    <span className={warningPillClass(w.type)}>{w.acknowledged ? 'Signed' : (isWarningType(w.type) ? 'Needs sign-off' : 'FYI')}</span>
                   </div>
                   <div className="muted" style={{ fontSize: '0.78rem', marginBottom: 6 }}>
                     {formatDate(w.issuedDate)}{w.issuedByName ? ` · ${w.issuedByName}` : ''}
@@ -856,7 +857,7 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
                     <p style={{ margin: '4px 0', fontStyle: 'italic' }}><strong>Agreed next steps:</strong> {w.correctiveAction}</p>
                   ) : null}
                   {w.attachmentUrl ? (
-                    <a href={w.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem' }}>Open attachment ↗</a>
+                    <a href={w.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem' }}>Open attachment</a>
                   ) : null}
                   {needsAck ? (
                     showSignPadFor === w.id ? (
@@ -892,10 +893,9 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
               onClick={() => setOpenPay((v) => !v)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 24 }}>💰</span>
               <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>My pay history</h3>
               <span style={{ fontSize: 12, color: 'var(--jp-ink-3, #64748b)' }}>{myPayslips.length} pay{myPayslips.length === 1 ? 'slip' : 'slips'}</span>
-              <span style={{ fontSize: 18, color: 'var(--jp-ink-3, #64748b)' }}>{openPay ? '▾' : '▸'}</span>
+              <span style={{ fontSize: 16, color: 'var(--jp-ink-3, #64748b)', fontWeight: 700, width: 20, textAlign: 'center' }}>{openPay ? '−' : '+'}</span>
             </button>
             {openPay && (
               <div style={{ padding: '0 16px 14px' }}>
@@ -937,7 +937,7 @@ export function StaffPortalPage({ profile, role, notices, trainingRecords, sopDo
             fontSize: 14,
           }}
         >
-          <span style={{ fontSize: 28 }}>▶️</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', padding: '6px 10px', borderRadius: 6, background: '#3b82f6', color: '#fff' }}>VIDEO</span>
           <span><strong>Watch how to use this page</strong><div style={{ fontSize: 12, color: '#475569' }}>Step-by-step video</div></span>
         </a>
       )}

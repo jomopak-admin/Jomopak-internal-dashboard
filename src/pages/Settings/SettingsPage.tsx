@@ -2381,8 +2381,6 @@ interface HelpVideoPage {
   key: string;
   /** Friendly display name in this Settings tab. */
   label: string;
-  /** Emoji shown next to the label so the page is instantly recognisable. */
-  emoji: string;
   /** Short subtitle telling Aman what the video should cover. */
   hint?: string;
 }
@@ -2402,59 +2400,59 @@ const HELP_VIDEO_GROUPS: HelpVideoGroup[] = [
     title: 'Staff portal',
     description: 'The page every staff member lands on. Most important video.',
     pages: [
-      { key: 'myPortal', label: 'My Stuff', emoji: '👤', hint: 'How to read messages, sign training, apply for leave, see pay.' },
+      { key: 'myPortal', label: 'My Stuff', hint: 'How to read messages, sign training, apply for leave, see pay.' },
     ],
   },
   {
     title: 'Reception & visitors',
     description: 'Reception staff and the kiosk surface.',
     pages: [
-      { key: 'visitorKiosk', label: 'Visitor kiosk', emoji: '🚪', hint: 'Sign visitors in and out. How to verify them.' },
-      { key: 'visitorApprovalRequests', label: 'Visitor approval requests', emoji: '🛎️', hint: 'How to handle host approval requests.' },
+      { key: 'visitorKiosk', label: 'Visitor kiosk', hint: 'Sign visitors in and out. How to verify them.' },
+      { key: 'visitorApprovalRequests', label: 'Visitor approval requests', hint: 'How to handle host approval requests.' },
     ],
   },
   {
     title: 'Drivers & dispatch',
     description: 'Driver POD app and dispatch flow.',
     pages: [
-      { key: 'driverPod', label: 'Driver POD (mobile)', emoji: '🚚', hint: 'Capture proof of delivery, signature, photos.' },
-      { key: 'dispatchRuns', label: 'Dispatch runs', emoji: '📦', hint: 'Plan load, hand to driver, complete.' },
-      { key: 'dispatch', label: 'Dispatch records', emoji: '📋', hint: 'Record what left the building.' },
+      { key: 'driverPod', label: 'Driver POD (mobile)', hint: 'Capture proof of delivery, signature, photos.' },
+      { key: 'dispatchRuns', label: 'Dispatch runs', hint: 'Plan load, hand to driver, complete.' },
+      { key: 'dispatch', label: 'Dispatch records', hint: 'Record what left the building.' },
     ],
   },
   {
     title: 'Production floor',
     description: 'Where production staff log work.',
     pages: [
-      { key: 'jobs', label: 'Job Cards', emoji: '🛠️', hint: 'Update job status, capture quantities, mark complete.' },
-      { key: 'productionSchedule', label: 'Production schedule', emoji: '📅', hint: 'Read the daily run list.' },
-      { key: 'workTicket', label: 'Work tickets', emoji: '🎫', hint: 'How a work ticket is filled in.' },
-      { key: 'production', label: 'Production logs', emoji: '📝', hint: 'Recording quantities + waste.' },
-      { key: 'waste', label: 'Waste log', emoji: '🗑️', hint: 'How to log waste cleanly.' },
+      { key: 'jobs', label: 'Job Cards', hint: 'Update job status, capture quantities, mark complete.' },
+      { key: 'productionSchedule', label: 'Production schedule', hint: 'Read the daily run list.' },
+      { key: 'workTicket', label: 'Work tickets', hint: 'How a work ticket is filled in.' },
+      { key: 'production', label: 'Production logs', hint: 'Recording quantities + waste.' },
+      { key: 'waste', label: 'Waste log', hint: 'How to log waste cleanly.' },
     ],
   },
   {
     title: 'Warehouse & stock',
     description: 'For warehouse and receiving staff.',
     pages: [
-      { key: 'finishedStock', label: 'Finished goods stock', emoji: '📦', hint: 'Update FG stock counts.' },
-      { key: 'materials', label: 'Materials receiving', emoji: '📥', hint: 'Receiving paper / chemicals / consumables.' },
-      { key: 'stockMovements', label: 'Stock movements', emoji: '🔁', hint: 'Move stock between locations.' },
-      { key: 'stockTake', label: 'Stock take', emoji: '✅', hint: 'How to do a stock count.' },
-      { key: 'spares', label: 'Spares & tools', emoji: '🔧', hint: 'Issue spares, check out tools.' },
+      { key: 'finishedStock', label: 'Finished goods stock', hint: 'Update FG stock counts.' },
+      { key: 'materials', label: 'Materials receiving', hint: 'Receiving paper / chemicals / consumables.' },
+      { key: 'stockMovements', label: 'Stock movements', hint: 'Move stock between locations.' },
+      { key: 'stockTake', label: 'Stock take', hint: 'How to do a stock count.' },
+      { key: 'spares', label: 'Spares & tools', hint: 'Issue spares, check out tools.' },
     ],
   },
   {
     title: 'Quality & safety',
     description: 'Compliance work that floor staff touch.',
     pages: [
-      { key: 'nonConformance', label: 'Non-conformance (NCR)', emoji: '⚠️', hint: 'Log an NCR + CAPA.' },
-      { key: 'firstAidRegister', label: 'First aid register', emoji: '🩹', hint: 'Record a first-aid incident.' },
-      { key: 'incidentRegister', label: 'Incident register', emoji: '🚨', hint: 'Log a workplace incident.' },
-      { key: 'cleaningLogs', label: 'Cleaning logs', emoji: '🧹', hint: 'Daily cleaning sign-off.' },
-      { key: 'chemicalRegister', label: 'Chemical register', emoji: '🧪', hint: 'Issue + receive chemicals.' },
-      { key: 'foodSafeMaterials', label: 'Food-safe materials', emoji: '🥪', hint: 'How food-safe materials get logged.' },
-      { key: 'toolboxTalks', label: 'Toolbox talks', emoji: '📣', hint: 'Record a toolbox talk + attendance.' },
+      { key: 'nonConformance', label: 'Non-conformance (NCR)', hint: 'Log an NCR + CAPA.' },
+      { key: 'firstAidRegister', label: 'First aid register', hint: 'Record a first-aid incident.' },
+      { key: 'incidentRegister', label: 'Incident register', hint: 'Log a workplace incident.' },
+      { key: 'cleaningLogs', label: 'Cleaning logs', hint: 'Daily cleaning sign-off.' },
+      { key: 'chemicalRegister', label: 'Chemical register', hint: 'Issue + receive chemicals.' },
+      { key: 'foodSafeMaterials', label: 'Food-safe materials', hint: 'How food-safe materials get logged.' },
+      { key: 'toolboxTalks', label: 'Toolbox talks', hint: 'Record a toolbox talk + attendance.' },
     ],
   },
 ];
@@ -2495,16 +2493,16 @@ function HelpVideosTab({ helpVideos, patchHelpVideo }: HelpVideosTabProps) {
                   key={page.key}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '40px 1fr auto',
+                    gridTemplateColumns: '1fr auto',
                     gap: 12,
                     alignItems: 'center',
                     padding: '10px 12px',
                     borderRadius: 8,
                     border: '1px solid var(--jp-divider, #e2e8f0)',
+                    borderLeft: hasUrl ? '4px solid #22a865' : '4px solid var(--jp-divider, #e2e8f0)',
                     background: hasUrl ? 'rgba(34, 168, 101, 0.04)' : 'var(--jp-paper, #fff)',
                   }}
                 >
-                  <span style={{ fontSize: 24, lineHeight: 1 }}>{page.emoji}</span>
                   <div style={{ minWidth: 0 }}>
                     <strong style={{ display: 'block' }}>{page.label}</strong>
                     {page.hint ? <span style={{ display: 'block', fontSize: 11, color: 'var(--jp-ink-3, #64748b)' }}>{page.hint}</span> : null}
@@ -2521,9 +2519,9 @@ function HelpVideosTab({ helpVideos, patchHelpVideo }: HelpVideosTabProps) {
                       href={url}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 12, color: 'var(--jp-orange, #db5a1f)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                      style={{ fontSize: 12, color: 'var(--jp-orange, #db5a1f)', textDecoration: 'none', whiteSpace: 'nowrap', fontWeight: 700 }}
                       title="Open video in a new tab"
-                    >Preview ↗</a>
+                    >Preview</a>
                   ) : (
                     <span style={{ fontSize: 11, color: 'var(--jp-ink-3, #94a3b8)', whiteSpace: 'nowrap' }}>No video</span>
                   )}
