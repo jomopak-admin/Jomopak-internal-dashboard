@@ -85,6 +85,30 @@ function money(n: number): string {
   return (Number(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Phase 123 — SA-format date helper for payslip headers + footer.
+ *  Turns "2026-05-01" into "1 May 2026". Returns "—" for blanks. */
+function fmtDateSA(iso: string): string {
+  if (!iso) return '—';
+  const parts = iso.split('-');
+  if (parts.length !== 3) return iso;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!y || !m || !d) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${d} ${months[m - 1]} ${y}`;
+}
+
+/** Phase 123 — Mask a bank account number to show only the last 4 digits.
+ *  Keeps payslips safe to print + email — full bank details aren't dumped
+ *  on every doc that gets passed around the office. */
+function maskAccount(acct: string): string {
+  if (!acct) return '—';
+  const trimmed = acct.replace(/\s/g, '');
+  if (trimmed.length <= 4) return trimmed;
+  return `••••${trimmed.slice(-4)}`;
+}
+
 /** Build a clean, email-client-safe HTML payslip (inline styles, simple table). */
 /**
  * SMETA-compliant payslip HTML (Phase 55). Itemizes hours/rates,
@@ -171,18 +195,19 @@ export function buildPayslipHtml(
       ${company?.addressLine1 ? `<div style="font-size:11px;color:#555;line-height:1.4;margin-top:4px;">${[company.addressLine1, company.addressLine2].filter(Boolean).join(' · ')}${(company.phone || company.email) ? `<br/>${[company.phone, company.email].filter(Boolean).join(' · ')}` : ''}</div>` : ''}
     </div>
 
-    <!-- ─── Employee header ─── -->
+    <!-- ─── Employee header (Phase 123 — SA date format) ─── -->
     <div style="display:table;width:100%;padding:14px 0 6px;">
       <div style="display:table-cell;width:50%;font-size:12px;">
         <div style="font-weight:600;font-size:13px;">Payslip for ${slip.employeeName}</div>
-        <div style="color:#555;margin-top:2px;">Period: ${period.from} to ${period.to}</div>
+        <div style="color:#555;margin-top:2px;">Period: ${fmtDateSA(period.from)} to ${fmtDateSA(period.to)}</div>
         ${employee?.idNumber ? `<div style="color:#555;">ID Number: ${employee.idNumber}</div>` : ''}
         ${employee?.taxNumber ? `<div style="color:#555;">Tax Number: ${employee.taxNumber}</div>` : ''}
       </div>
       <div style="display:table-cell;width:50%;text-align:right;font-size:12px;color:#555;">
         ${slip.employeeNumber ? `Employee Number: ${slip.employeeNumber}<br/>` : ''}
-        ${employee?.jobTitle ? `${employee.jobTitle}<br/>` : ''}
-        ${employee?.startDate ? `Employment Date: ${employee.startDate}` : ''}
+        ${employee?.jobTitle ? `Job Title: ${employee.jobTitle}<br/>` : ''}
+        ${employee?.department ? `Department: ${employee.department}<br/>` : ''}
+        ${employee?.startDate ? `Employment Date: ${fmtDateSA(employee.startDate)}` : ''}
       </div>
     </div>
 
@@ -295,9 +320,29 @@ export function buildPayslipHtml(
       </div>
     ` : ''}
 
-    <p style="font-size:10px;color:#999;margin-top:24px;border-top:1px solid #eee;padding-top:8px;text-align:center;">
+    <!-- ─── Phase 123 — Bank deposit footer.
+         Shows the employee where the money was paid (or would be, at R0)
+         so they can verify their bank record on file. Account number is
+         masked to last-4 so the payslip is safe to print/share. ─── -->
+    <div style="display:table;width:100%;margin-top:18px;border-top:1px solid #ddd;padding-top:10px;">
+      <div style="display:table-cell;vertical-align:top;width:55%;font-size:11px;color:#444;">
+        <div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Paid to</div>
+        <div><strong>${employee?.bankName || 'Bank not on file'}</strong></div>
+        <div style="color:#555;">
+          ${employee?.accountType ? `${employee.accountType} account · ` : ''}
+          ${maskAccount(employee?.bankAccountNumber || '')}
+        </div>
+        ${employee?.bankBranchCode ? `<div style="color:#555;">Branch ${employee.bankBranchCode}</div>` : ''}
+      </div>
+      <div style="display:table-cell;vertical-align:top;width:45%;font-size:11px;color:#444;text-align:right;">
+        <div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pay date</div>
+        <div><strong>${fmtDateSA(run.payDate)}</strong></div>
+      </div>
+    </div>
+
+    <p style="font-size:10px;color:#999;margin-top:18px;border-top:1px solid #eee;padding-top:8px;text-align:center;">
       This payslip is provided in accordance with the Basic Conditions of Employment Act and SMETA wage-transparency guidelines.
-      If anything looks wrong, please contact payroll within 7 days. · Paid ${run.payDate}
+      If anything looks wrong, please contact payroll within 7 days.
     </p>
   </div>`;
 }
