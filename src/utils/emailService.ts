@@ -8,6 +8,7 @@
 
 import { AppSettingsCompany, Employee, Payslip, PayrollRun } from '../types';
 import { supabase } from './supabase';
+import { buildLetterhead } from './printing';
 
 /**
  * YTD totals for the current SA tax year (March → February). Pass the
@@ -165,20 +166,36 @@ export function buildPayslipHtml(
     ...((slip.additionalDeductions ?? []).map((l) => line2(l.label, l.amount, 0, { sign: '-' }))),
   ].join('');
 
+  // Phase 123.2 — Always show SDL row even at R0 so SMETA auditors
+  // see the statutory line is present. (UIF Employer was already always-on.)
   const employerRows = [
     line2('UIF - Employer', slip.uifEmployer || 0, safeYtd.uifEmployer),
-    ...(slip.sdl ? [line2('SDL', slip.sdl, safeYtd.sdl)] : []),
+    line2('SDL', slip.sdl || 0, safeYtd.sdl),
   ].join('');
+
+  // Phase 123.2 — Cost to Company = Gross + Employer contributions.
+  // Critical SMETA transparency: the employee sees the full cost of
+  // employing them, not just their nett take-home.
+  const employerTotal = (slip.uifEmployer || 0) + (slip.sdl || 0);
+  const employerYtdTotal = safeYtd.uifEmployer + safeYtd.sdl;
+  const costToCompany = totalIncome + employerTotal;
+  const costToCompanyYtd = safeYtd.income + employerYtdTotal;
 
   const hoursRows = (slip.hoursLines ?? []).map((h) => `<tr>
     <td style="padding:5px 8px;border-bottom:1px solid #eee;">${h.type}</td>
     <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">${h.quantity.toFixed(2)}</td>
-    <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">R ${money(h.rate)}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">R ${money(h.rate)}</td>
   </tr>`).join('');
 
+  // Phase 123.2 — Daily hours for converting leave days → hours equivalent.
+  // Most staff think in "days" but timekeepers / SMETA auditors want hours.
+  // Defaults to 8 hours/day if no standardMonthlyHours captured.
+  const standardDailyHours = (employee?.standardMonthlyHours && employee.standardMonthlyHours > 0)
+    ? (employee.standardMonthlyHours / 21.67) // BCEA: ~21.67 working days/month
+    : 8;
   const leaveRows = (slip.leaveSnapshot ?? []).map((l) => `<tr>
     <td style="padding:4px 8px;">${l.type}</td>
-    <td style="padding:4px 8px;text-align:right;">${l.balance.toFixed(2)}</td>
+    <td style="padding:4px 8px;text-align:right;white-space:nowrap;">${l.balance.toFixed(2)} <span style="color:#888;font-size:10px;">(${(l.balance * standardDailyHours).toFixed(1)}h)</span></td>
     <td style="padding:4px 8px;text-align:right;">${l.adjustment.toFixed(2)}</td>
     <td style="padding:4px 8px;text-align:right;">${l.taken.toFixed(2)}</td>
     <td style="padding:4px 8px;text-align:right;">${l.scheduled.toFixed(2)}</td>
@@ -189,21 +206,27 @@ export function buildPayslipHtml(
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:0 auto;color:#1a1a1a;font-size:12px;">
 
-    <!-- ─── Company header ─── -->
-    <div style="text-align:center;padding:14px 0 4px;border-bottom:1px solid #ddd;">
-      <div style="font-size:15px;font-weight:600;">${company?.legalName || company?.name || 'JomoPak'}</div>
-      ${company?.addressLine1 ? `<div style="font-size:11px;color:#555;line-height:1.4;margin-top:4px;">${[company.addressLine1, company.addressLine2].filter(Boolean).join(' · ')}${(company.phone || company.email) ? `<br/>${[company.phone, company.email].filter(Boolean).join(' · ')}` : ''}</div>` : ''}
-    </div>
+    <!-- ─── Phase 123.2 — Letterhead block.
+         Uses the shared buildLetterhead helper so payslips look the same
+         as your invoices/quotes (brand logo + clean address layout).
+         The "Payslip" right-title makes the doc type instantly clear. -->
+    ${buildLetterhead(company, {
+      rightTitle: 'Payslip',
+      rightSubtitle: `${fmtDateSA(period.from)} to ${fmtDateSA(period.to)}`,
+      logoHeightPx: 80,
+      documentKind: 'payslip',
+    })}
 
-    <!-- ─── Employee header (Phase 123 — SA date format) ─── -->
+    <!-- ─── Employee header (Phase 123.2 — period now in letterhead subtitle).
+         Status pill makes Draft vs Approved instantly obvious. -->
     <div style="display:table;width:100%;padding:14px 0 6px;">
-      <div style="display:table-cell;width:50%;font-size:12px;">
-        <div style="font-weight:600;font-size:13px;">Payslip for ${slip.employeeName}</div>
-        <div style="color:#555;margin-top:2px;">Period: ${fmtDateSA(period.from)} to ${fmtDateSA(period.to)}</div>
-        ${employee?.idNumber ? `<div style="color:#555;">ID Number: ${employee.idNumber}</div>` : ''}
+      <div style="display:table-cell;width:55%;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;">${slip.employeeName}</div>
+        ${employee?.idNumber ? `<div style="color:#555;margin-top:2px;">ID Number: ${employee.idNumber}</div>` : ''}
         ${employee?.taxNumber ? `<div style="color:#555;">Tax Number: ${employee.taxNumber}</div>` : ''}
+        <div style="color:#555;">${run.payCycle || 'Monthly'} pay${run.status && run.status !== 'Approved' ? ` · <strong style="color:#92400e;">${run.status}</strong>` : ''}</div>
       </div>
-      <div style="display:table-cell;width:50%;text-align:right;font-size:12px;color:#555;">
+      <div style="display:table-cell;width:45%;text-align:right;font-size:12px;color:#555;">
         ${slip.employeeNumber ? `Employee Number: ${slip.employeeNumber}<br/>` : ''}
         ${employee?.jobTitle ? `Job Title: ${employee.jobTitle}<br/>` : ''}
         ${employee?.department ? `Department: ${employee.department}<br/>` : ''}
@@ -223,29 +246,29 @@ export function buildPayslipHtml(
             </tr>
           </thead>
           <tbody>
-            ${head('Income')}
+            ${head('Earnings')}
             ${incomeRows}
             <tr><td colspan="3" style="padding:6px 8px;border-top:1px solid #ccc;font-weight:600;">
               <table style="width:100%;"><tr>
-                <td style="padding:0;">Gross Income</td>
-                <td style="padding:0;text-align:right;">${money(totalIncome)}</td>
-                <td style="padding:0;text-align:right;color:#666;width:80px;">${money(safeYtd.income)}</td>
+                <td style="padding:0;">Total Earnings</td>
+                <td style="padding:0;text-align:right;">R ${money(totalIncome)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">R ${money(safeYtd.income)}</td>
               </tr></table>
             </td></tr>
 
-            ${head('Deduction')}
+            ${head('Deductions')}
             ${deductionRows}
             <tr><td colspan="3" style="padding:6px 8px;border-top:1px solid #ccc;font-weight:600;">
               <table style="width:100%;"><tr>
                 <td style="padding:0;">Total Deductions</td>
-                <td style="padding:0;text-align:right;">-${money(totalDeductions)}</td>
-                <td style="padding:0;text-align:right;color:#666;width:80px;">-${money(safeYtd.paye + safeYtd.uifEmployee + safeYtd.otherDeductions)}</td>
+                <td style="padding:0;text-align:right;">-R ${money(totalDeductions)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">-R ${money(safeYtd.paye + safeYtd.uifEmployee + safeYtd.otherDeductions)}</td>
               </tr></table>
             </td></tr>
 
-            <tr><td colspan="3" style="padding:12px 8px;border-top:2px solid #333;font-weight:600;font-size:13px;background:#f7f7f7;">
+            <tr><td colspan="3" style="padding:12px 8px;border-top:2px solid #333;font-weight:700;font-size:14px;background:#f7f7f7;">
               <table style="width:100%;"><tr>
-                <td style="padding:0;">Nett Pay</td>
+                <td style="padding:0;">Net Pay</td>
                 <td style="padding:0;text-align:right;">R ${money(slip.netPay)}</td>
                 <td style="padding:0;text-align:right;color:#666;width:80px;">R ${money(safeYtd.netPay)}</td>
               </tr></table>
@@ -264,8 +287,25 @@ export function buildPayslipHtml(
             </tr>
           </thead>
           <tbody>
-            ${head('Employer Contribution')}
+            ${head('Employer Contributions')}
             ${employerRows}
+            <tr><td colspan="3" style="padding:6px 8px;border-top:1px solid #ccc;font-weight:600;">
+              <table style="width:100%;"><tr>
+                <td style="padding:0;">Employer total</td>
+                <td style="padding:0;text-align:right;">R ${money(employerTotal)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">R ${money(employerYtdTotal)}</td>
+              </tr></table>
+            </td></tr>
+            <!-- Phase 123.2 — Cost to Company is the real number a SMETA
+                 auditor wants: Earnings + Employer Contributions. The
+                 employee sees their full cost on the business. -->
+            <tr><td colspan="3" style="padding:10px 8px;border-top:2px solid #333;font-weight:700;font-size:13px;background:#f7f7f7;">
+              <table style="width:100%;"><tr>
+                <td style="padding:0;">Cost to Company</td>
+                <td style="padding:0;text-align:right;">R ${money(costToCompany)}</td>
+                <td style="padding:0;text-align:right;color:#666;width:80px;">R ${money(costToCompanyYtd)}</td>
+              </tr></table>
+            </td></tr>
           </tbody>
         </table>
 
@@ -295,7 +335,7 @@ export function buildPayslipHtml(
                 </tr>
               </thead>
               <tbody>
-                <tr><td style="padding:5px 8px;">Normal</td><td style="padding:5px 8px;text-align:right;">${(employee?.standardMonthlyHours ?? 173.33).toFixed(2)}</td><td style="padding:5px 8px;text-align:right;">R ${hourlyRate.toFixed(2)}</td></tr>
+                <tr><td style="padding:5px 8px;">Normal</td><td style="padding:5px 8px;text-align:right;">${(employee?.standardMonthlyHours ?? 173.33).toFixed(2)}</td><td style="padding:5px 8px;text-align:right;white-space:nowrap;">R ${hourlyRate.toFixed(2)}</td></tr>
               </tbody>
             </table>
           </div>
