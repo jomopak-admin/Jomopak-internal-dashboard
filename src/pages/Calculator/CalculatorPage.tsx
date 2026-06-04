@@ -130,6 +130,10 @@ export function CalculatorPage({
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
   const [printing, setPrinting] = useState(false);
+  // Phase 131.1 — Header advanced section is collapsed by default to cut
+  // visual noise. Lead, Pricing tier, Sales owner, Plate billing, Margin
+  // override are advanced settings most quotes don't need.
+  const [showHeaderAdvanced, setShowHeaderAdvanced] = useState(false);
 
   // Live computation runs on every render. Pure function — no perf cost.
   const computation = useMemo(
@@ -188,10 +192,9 @@ export function CalculatorPage({
 
   async function handleSaveAsQuote() {
     if (!onSaveAsQuote) return;
-    if (!state.shared.clientId) {
-      setSavedMessage('Pick a client before saving.');
-      return;
-    }
+    // Phase 131.1 — Client is now optional. Empty or 'cash-sale' both
+    // route through the save handler which decides whether to attach a
+    // CASH SALE marker on the resulting quote/invoice.
     if (computation.rollup.totalQuantity === 0) {
       setSavedMessage('Add at least one line with a quantity.');
       return;
@@ -217,8 +220,10 @@ export function CalculatorPage({
   }
 
   const blockingIssues: string[] = [];
-  if (!state.shared.clientId) blockingIssues.push('Pick a client');
-  if (!state.shared.paperRateId) blockingIssues.push('Pick a paper rate');
+  // Phase 131.1 — Client is no longer strictly required. Empty or
+  // 'cash-sale' both mean "no specific account" and the save flow
+  // treats them as a Cash Sale walk-in.
+  if (!state.shared.paperRateId) blockingIssues.push('Pick a paper');
   if (!state.shared.costProfileId) blockingIssues.push('Pick a cost profile');
   if (computation.rollup.totalQuantity === 0) blockingIssues.push('Add at least one line quantity');
 
@@ -248,6 +253,28 @@ export function CalculatorPage({
       {/* Shared header --------------------------------------------------- */}
       <section className="card calculator2-shared">
         <h3>Quote header</h3>
+
+        {/* Phase 131.1 — Cash Sale banner. Big and obvious so the user
+            knows this isn't going against a client account. */}
+        {state.shared.clientId === 'cash-sale' ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 14px', marginBottom: 12,
+            borderRadius: 8,
+            background: 'rgba(220, 38, 38, 0.08)',
+            border: '1px solid #dc2626',
+          }}>
+            <span style={{
+              padding: '4px 10px', borderRadius: 6,
+              background: '#dc2626', color: '#fff',
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.08em',
+            }}>CASH SALE</span>
+            <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>
+              <strong>Walk-in / no client account.</strong>
+              {' '}Standard pricing — no credit terms, no client-specific defaults applied.
+            </div>
+          </div>
+        ) : null}
 
         {/* Phase 86 — client privileges panel. Once a client is picked,
             surface their pricing tier + credit + standing flags so the
@@ -280,35 +307,36 @@ export function CalculatorPage({
           </div>
         ) : null}
 
+        {/* Phase 131.1 — Essentials first. Client / Paper / Cost profile /
+            Quote date / Notes. Everything else is hidden under "More options"
+            below to cut visual clutter. */}
         <div className="calculator2-shared-grid">
           <label>
-            <span>Client *</span>
+            <span>Client</span>
             <select value={state.shared.clientId} onChange={(e) => updateShared('clientId', e.target.value)}>
               <option value="">Select client</option>
+              {/* Phase 131.1 — Cash Sale built-in. Lets you quote without
+                  picking a real client. The save handler treats this as
+                  a walk-in / no-account quote. */}
+              <option value="cash-sale">CASH SALE — quick quote / walk-in</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label>
-            <span>Lead (optional)</span>
-            <select value={state.shared.leadId} onChange={(e) => updateShared('leadId', e.target.value)}>
-              <option value="">No lead linked</option>
-              {clientLeads.map((l) => <option key={l.id} value={l.id}>{l.leadNumber} · {l.companyName || l.contactName}</option>)}
-            </select>
-          </label>
-          <label>
-            <span>Pricing tier</span>
-            <select value={state.shared.pricingTierId} onChange={(e) => updateShared('pricingTierId', e.target.value)}>
-              <option value="">{selectedClient ? `Client default (${pricingTiers.find((t) => t.id === selectedClient.pricingTierId)?.name || 'none'})` : 'Use client default'}</option>
-              {pricingTiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </label>
-          <label>
-            <span>Paper rate *</span>
+            <span>Paper *</span>
             <select value={state.shared.paperRateId} onChange={(e) => updateShared('paperRateId', e.target.value)}>
-              <option value="">Select paper rate</option>
-              {paperRates.filter((r) => r.active).map((r) => (
-                <option key={r.id} value={r.id}>{r.name} · {r.gsm}gsm · {r.pricePerTon}/t</option>
-              ))}
+              <option value="">Select paper</option>
+              {paperRates.filter((r) => r.active).map((r) => {
+                // Phase 131.1 — Non-admin staff only see the public label
+                // (e.g. "70gsm Unbleached Kraft"). Supplier name and per-ton
+                // cost are admin-only. The internal `name` is a fallback so
+                // legacy rows without publicLabel still render.
+                const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                const costSuffix = canViewInternalCosts ? ` · R${formatNumber(r.chargePerTon ?? r.pricePerTon, 0)}/t` : '';
+                return (
+                  <option key={r.id} value={r.id}>{label}{costSuffix}</option>
+                );
+              })}
             </select>
           </label>
           <label>
@@ -320,39 +348,9 @@ export function CalculatorPage({
               ))}
             </select>
           </label>
-          {/* Phase 90 — quote-level margin override is admin-only. Sales
-              sees the standard price; only the CEO can move the margin. */}
-          {canEditPricing ? (
-            <label>
-              <span>Quote-level margin %</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.1"
-                value={state.shared.customMarginPercent}
-                onChange={(e) => updateShared('customMarginPercent', e.target.value)}
-                placeholder="Blank = company standard"
-              />
-            </label>
-          ) : null}
           <label>
             <span>Quote date</span>
             <input type="date" value={state.shared.quoteDate} onChange={(e) => updateShared('quoteDate', e.target.value)} />
-          </label>
-          <label>
-            <span>Sales owner</span>
-            <input value={state.shared.salesOwnerName} onChange={(e) => updateShared('salesOwnerName', e.target.value)} placeholder="Your name" />
-          </label>
-          <label>
-            <span>Plate billing</span>
-            <select
-              value={state.shared.plateBilling}
-              onChange={(e) => updateShared('plateBilling', e.target.value as CalculatorState['shared']['plateBilling'])}
-            >
-              <option value="upfront">Upfront one-off (separate line)</option>
-              <option value="amortized">Spread into bag price (no upfront)</option>
-            </select>
           </label>
           <label className="calculator2-shared-notes">
             <span>Quote notes (printed)</span>
@@ -363,6 +361,72 @@ export function CalculatorPage({
               placeholder="e.g. Lead time 14 days · prices valid 30 days · ex-works"
             />
           </label>
+        </div>
+
+        {/* Phase 131.1 — Advanced settings toggle. Most quotes don't
+            need Lead / Pricing tier / Sales owner / Plate billing /
+            Margin override. Hidden behind a one-tap toggle. */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--jp-divider, #e5e7eb)' }}>
+          <button
+            type="button"
+            onClick={() => setShowHeaderAdvanced((v) => !v)}
+            style={{
+              background: 'transparent', border: 'none', padding: 0,
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
+              color: 'var(--jp-ink-3, #64748b)', cursor: 'pointer',
+            }}
+          >
+            {showHeaderAdvanced ? '−' : '+'} MORE OPTIONS
+            <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--jp-ink-3, #94a3b8)' }}>
+              (lead · pricing tier{canEditPricing ? ' · margin override' : ''} · sales owner · plate billing)
+            </span>
+          </button>
+          {showHeaderAdvanced && (
+            <div className="calculator2-shared-grid" style={{ marginTop: 12 }}>
+              <label>
+                <span>Lead (optional)</span>
+                <select value={state.shared.leadId} onChange={(e) => updateShared('leadId', e.target.value)}>
+                  <option value="">No lead linked</option>
+                  {clientLeads.map((l) => <option key={l.id} value={l.id}>{l.leadNumber} · {l.companyName || l.contactName}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Pricing tier</span>
+                <select value={state.shared.pricingTierId} onChange={(e) => updateShared('pricingTierId', e.target.value)}>
+                  <option value="">{selectedClient ? `Client default (${pricingTiers.find((t) => t.id === selectedClient.pricingTierId)?.name || 'none'})` : 'Use client default'}</option>
+                  {pricingTiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </label>
+              {canEditPricing ? (
+                <label>
+                  <span>Quote-level margin %</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={state.shared.customMarginPercent}
+                    onChange={(e) => updateShared('customMarginPercent', e.target.value)}
+                    placeholder="Blank = company standard"
+                  />
+                </label>
+              ) : null}
+              <label>
+                <span>Sales owner</span>
+                <input value={state.shared.salesOwnerName} onChange={(e) => updateShared('salesOwnerName', e.target.value)} placeholder="Your name" />
+              </label>
+              <label>
+                <span>Plate billing</span>
+                <select
+                  value={state.shared.plateBilling}
+                  onChange={(e) => updateShared('plateBilling', e.target.value as CalculatorState['shared']['plateBilling'])}
+                >
+                  <option value="upfront">Upfront one-off (separate line)</option>
+                  <option value="amortized">Spread into bag price (no upfront)</option>
+                </select>
+              </label>
+            </div>
+          )}
         </div>
       </section>
 
@@ -700,12 +764,14 @@ function LineCard({
       {showOverrides && (
         <div className="calculator2-line-grid">
           <label>
-            <span>Paper rate (override)</span>
+            <span>Paper (override)</span>
             <select value={line.paperRateIdOverride} onChange={(e) => onChange({ paperRateIdOverride: e.target.value })}>
               <option value="">Inherit from header</option>
-              {paperRates.filter((r) => r.active).map((r) => (
-                <option key={r.id} value={r.id}>{r.name} · {r.gsm}gsm</option>
-              ))}
+              {paperRates.filter((r) => r.active).map((r) => {
+                // Phase 131.1 — Public label only. Cost suffix admin-only.
+                const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                return <option key={r.id} value={r.id}>{label}</option>;
+              })}
             </select>
           </label>
           <label>
