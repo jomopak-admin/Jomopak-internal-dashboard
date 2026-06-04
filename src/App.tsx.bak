@@ -4133,7 +4133,7 @@ function App() {
     const computation = computeQuote(state, {
       clients: data.clients,
       pricingTiers: data.pricingTiers,
-      paperRates: paperRatesUnified,
+      paperRates: data.paperRates,
       costProfiles: data.costProfiles,
       standardMarginPercent: data.appSettings.standardMarginPercent,
     });
@@ -4268,7 +4268,7 @@ function App() {
     const computation = computeQuote(state, {
       clients: data.clients,
       pricingTiers: data.pricingTiers,
-      paperRates: paperRatesUnified,
+      paperRates: data.paperRates,
       costProfiles: data.costProfiles,
       standardMarginPercent: data.appSettings.standardMarginPercent,
     });
@@ -4345,7 +4345,7 @@ function App() {
     const computation = computeQuote(state, {
       clients: data.clients,
       pricingTiers: data.pricingTiers,
-      paperRates: paperRatesUnified,
+      paperRates: data.paperRates,
       costProfiles: data.costProfiles,
       standardMarginPercent: data.appSettings.standardMarginPercent,
     });
@@ -7568,7 +7568,7 @@ function App() {
         despatchCost: Number(workTicketForm.despatchCost || 0),
       },
       {
-        paperRates: paperRatesUnified,
+        paperRates: data.paperRates,
         costProfiles: data.costProfiles,
         inkRates: data.inkRates,
         finishingOperations: data.finishingOperations,
@@ -7858,7 +7858,7 @@ function App() {
     if (!product || !product.pricingSpec) {
       return;
     }
-    const refs = { pricingTiers: data.pricingTiers, paperRates: paperRatesUnified, costProfiles: data.costProfiles };
+    const refs = { pricingTiers: data.pricingTiers, paperRates: data.paperRates, costProfiles: data.costProfiles };
     const existing = data.productPriceVersions.filter((v) => v.productId === productId);
     const nextNumber = existing.reduce((max, v) => Math.max(max, v.versionNumber), 0) + 1;
     const now = new Date().toISOString();
@@ -15268,7 +15268,7 @@ function App() {
         const computation = computeQuote(stitched, {
           clients: data.clients,
           pricingTiers: data.pricingTiers,
-          paperRates: paperRatesUnified,
+          paperRates: data.paperRates,
           costProfiles: data.costProfiles,
           standardMarginPercent: data.appSettings.standardMarginPercent,
         });

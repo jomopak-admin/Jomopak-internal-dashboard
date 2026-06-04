@@ -24,7 +24,12 @@ import {
   ConsumableCategory,
   ConsumableRate,
   ConsumableUnit,
+  MaterialRate,
+  MaterialRateUnit,
+  PaperForm,
   PaperRate,
+  PaperRegion,
+  PaperUseCase,
   PricingTier,
   Product,
   ProductPriceVersion,
@@ -568,6 +573,34 @@ function mapPaperRate(row: any): PaperRate {
     validTo: row.valid_to ?? undefined,
     notes: row.notes ?? '',
     active: row.active !== false,
+  };
+}
+
+// Phase 128.1 — Unified MaterialRate mapper. Reads from material_rates table.
+function mapMaterialRate(row: any): MaterialRate {
+  return {
+    id: row.id,
+    name: row.name ?? '',
+    publicLabel: row.public_label ?? undefined,
+    category: row.category ?? 'Other',
+    unit: (row.unit ?? 'unit') as MaterialRateUnit,
+    supplierId: row.supplier_id ?? '',
+    supplierName: row.supplier_name ?? '',
+    productCode: row.product_code ?? undefined,
+    region: (row.region ?? undefined) as PaperRegion | undefined,
+    costPerUnit: Number(row.cost_per_unit ?? 0),
+    chargePerUnit: row.charge_per_unit == null ? undefined : Number(row.charge_per_unit),
+    validFrom: row.valid_from ?? undefined,
+    validTo: row.valid_to ?? undefined,
+    notes: row.notes ?? '',
+    active: row.active !== false,
+    // Paper-specific optional fields.
+    gsm: row.gsm ?? undefined,
+    paperType: row.paper_type ?? undefined,
+    form: (row.form ?? undefined) as PaperForm | undefined,
+    useCases: Array.isArray(row.use_cases) && row.use_cases.length > 0
+      ? (row.use_cases as PaperUseCase[])
+      : undefined,
   };
 }
 
@@ -2669,6 +2702,7 @@ export async function fetchAppData(): Promise<AppData> {
     deliveryNotes,
     paperRates,
     consumableRates,
+    materialRates,
     costProfiles,
     pricingTiers,
     clients,
@@ -2761,6 +2795,7 @@ export async function fetchAppData(): Promise<AppData> {
     safeSelect('delivery_notes'),
     safeSelect('paper_rates'),
     safeSelect('consumable_rates'),
+    safeSelect('material_rates'),
     safeSelect('cost_profiles'),
     safeSelect('pricing_tiers'),
     safeSelect('clients'),
@@ -2880,6 +2915,7 @@ export async function fetchAppData(): Promise<AppData> {
     productionSpecs: productionSpecs.map(mapProductionSpec),
     paperRates: paperRates.map(mapPaperRate),
     consumableRates: consumableRates.map(mapConsumableRate),
+    materialRates: materialRates.map(mapMaterialRate),
     costProfiles: costProfiles.map(mapCostProfile),
     inkRates: inkRates.map(mapInkRate),
     finishingOperations: finishingOperations.map(mapFinishingOperation),
@@ -3215,6 +3251,31 @@ export async function syncAppData(data: AppData): Promise<void> {
       valid_to: rate.validTo || null,
       notes: rate.notes || null,
       active: rate.active,
+    }))),
+    // Phase 128.1 — Unified materials. Single source of truth going
+    // forward. paper_rates + consumable_rates upserts kept temporarily
+    // for back-compat until we drop the old tables.
+    safeUpsert('material_rates', (data.materialRates ?? []).map((m) => ({
+      id: m.id,
+      name: m.name,
+      public_label: m.publicLabel || null,
+      category: m.category || 'Other',
+      unit: m.unit || 'unit',
+      supplier_id: m.supplierId || null,
+      supplier_name: m.supplierName || null,
+      product_code: m.productCode || null,
+      region: m.region || null,
+      cost_per_unit: m.costPerUnit,
+      charge_per_unit: m.chargePerUnit ?? m.costPerUnit,
+      valid_from: m.validFrom || null,
+      valid_to: m.validTo || null,
+      notes: m.notes || null,
+      active: m.active,
+      // Paper-specific (null for non-paper).
+      gsm: m.gsm || null,
+      paper_type: m.paperType || null,
+      form: m.form || null,
+      use_cases: m.useCases && m.useCases.length > 0 ? m.useCases : null,
     }))),
     // Phase 127.1 — Consumable rates (glue/tape/ink/etc.).
     safeUpsert('consumable_rates', (data.consumableRates ?? []).map((rate) => ({

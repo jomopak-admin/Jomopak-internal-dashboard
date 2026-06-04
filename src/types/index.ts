@@ -1965,6 +1965,104 @@ export interface ConsumableRateFilters {
   category: string;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 128.1 — UNIFIED MATERIAL.
+ *
+ * Single concept that replaces PaperRate + ConsumableRate. Every cost is
+ * just a material — paper, glue, tape, ink, anything. White-label
+ * customers can add categories without code changes.
+ *
+ * Paper-specific fields (gsm / form / useCases) stay as OPTIONAL columns
+ * — they're filled in only when category === 'Paper'. The calculator
+ * engine reads them with that filter.
+ * ───────────────────────────────────────────────────────────────────────*/
+
+/** Category is a free string so white-label customers can add their own
+ *  ("LDPE Resin", "Master Batch"). We seed it with the same options
+ *  PaperRate + ConsumableRate covered. */
+export type MaterialRateCategory =
+  | 'Paper'
+  | 'Glue'
+  | 'Tape'
+  | 'Stitching Wire'
+  | 'Ink'
+  | 'Solvent'
+  | 'Other';
+
+export const MATERIAL_RATE_CATEGORIES: MaterialRateCategory[] = [
+  'Paper', 'Glue', 'Tape', 'Stitching Wire', 'Ink', 'Solvent', 'Other',
+];
+
+/** Unit covers paper-style (ton) and consumable-style (kg/L/roll/case). */
+export type MaterialRateUnit =
+  | 'ton' | 'kg' | 'L' | 'roll' | 'case' | 'bag' | 'drum' | 'pail' | 'unit' | 'sheet' | 'm';
+
+export const MATERIAL_RATE_UNITS: MaterialRateUnit[] = [
+  'ton', 'kg', 'L', 'roll', 'case', 'bag', 'drum', 'pail', 'unit', 'sheet', 'm',
+];
+
+export interface MaterialRate {
+  id: string;
+  /** Private internal nickname (for admin reference). */
+  name: string;
+  /** PUBLIC label — the only identifier non-admin staff see. */
+  publicLabel?: string;
+  /** What category of material. Free string for white-label extensibility,
+   *  but typed as MaterialRateCategory for autocomplete on the form. */
+  category: string;
+  /** Unit the cost / charge is quoted in. */
+  unit: MaterialRateUnit;
+  /** PRIVATE — supplier identity. */
+  supplierId: string;
+  supplierName: string;
+  /** PRIVATE — supplier product code (e.g. "PrimePak U"). */
+  productCode?: string;
+  /** PRIVATE — supplier dispatch region (e.g. DBN/JHB/CT for SA mills). */
+  region?: PaperRegion;
+  /** PRIVATE — what we pay the supplier per unit. */
+  costPerUnit: number;
+  /** PRIVATE — what the calculator charges per unit. Falls back to cost. */
+  chargePerUnit?: number;
+  /** Contract validity dates. */
+  validFrom?: string;
+  validTo?: string;
+  notes: string;
+  active: boolean;
+  /* ── PAPER-SPECIFIC fields (optional). Only filled when
+   *    category === 'Paper'. White-label customers ignore. ── */
+  gsm?: string;
+  paperType?: string;
+  form?: PaperForm;
+  useCases?: PaperUseCase[];
+}
+
+export interface MaterialRateFormState {
+  name: string;
+  publicLabel: string;
+  category: string;
+  unit: MaterialRateUnit | '';
+  supplierId: string;
+  productCode: string;
+  region: PaperRegion | '';
+  costPerUnit: string;
+  chargePerUnit: string;
+  validFrom: string;
+  validTo: string;
+  notes: string;
+  active: boolean;
+  // Paper-specific (only filled when category === 'Paper').
+  gsm: string;
+  paperType: string;
+  form: PaperForm | '';
+  useCases: PaperUseCase[];
+}
+
+export interface MaterialRateFilters {
+  search: string;
+  category: string;
+  active: string;
+}
+
 export interface PaperRate {
   id: string;
   name: string;
@@ -7935,6 +8033,11 @@ export interface AppData {
   /** Phase 127.1 — Consumable rates (glue/tape/ink/etc.). Optional so
    *  legacy saved state still loads cleanly. */
   consumableRates?: ConsumableRate[];
+  /** Phase 128.1 — UNIFIED material rates. Single source of truth for
+   *  every cost master. paperRates + consumableRates are now deprecated;
+   *  this is what the UI + calculator engine read. Optional so legacy
+   *  state loads cleanly until the migration runs. */
+  materialRates?: MaterialRate[];
   costProfiles: CostProfile[];
   inkRates: InkRate[];
   finishingOperations: FinishingOperation[];

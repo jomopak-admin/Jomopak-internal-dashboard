@@ -876,6 +876,8 @@ export function loadAppData(): AppData {
       paperRates: (parsed.paperRates ?? []).map(normalizePaperRate),
       // Phase 127.1 — Consumable rates (glue/tape/ink/etc.).
       consumableRates: parsed.consumableRates ?? [],
+      // Phase 128.1 — Unified material rates.
+      materialRates: parsed.materialRates ?? [],
       costProfiles: parsed.costProfiles ?? [],
       // Phase 15 work-ticket masters — local-only for now, no normalizer.
       inkRates: parsed.inkRates ?? [],
