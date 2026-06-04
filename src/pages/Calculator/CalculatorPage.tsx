@@ -286,12 +286,16 @@ export function CalculatorPage({
   }
 
   const blockingIssues: string[] = [];
-  // Phase 131.1 — Client is no longer strictly required. Empty or
-  // 'cash-sale' both mean "no specific account" and the save flow
-  // treats them as a Cash Sale walk-in.
-  if (!state.shared.paperRateId) blockingIssues.push('Pick a paper');
-  if (!state.shared.costProfileId) blockingIssues.push('Pick a cost profile');
+  // Phase 131.1 / 132.6 — Client is optional (Cash Sale or empty both
+  // route to the walk-in flow). Paper + Cost profile moved to per-line;
+  // each line must have its own pick OR a shared fallback from earlier
+  // quote state.
   if (computation.rollup.totalQuantity === 0) blockingIssues.push('Add at least one line quantity');
+  // Per-line missing paper/profile check.
+  const linesMissingPaper = state.lines.filter((l) => !(l.paperRateIdOverride || state.shared.paperRateId)).length;
+  const linesMissingProfile = state.lines.filter((l) => !(l.costProfileIdOverride || state.shared.costProfileId)).length;
+  if (linesMissingPaper > 0) blockingIssues.push(`${linesMissingPaper} line(s) need a paper`);
+  if (linesMissingProfile > 0) blockingIssues.push(`${linesMissingProfile} line(s) need a cost profile`);
 
   if (printing) {
     return (
@@ -388,27 +392,12 @@ export function CalculatorPage({
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
-          <label>
-            <span>Paper *</span>
-            <select value={state.shared.paperRateId} onChange={(e) => updateShared('paperRateId', e.target.value)}>
-              <option value="">Select paper</option>
-              {dedupedPaperRates.map((r) => {
-                // Phase 131.2 — Public label only. Per-ton cost removed.
-                // Dropdown is deduped by publicLabel; cheapest row chosen.
-                const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
-                return <option key={r.id} value={r.id}>{label}</option>;
-              })}
-            </select>
-          </label>
-          <label>
-            <span>Cost profile *</span>
-            <select value={state.shared.costProfileId} onChange={(e) => updateShared('costProfileId', e.target.value)}>
-              <option value="">Select profile</option>
-              {costProfiles.filter((p) => p.active).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
+          {/* Phase 132.6 — Paper + Cost profile moved out of the header.
+              They live on each line so different lines can use different
+              paper / profile (e.g. one line on Bleached Kraft @ Premium
+              profile, another on Unbleached @ Cheap profile). The shared
+              fields stay in state for back-compat with already-saved
+              quotes but aren't editable from the header anymore. */}
           <label>
             <span>Quote date</span>
             <input type="date" value={state.shared.quoteDate} onChange={(e) => updateShared('quoteDate', e.target.value)} />
@@ -666,6 +655,59 @@ function LineCard({
       </header>
 
       <div className="calculator2-line-grid">
+        {/* Phase 132.6 — Paper + Cost profile per line. Always visible
+            (not behind admin overrides) because this is the user's
+            primary decision per calculation. */}
+        <label>
+          <span>Paper *</span>
+          <select
+            value={line.paperRateIdOverride}
+            onChange={(e) => onChange({ paperRateIdOverride: e.target.value })}
+          >
+            <option value="">Select paper</option>
+            {(() => {
+              const preferredRegion = defaultPaperRegion;
+              const groups = new Map<string, PaperRate>();
+              paperRates.filter((r) => r.active).forEach((r) => {
+                const key = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                const existing = groups.get(key);
+                const rCharge = r.chargePerTon ?? r.pricePerTon;
+                const existingCharge = existing ? (existing.chargePerTon ?? existing.pricePerTon) : -1;
+                const rMatchesRegion = preferredRegion && r.region === preferredRegion;
+                const existingMatchesRegion = preferredRegion && existing?.region === preferredRegion;
+                let take = false;
+                if (!existing) take = true;
+                else if (rMatchesRegion && !existingMatchesRegion) take = true;
+                else if (!rMatchesRegion && existingMatchesRegion) take = false;
+                else take = rCharge > existingCharge;
+                if (take) groups.set(key, r);
+              });
+              const out = Array.from(groups.values());
+              if (line.paperRateIdOverride) {
+                const sel = paperRates.find((r) => r.id === line.paperRateIdOverride);
+                if (sel && !out.some((r) => r.id === sel.id)) out.push(sel);
+              }
+              return out
+                .sort((a, b) => (a.publicLabel || a.name).localeCompare(b.publicLabel || b.name))
+                .map((r) => {
+                  const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                  return <option key={r.id} value={r.id}>{label}</option>;
+                });
+            })()}
+          </select>
+        </label>
+        <label>
+          <span>Cost profile *</span>
+          <select
+            value={line.costProfileIdOverride}
+            onChange={(e) => onChange({ costProfileIdOverride: e.target.value })}
+          >
+            <option value="">Select profile</option>
+            {costProfiles.filter((p) => p.active).map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
         <label>
           <span>Product</span>
           <select
@@ -858,66 +900,23 @@ function LineCard({
         ) : null}
       </div>
 
-      {/* Phase 90 — admin-only. Sales doesn't see paper / profile / margin
-          overrides; they take the company-standard price as-is. */}
+      {/* Phase 132.6 — Per-line paper + profile are now visible above
+          (not behind this overrides toggle). The toggle below only
+          surfaces the MARGIN override + discount-reason capture. */}
       {canEditPricing ? (
         <button
           type="button"
           className="link-button calculator2-overrides-toggle"
           onClick={() => setShowOverrides((v) => !v)}
         >
-          {showOverrides ? 'Hide' : 'Show'} per-line paper / profile / margin overrides
+          {showOverrides ? 'Hide' : 'Show'} margin override + discount reason
         </button>
       ) : null}
       {showOverrides && (
         <div className="calculator2-line-grid">
-          <label>
-            <span>Paper (override)</span>
-            <select value={line.paperRateIdOverride} onChange={(e) => onChange({ paperRateIdOverride: e.target.value })}>
-              <option value="">Inherit from header</option>
-              {/* Phase 131.3 — Same dedupe pattern as the header picker:
-                  prefer rows matching defaultPaperRegion; otherwise pick
-                  the MOST EXPENSIVE row per publicLabel. */}
-              {(() => {
-                const preferredRegion = defaultPaperRegion;
-                const groups = new Map<string, PaperRate>();
-                paperRates.filter((r) => r.active).forEach((r) => {
-                  const key = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
-                  const existing = groups.get(key);
-                  const rCharge = r.chargePerTon ?? r.pricePerTon;
-                  const existingCharge = existing ? (existing.chargePerTon ?? existing.pricePerTon) : -1;
-                  const rMatchesRegion = preferredRegion && r.region === preferredRegion;
-                  const existingMatchesRegion = preferredRegion && existing?.region === preferredRegion;
-                  let take = false;
-                  if (!existing) take = true;
-                  else if (rMatchesRegion && !existingMatchesRegion) take = true;
-                  else if (!rMatchesRegion && existingMatchesRegion) take = false;
-                  else take = rCharge > existingCharge;
-                  if (take) groups.set(key, r);
-                });
-                const out = Array.from(groups.values());
-                if (line.paperRateIdOverride) {
-                  const sel = paperRates.find((r) => r.id === line.paperRateIdOverride);
-                  if (sel && !out.some((r) => r.id === sel.id)) out.push(sel);
-                }
-                return out
-                  .sort((a, b) => (a.publicLabel || a.name).localeCompare(b.publicLabel || b.name))
-                  .map((r) => {
-                    const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
-                    return <option key={r.id} value={r.id}>{label}</option>;
-                  });
-              })()}
-            </select>
-          </label>
-          <label>
-            <span>Cost profile (override)</span>
-            <select value={line.costProfileIdOverride} onChange={(e) => onChange({ costProfileIdOverride: e.target.value })}>
-              <option value="">Inherit from header</option>
-              {costProfiles.filter((p) => p.active).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
+          {/* Phase 132.6 — Paper + Cost profile pickers moved to the
+              standard fields above. This panel only holds the margin
+              override + discount-reason capture now. */}
           {/* Phase 87 — per-line margin lives in the overrides block now.
               By default the line uses the header margin (or client tier);
               this is the escape hatch for unusual lines. */}
