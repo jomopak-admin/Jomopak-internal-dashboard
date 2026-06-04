@@ -29,7 +29,8 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   // Pinned top-level landings. Each is its own one-item group so it renders
   // as a single high-visibility row, not buried inside a collapsible group.
   { title: 'Inbox', views: ['inbox'] },
-  { title: 'Admin Hub', views: ['adminHub'] },
+  // Phase 130.1 — Admin Hub merged into Dashboard. No separate nav item;
+  // the page renders inline below Control Centre for admin users.
   { title: 'My Stuff', views: ['myPortal'] },
   { title: 'Overview', views: ['dashboard', 'morningDigest', 'reportsHub', 'reports', 'profitability', 'cashFlow'] },
   { title: 'Sales', views: ['salesPipeline', 'salesDesk', 'leads', 'leadAnalytics', 'quotes', 'proformas', 'customerDeposits', 'invoices', 'agedDebtors', 'companies', 'clients', 'pricing', 'priceList', 'calculator', 'costInputs'] },

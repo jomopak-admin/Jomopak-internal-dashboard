@@ -12220,13 +12220,27 @@ function App() {
 
       {!loading && (
         <>
-      {view === 'dashboard' && (
-        <ControlCentrePage
-          data={data}
-          profile={profile}
-          allowedViews={allowedViews}
-          onNavigate={setView}
-        />
+      {/* Phase 130.1 — Dashboard + Admin Hub merged. ControlCentre shows
+          cross-cutting business urgency; AdminHubPage (admin-only) renders
+          below with the configuration / cross-cutting admin actions.
+          adminHub view redirects here so both ways into the page work. */}
+      {(view === 'dashboard' || view === 'adminHub') && (
+        <>
+          <ControlCentrePage
+            data={data}
+            profile={profile}
+            allowedViews={allowedViews}
+            onNavigate={setView}
+          />
+          {profile?.role === 'admin' && (
+            <AdminHubPage
+              data={data}
+              profile={profile}
+              goTo={(next) => setView(next)}
+              goToWithIntent={goToWithIntent}
+            />
+          )}
+        </>
       )}
 
       {/* The classic widget dashboard remains accessible at view='legacyDashboard'
@@ -14905,15 +14919,9 @@ function App() {
         />
       )}
 
-      {/* Phase 101 — Admin Hub. Admin-role landing page for the admin chores. */}
-      {view === 'adminHub' && (
-        <AdminHubPage
-          data={data}
-          profile={profile}
-          goTo={(next) => setView(next)}
-          goToWithIntent={goToWithIntent}
-        />
-      )}
+      {/* Phase 130.1 — Admin Hub is now rendered inline under Dashboard
+          for admin users. The standalone adminHub view is kept as a route
+          alias (handled above) so old deep-links keep working. */}
 
       {/* Phase 95 — SMETA safety registers. */}
       {view === 'incidentRegister' && (
