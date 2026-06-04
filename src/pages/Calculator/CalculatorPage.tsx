@@ -506,7 +506,7 @@ export function CalculatorPage({
           />
         ))}
         <button type="button" className="ghost-button calculator2-add-line" onClick={addLine}>
-          + Add another SKU
+          + Add another line
         </button>
       </section>
 
@@ -656,7 +656,9 @@ function LineCard({
   return (
     <div className="card calculator2-line-card">
       <header className="calculator2-line-header">
-        <h4>SKU {index}{line.productName ? ` — ${line.productName}` : ''}</h4>
+        {/* Phase 132.5 — Renamed SKU → Line. The line is just one
+            calculation in the quote, not a stock-keeping unit. */}
+        <h4>Line {index}{line.productName ? ` — ${line.productName}` : ''}</h4>
         <div className="calculator2-line-actions">
           <button type="button" className="link-button" onClick={onDuplicate}>Duplicate</button>
           <button type="button" className="link-button calculator2-remove" onClick={onRemove}>Remove</button>
@@ -771,17 +773,21 @@ function LineCard({
               <span>Height (mm)</span>
               <input type="number" inputMode="decimal" min="0" placeholder="e.g. 350" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
             </label>
-            <label>
-              <span>Glue allowance (mm)</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                placeholder="30"
-                value={line.glueAllowanceMm}
-                onChange={(e) => onChange({ glueAllowanceMm: e.target.value })}
-              />
-            </label>
+            {/* Phase 132.5 — Glue allowance is a production detail, not a
+                sales decision. Admin-only. Default 30mm applies for sales. */}
+            {canEditPricing ? (
+              <label>
+                <span>Glue allowance (mm)</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  placeholder="30"
+                  value={line.glueAllowanceMm}
+                  onChange={(e) => onChange({ glueAllowanceMm: e.target.value })}
+                />
+              </label>
+            ) : null}
             <label>
               <span>Handle</span>
               <select value={line.handleType} onChange={(e) => onChange({ handleType: e.target.value as HandleType })}>
@@ -834,10 +840,9 @@ function LineCard({
             placeholder="W × H of artwork"
           />
         </label>
-        {/* Phase 132.3 — Per-line plate charge override (per cm²). Only
-            renders when colours > 0 (otherwise no plates needed). Blank
-            inherits CostProfile (default R2.65/cm²). */}
-        {Number(line.colors) > 0 ? (
+        {/* Phase 132.3/132.5 — Per-line plate charge override. Admin-only
+            (sales shouldn't decide pricing). Only renders when colours > 0. */}
+        {canEditPricing && Number(line.colors) > 0 ? (
           <label>
             <span>Plate charge / cm² (R)</span>
             <input
@@ -941,13 +946,57 @@ function LineCard({
         </div>
       )}
 
-      {/* Live per-line numbers ----------------------------------------- */}
-      <div className="calculator2-line-result">
-        <div><span>Print resolved</span><strong>{result.resolvedPrintMethod}</strong></div>
-        <div><span>Paper width</span><strong>{formatNumber(result.recommendedPaperWidthMm, 1)}mm</strong></div>
-        <div><span>Sheet height</span><strong>{formatNumber(result.recommendedSheetHeightMm, 1)}mm</strong></div>
-        {canViewInternalCosts && (
-          <>
+      {/* Phase 132.5 — RESULT panel. Salespeople ONLY see:
+            Per-bag price · Plates · Line total
+          Admin can expand the cost breakdown via the toggle below.
+          Sheet dimensions + cost components are noise for sales — they
+          belong on the production work-ticket, not the quote. */}
+      <div className="calculator2-line-result" style={{
+        background: 'var(--jp-paper-2, #faf8f4)',
+        border: '1px solid var(--jp-line, #e6e0d3)',
+        borderRadius: 10,
+        padding: '12px 14px',
+        marginTop: 12,
+        display: 'flex',
+        gap: 24,
+        flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>PER-BAG PRICE</span>
+          <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>
+            R {formatNumber(result.quotedUnitPrice, 4)}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>
+            {result.platesAmortized ? 'PLATES (in unit price)' : 'PLATES (upfront)'}
+          </span>
+          <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
+            {result.platesAmortized
+              ? `+R ${formatNumber(result.platePerBagAmortized, 4)} / bag`
+              : `R ${formatNumber(result.plateSetupFee, 2)}`}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)' }}>LINE TOTAL</span>
+          <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: '#065f46' }}>
+            R {formatNumber(result.lineTotal, 2)}
+          </div>
+        </div>
+      </div>
+
+      {/* Phase 132.5 — Admin-only cost breakdown, collapsed by default.
+          For production / costing analysis — not part of the sales view. */}
+      {canViewInternalCosts ? (
+        <details style={{ marginTop: 10 }}>
+          <summary style={{
+            cursor: 'pointer', fontSize: 11, fontWeight: 700,
+            letterSpacing: '0.06em', color: 'var(--jp-ink-3, #64748b)',
+            padding: '6px 0',
+          }}>SHOW COST BREAKDOWN (admin only)</summary>
+          <div className="calculator2-line-result" style={{ marginTop: 8 }}>
+            <div><span>Print resolved</span><strong>{result.resolvedPrintMethod}</strong></div>
+            <div><span>Sheet size</span><strong>{formatNumber(result.recommendedPaperWidthMm, 1)} × {formatNumber(result.recommendedSheetHeightMm, 1)}mm</strong></div>
             <div><span>Paper / bag</span><strong>{formatNumber(result.paperPerBag, 4)}</strong></div>
             <div><span>Handle / bag</span><strong>{formatNumber(result.handlePerBag, 4)}</strong></div>
             <div><span>Print / bag</span><strong>{formatNumber(result.printBandChargePerBag, 4)}</strong></div>
@@ -958,15 +1007,9 @@ function LineCard({
             <div><span>Unit cost</span><strong>{formatNumber(result.unitCost, 4)}</strong></div>
             <div><span>Margin %</span><strong>{formatNumber(result.marginPercent, 2)}%</strong></div>
             <div><span>Plate cost</span><strong>{formatNumber(result.plateCost, 2)}</strong></div>
-          </>
-        )}
-        <div className="calculator2-line-price"><span>Quoted unit price</span><strong>{formatNumber(result.quotedUnitPrice, 4)}</strong></div>
-        <div className="calculator2-line-price">
-          <span>{result.platesAmortized ? 'Plates (in unit price)' : 'Plates (upfront)'}</span>
-          <strong>{result.platesAmortized ? `+${formatNumber(result.platePerBagAmortized, 4)}/bag` : formatNumber(result.plateSetupFee, 2)}</strong>
-        </div>
-        <div className="calculator2-line-price"><span>Line total</span><strong>{formatNumber(result.lineTotal, 2)}</strong></div>
-      </div>
+          </div>
+        </details>
+      ) : null}
 
       {/* Phase 91 — CEO discount mode. Admin-only widget for sanity-
           checking a discount before applying it. Shows cost, current
