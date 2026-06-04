@@ -237,12 +237,23 @@ function computeLine(
   const resolvedPrintMethod = resolvePrintMethod(line, costProfile);
   const isPrinted = resolvedPrintMethod !== 'Plain' && colors > 0;
 
+  // Phase 132.7 — Plate area is auto-derived from the sheet dimensions.
+  //   Plate width  = sheet width  + 20mm border
+  //   Plate length = sheet length + 20mm border
+  //   Plate area (cm²) = plate width × plate length / 100
+  //
+  // The standalone "Print area" input is gone — plate sizing is purely a
+  // function of bag dimensions per Aman's process. No user input needed.
+  //
   // Phase 132.3 — Plates: billed by area, one plate per colour.
   //   Cost  rate (we pay)   → CostProfile.platePerSqCmCost (default 0.55)
   //   Charge rate (we quote) → per-line override OR CostProfile.platePerSqCmCharge (default 2.65)
   // Quote-builder can override the charge for one specific quote without
   // touching the Cost Profile master.
-  const plateAreaCm2 = num(line.printAreaCm2);
+  const PLATE_BORDER_MM = 20;
+  const plateWidthMm = recommendedPaperWidthMm > 0 ? recommendedPaperWidthMm + PLATE_BORDER_MM : 0;
+  const plateLengthMm = recommendedSheetHeightMm > 0 ? recommendedSheetHeightMm + PLATE_BORDER_MM : 0;
+  const plateAreaCm2 = (plateWidthMm * plateLengthMm) / 100;
   const plateCostRate = costProfile?.platePerSqCmCost ?? PLATE_COST_RATE_PER_CM2;
   const lineChargeRateOverride = num((line as { platePerSqCmChargeOverride?: string }).platePerSqCmChargeOverride);
   const plateChargeRate = lineChargeRateOverride > 0

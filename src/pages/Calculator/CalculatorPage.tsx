@@ -871,17 +871,10 @@ function LineCard({
             {COVERAGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-        <label>
-          <span>Print area (cm²)</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={line.printAreaCm2}
-            onChange={(e) => onChange({ printAreaCm2: e.target.value })}
-            placeholder="W × H of artwork"
-          />
-        </label>
+        {/* Phase 132.7 — Print area field removed. Plate area is now
+            auto-derived from the bag dimensions (sheet + 20mm border).
+            No user input needed; admin can see the derived plate size
+            in the SHOW COST BREAKDOWN section. */}
         {/* Phase 132.3/132.5 — Per-line plate charge override. Admin-only
             (sales shouldn't decide pricing). Only renders when colours > 0. */}
         {canEditPricing && Number(line.colors) > 0 ? (
@@ -996,6 +989,7 @@ function LineCard({
           <div className="calculator2-line-result" style={{ marginTop: 8 }}>
             <div><span>Print resolved</span><strong>{result.resolvedPrintMethod}</strong></div>
             <div><span>Sheet size</span><strong>{formatNumber(result.recommendedPaperWidthMm, 1)} × {formatNumber(result.recommendedSheetHeightMm, 1)}mm</strong></div>
+            <div><span>Plate size</span><strong>{formatNumber(result.recommendedPaperWidthMm + 20, 1)} × {formatNumber(result.recommendedSheetHeightMm + 20, 1)}mm</strong></div>
             <div><span>Paper / bag</span><strong>{formatNumber(result.paperPerBag, 4)}</strong></div>
             <div><span>Handle / bag</span><strong>{formatNumber(result.handlePerBag, 4)}</strong></div>
             <div><span>Print / bag</span><strong>{formatNumber(result.printBandChargePerBag, 4)}</strong></div>
