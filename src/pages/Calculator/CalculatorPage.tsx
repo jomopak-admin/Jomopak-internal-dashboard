@@ -429,7 +429,7 @@ export function CalculatorPage({
           >
             {showHeaderAdvanced ? '−' : '+'} MORE OPTIONS
             <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--jp-ink-3, #94a3b8)' }}>
-              (lead · pricing tier{canEditPricing ? ' · margin override' : ''} · sales owner · plate billing)
+              (lead · pricing tier · sales owner · plate billing)
             </span>
           </button>
           {showHeaderAdvanced && (
@@ -448,20 +448,15 @@ export function CalculatorPage({
                   {pricingTiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </label>
-              {canEditPricing ? (
-                <label>
-                  <span>Quote-level margin %</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.1"
-                    value={state.shared.customMarginPercent}
-                    onChange={(e) => updateShared('customMarginPercent', e.target.value)}
-                    placeholder="Blank = company standard"
-                  />
-                </label>
-              ) : null}
+              {/* Phase 132.2 — Quote-level margin override removed. Margin
+                  is driven by the client's pricing tier, never by who's
+                  building the quote. Tiers:
+                    Wholesale (Yucca etc.) → 23%
+                    Retail (small/walk-in) → 85%
+                    Special (Daniel)       → 40%
+                    Volume (large qty)     → 35–65% (qty-tiered, future)
+                  Per-line override stays as an admin-only escape hatch
+                  inside the line card's "per-line overrides" panel. */}
               <label>
                 <span>Sales owner</span>
                 <input value={state.shared.salesOwnerName} onChange={(e) => updateShared('salesOwnerName', e.target.value)} placeholder="Your name" />

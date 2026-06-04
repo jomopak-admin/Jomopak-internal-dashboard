@@ -268,8 +268,31 @@ function computeLine(
     + packagingPerBag
     + transportPerBag;
 
+  // Phase 132.2 — Tier margin with sliding-scale volume rule.
+  //
+  // For tiers that have volumeStartQty + volumeFloorQty + volumeFloorMarginPercent
+  // configured, the margin slides from the default at the start qty down to
+  // the floor margin at the floor qty (linear interpolation). Below the
+  // start qty → default. At/above the floor qty → floor. Between → lerp.
+  //
+  // Tiers without the volume fields are flat (default margin always).
+  function tierMarginAtQty(tier: PricingTier | undefined, atQty: number): number {
+    if (!tier) return 0;
+    const base = tier.defaultMarginPercent ?? 0;
+    const floor = tier.volumeFloorMarginPercent;
+    const startQty = tier.volumeStartQty;
+    const floorQty = tier.volumeFloorQty;
+    if (floor == null || startQty == null || floorQty == null || floorQty <= startQty) {
+      return base;
+    }
+    if (atQty <= startQty) return base;
+    if (atQty >= floorQty) return floor;
+    const t = (atQty - startQty) / (floorQty - startQty); // 0..1
+    return base + t * (floor - base);
+  }
+
   const sharedMargin = num(state.shared.customMarginPercent);
-  const tierMargin = pricingTier?.defaultMarginPercent ?? 0;
+  const tierMargin = tierMarginAtQty(pricingTier, qty);
   const profileMargin = costProfile?.defaultMarginPercent ?? 0;
   const lineMargin = num(line.customMarginPercent);
   const standardMargin = num(standardMarginPercent);

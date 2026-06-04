@@ -2169,6 +2169,30 @@ export interface PricingTier {
   defaultMarginPercent: number;
   brandingMarginPercent: number;
   notes: string;
+  /**
+   * Phase 132.2 — Volume sliding-scale margin (optional).
+   *
+   * For tiers where the margin should fall as quantity grows (e.g.
+   * Retail 85% at small qty sliding down to 35% at large qty), set:
+   *   - volumeStartQty       : qty at which sliding begins
+   *   - volumeFloorQty       : qty at which floor is reached
+   *   - volumeFloorMarginPercent : margin at floor qty
+   *
+   * Engine logic (in order):
+   *   qty <= start             → defaultMarginPercent
+   *   qty >= floor             → volumeFloorMarginPercent
+   *   start < qty < floor      → linear interp between the two
+   *
+   * Leave all three unset for a flat margin (tier never slides).
+   *
+   * Example seed values:
+   *   Wholesale  : default 23%, no sliding (already at low margin)
+   *   Retail     : default 85%, slides to 35% between 5k–100k bags
+   *   Special    : default 40%, no sliding (negotiated rate, fixed)
+   */
+  volumeStartQty?: number;
+  volumeFloorQty?: number;
+  volumeFloorMarginPercent?: number;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

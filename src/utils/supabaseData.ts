@@ -544,6 +544,10 @@ function mapPricingTier(row: any): PricingTier {
     defaultMarginPercent: Number(row.default_margin_percent ?? 0),
     brandingMarginPercent: Number(row.branding_margin_percent ?? 0),
     notes: row.notes ?? '',
+    // Phase 132.2 — Volume sliding-scale margin.
+    volumeStartQty: row.volume_start_qty == null ? undefined : Number(row.volume_start_qty),
+    volumeFloorQty: row.volume_floor_qty == null ? undefined : Number(row.volume_floor_qty),
+    volumeFloorMarginPercent: row.volume_floor_margin_percent == null ? undefined : Number(row.volume_floor_margin_percent),
   };
 }
 
@@ -3326,6 +3330,10 @@ export async function syncAppData(data: AppData): Promise<void> {
       default_margin_percent: tier.defaultMarginPercent,
       branding_margin_percent: tier.brandingMarginPercent,
       notes: tier.notes || null,
+      // Phase 132.2 — Sliding-scale volume margin (nullable).
+      volume_start_qty: tier.volumeStartQty ?? null,
+      volume_floor_qty: tier.volumeFloorQty ?? null,
+      volume_floor_margin_percent: tier.volumeFloorMarginPercent ?? null,
     }))),
     safeUpsert('clients', data.clients.map((client) => ({
       id: client.id,
