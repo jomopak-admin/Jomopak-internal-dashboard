@@ -6641,6 +6641,28 @@ export interface AppSettings {
    *  edit this in Settings. Defaults to 35% so the engine has something
    *  sensible to compute against on a fresh install. */
   standardMarginPercent?: number;
+  /**
+   * Phase 131.3 — Default paper-rate region for THIS deploy / branch.
+   *
+   * White-label foundation: when a factory has multiple branches each
+   * sourcing from a different supplier warehouse, this is the per-deploy
+   * setting that controls which regional price the calculator picker
+   * sees. Today every catalogue row may exist as DBN/JHB/CT variants
+   * with the same publicLabel; this setting tells the picker which one
+   * to prefer.
+   *
+   * Behaviour when set:
+   *   - Picker dedupes to one option per publicLabel, preferring rows
+   *     matching this region.
+   *   - When no matching region row exists for a label, falls back to
+   *     the MOST EXPENSIVE matching row (safer cost basis).
+   *
+   * Behaviour when unset:
+   *   - Picker picks the most expensive row per publicLabel.
+   *
+   * Default for the JomoPak install: 'JHB' (single-site, Joburg).
+   */
+  defaultPaperRegion?: PaperRegion;
   /** Phase 106 — Visitor area approval policy.
    *
    * Per-area override of DEFAULT_AREA_SAFETY. Admins flip areas from safe

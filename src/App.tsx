@@ -12346,9 +12346,14 @@ function App() {
           clients={data.clients}
           products={data.products}
           pricingTiers={data.pricingTiers}
-          paperRates={data.paperRates}
+          paperRates={paperRatesUnified}
           costProfiles={data.costProfiles}
           standardMarginPercent={data.appSettings.standardMarginPercent}
+          // Phase 131.3 — Default paper region for this branch. JomoPak
+          // is single-site (JHB) for now; defaultPaperRegion in settings
+          // controls which regional row the picker prefers. White-label
+          // ready for multi-branch deploys.
+          defaultPaperRegion={data.appSettings.defaultPaperRegion ?? 'JHB'}
           leads={data.leads}
           state={calculatorState}
           setState={setCalculatorState}

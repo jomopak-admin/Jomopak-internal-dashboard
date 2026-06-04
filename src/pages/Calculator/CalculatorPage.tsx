@@ -69,6 +69,10 @@ interface CalculatorPageProps {
   /** Phase 92 — company-wide standard margin %. Falls back below any
    *  per-line / shared / tier / profile margin already set on the state. */
   standardMarginPercent?: number;
+  /** Phase 131.3 — Default paper region for this branch (e.g. 'JHB').
+   *  Drives the picker dedupe so multi-region rows collapse to the row
+   *  matching the configured branch. Unset = pick most expensive. */
+  defaultPaperRegion?: import('../../types').PaperRegion;
   leads?: Lead[];
   state: CalculatorState;
   setState: (next: CalculatorState) => void;
@@ -115,6 +119,7 @@ export function CalculatorPage({
   paperRates,
   costProfiles,
   standardMarginPercent,
+  defaultPaperRegion,
   leads = [],
   state,
   setState,
@@ -143,6 +148,57 @@ export function CalculatorPage({
 
   const selectedClient = clients.find((c) => c.id === state.shared.clientId);
   const clientLeads = leads.filter((l) => !state.shared.clientId || l.clientId === state.shared.clientId);
+
+  // Phase 131.3 — Dedupe paper picker by public label, preferring the
+  // configured branch region; otherwise pick the MOST EXPENSIVE row per
+  // label (safer cost basis when buying in small quantities — if it
+  // comes in cheaper, that's bonus margin).
+  //
+  // White-label foundation:
+  //   defaultPaperRegion = 'JHB'  → prefer JHB rows for each publicLabel
+  //   defaultPaperRegion = unset  → just pick the most expensive
+  //
+  // When more branches go live, each deploy sets its own region.
+  const dedupedPaperRates = useMemo(() => {
+    const preferredRegion = defaultPaperRegion;
+    const groups = new Map<string, PaperRate>();
+    paperRates.filter((r) => r.active).forEach((r) => {
+      const key = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+      const existing = groups.get(key);
+      const rCharge = r.chargePerTon ?? r.pricePerTon;
+      const existingCharge = existing ? (existing.chargePerTon ?? existing.pricePerTon) : -1;
+      const rMatchesRegion = preferredRegion && r.region === preferredRegion;
+      const existingMatchesRegion = preferredRegion && existing?.region === preferredRegion;
+
+      // Decision matrix:
+      //   - if NEW row matches region and existing does not → take NEW
+      //   - if EXISTING matches region and new does not → keep EXISTING
+      //   - otherwise pick the MORE EXPENSIVE row
+      let take = false;
+      if (!existing) {
+        take = true;
+      } else if (rMatchesRegion && !existingMatchesRegion) {
+        take = true;
+      } else if (!rMatchesRegion && existingMatchesRegion) {
+        take = false;
+      } else {
+        take = rCharge > existingCharge;
+      }
+      if (take) groups.set(key, r);
+    });
+    const out = Array.from(groups.values());
+    // Keep the currently-selected row visible on edit even if it's not
+    // the deduped winner for its group.
+    if (state.shared.paperRateId) {
+      const sel = paperRates.find((r) => r.id === state.shared.paperRateId);
+      if (sel && !out.some((r) => r.id === sel.id)) out.push(sel);
+    }
+    return out.sort((a, b) => {
+      const al = a.publicLabel || a.name;
+      const bl = b.publicLabel || b.name;
+      return al.localeCompare(bl);
+    });
+  }, [paperRates, state.shared.paperRateId, defaultPaperRegion]);
 
   function updateShared<K extends keyof CalculatorState['shared']>(key: K, value: CalculatorState['shared'][K]) {
     setState({ ...state, shared: { ...state.shared, [key]: value } });
@@ -326,16 +382,11 @@ export function CalculatorPage({
             <span>Paper *</span>
             <select value={state.shared.paperRateId} onChange={(e) => updateShared('paperRateId', e.target.value)}>
               <option value="">Select paper</option>
-              {paperRates.filter((r) => r.active).map((r) => {
-                // Phase 131.1 — Non-admin staff only see the public label
-                // (e.g. "70gsm Unbleached Kraft"). Supplier name and per-ton
-                // cost are admin-only. The internal `name` is a fallback so
-                // legacy rows without publicLabel still render.
+              {dedupedPaperRates.map((r) => {
+                // Phase 131.2 — Public label only. Per-ton cost removed.
+                // Dropdown is deduped by publicLabel; cheapest row chosen.
                 const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
-                const costSuffix = canViewInternalCosts ? ` · R${formatNumber(r.chargePerTon ?? r.pricePerTon, 0)}/t` : '';
-                return (
-                  <option key={r.id} value={r.id}>{label}{costSuffix}</option>
-                );
+                return <option key={r.id} value={r.id}>{label}</option>;
               })}
             </select>
           </label>
@@ -443,6 +494,7 @@ export function CalculatorPage({
             costProfiles={costProfiles}
             canViewInternalCosts={canViewInternalCosts}
             canEditPricing={canEditPricing}
+            defaultPaperRegion={defaultPaperRegion}
             onChange={(patch) => updateLine(line.id, patch)}
             onDuplicate={() => duplicateLine(line.id)}
             onRemove={() => removeLine(line.id)}
@@ -564,6 +616,8 @@ interface LineCardProps {
   canViewInternalCosts: boolean;
   /** Phase 90 — admin-only. Gates the per-line overrides block. */
   canEditPricing?: boolean;
+  /** Phase 131.3 — Branch region preference for the paper picker. */
+  defaultPaperRegion?: import('../../types').PaperRegion;
   onChange: (patch: Partial<CalculatorLineItem>) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -578,6 +632,7 @@ function LineCard({
   costProfiles,
   canViewInternalCosts,
   canEditPricing = false,
+  defaultPaperRegion,
   onChange,
   onDuplicate,
   onRemove,
@@ -767,11 +822,38 @@ function LineCard({
             <span>Paper (override)</span>
             <select value={line.paperRateIdOverride} onChange={(e) => onChange({ paperRateIdOverride: e.target.value })}>
               <option value="">Inherit from header</option>
-              {paperRates.filter((r) => r.active).map((r) => {
-                // Phase 131.1 — Public label only. Cost suffix admin-only.
-                const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
-                return <option key={r.id} value={r.id}>{label}</option>;
-              })}
+              {/* Phase 131.3 — Same dedupe pattern as the header picker:
+                  prefer rows matching defaultPaperRegion; otherwise pick
+                  the MOST EXPENSIVE row per publicLabel. */}
+              {(() => {
+                const preferredRegion = defaultPaperRegion;
+                const groups = new Map<string, PaperRate>();
+                paperRates.filter((r) => r.active).forEach((r) => {
+                  const key = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                  const existing = groups.get(key);
+                  const rCharge = r.chargePerTon ?? r.pricePerTon;
+                  const existingCharge = existing ? (existing.chargePerTon ?? existing.pricePerTon) : -1;
+                  const rMatchesRegion = preferredRegion && r.region === preferredRegion;
+                  const existingMatchesRegion = preferredRegion && existing?.region === preferredRegion;
+                  let take = false;
+                  if (!existing) take = true;
+                  else if (rMatchesRegion && !existingMatchesRegion) take = true;
+                  else if (!rMatchesRegion && existingMatchesRegion) take = false;
+                  else take = rCharge > existingCharge;
+                  if (take) groups.set(key, r);
+                });
+                const out = Array.from(groups.values());
+                if (line.paperRateIdOverride) {
+                  const sel = paperRates.find((r) => r.id === line.paperRateIdOverride);
+                  if (sel && !out.some((r) => r.id === sel.id)) out.push(sel);
+                }
+                return out
+                  .sort((a, b) => (a.publicLabel || a.name).localeCompare(b.publicLabel || b.name))
+                  .map((r) => {
+                    const label = r.publicLabel || `${r.gsm}gsm ${r.paperType}`.trim() || r.name;
+                    return <option key={r.id} value={r.id}>{label}</option>;
+                  });
+              })()}
             </select>
           </label>
           <label>
