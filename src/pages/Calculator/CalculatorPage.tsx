@@ -106,7 +106,17 @@ interface CalculatorPageProps {
   today?: string;
 }
 
-const HANDLE_OPTIONS: HandleType[] = ['None', 'Flat Handle', 'Rope Handle', 'Roll Handle'];
+// Phase 132.4 — Just two handle types in the dropdown. Cheap-vs-premium
+// distinction is per-Cost-Profile (one profile for cheap bags with low
+// handle rates, one for premium with higher rates). Roll Handle stays in
+// the HandleType enum for legacy data compatibility but hidden here.
+const HANDLE_OPTIONS: HandleType[] = ['None', 'Flat Handle', 'Rope Handle'];
+const HANDLE_LABELS: Record<string, string> = {
+  'None': 'None',
+  'Flat Handle': 'Paper Flat Handle',
+  'Rope Handle': 'Paper Rope Handle',
+  'Roll Handle': 'Paper Roll Handle (legacy)',
+};
 const PRINT_OPTIONS: PrintMethod[] = ['Auto', 'Plain', 'Screen Print', 'Flexo'];
 const COVERAGE_OPTIONS: PrintCoverageBand[] = ['None', 'Light', 'Medium', 'Heavy'];
 
@@ -775,7 +785,12 @@ function LineCard({
             <label>
               <span>Handle</span>
               <select value={line.handleType} onChange={(e) => onChange({ handleType: e.target.value as HandleType })}>
-                {HANDLE_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+                {HANDLE_OPTIONS.map((h) => <option key={h} value={h}>{HANDLE_LABELS[h] || h}</option>)}
+                {/* Surface legacy handle types when a saved quote uses them
+                    so editing doesn't silently downgrade the selection. */}
+                {line.handleType && !HANDLE_OPTIONS.includes(line.handleType) ? (
+                  <option value={line.handleType}>{HANDLE_LABELS[line.handleType] || line.handleType}</option>
+                ) : null}
               </select>
             </label>
           </>
@@ -819,6 +834,23 @@ function LineCard({
             placeholder="W × H of artwork"
           />
         </label>
+        {/* Phase 132.3 — Per-line plate charge override (per cm²). Only
+            renders when colours > 0 (otherwise no plates needed). Blank
+            inherits CostProfile (default R2.65/cm²). */}
+        {Number(line.colors) > 0 ? (
+          <label>
+            <span>Plate charge / cm² (R)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={line.platePerSqCmChargeOverride}
+              onChange={(e) => onChange({ platePerSqCmChargeOverride: e.target.value })}
+              placeholder="2.65 (default)"
+            />
+          </label>
+        ) : null}
       </div>
 
       {/* Phase 90 — admin-only. Sales doesn't see paper / profile / margin

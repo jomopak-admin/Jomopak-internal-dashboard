@@ -115,6 +115,8 @@ function buildState(spec: ProductPricingSpec, quantity: number, marginPercent: n
         gussetMm: String(spec.gussetMm ?? ''),
         // Phase 132.1 — default glue allowance.
         glueAllowanceMm: '30',
+        // Phase 132.3 — empty = inherit CostProfile (default R2.65/cm²).
+        platePerSqCmChargeOverride: '',
         quantity: String(quantity),
         handleType: spec.handleType,
         printMethod: spec.printMethod,

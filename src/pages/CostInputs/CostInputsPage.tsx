@@ -345,6 +345,30 @@ export function CostInputsPage({
           <label><span>Screen print cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.screenPrintCostPerColor} onChange={(e) => setCostProfileForm({ ...costProfileForm, screenPrintCostPerColor: e.target.value })} /></label>
           <label><span>Flexo ink / 1000 bags / color</span><input type="number" min="0" step="0.01" value={costProfileForm.flexoInkCostPer1000PerColor} onChange={(e) => setCostProfileForm({ ...costProfileForm, flexoInkCostPer1000PerColor: e.target.value })} /></label>
           <label><span>Plate cost / color</span><input type="number" min="0" step="0.01" value={costProfileForm.plateCostPerColor} onChange={(e) => setCostProfileForm({ ...costProfileForm, plateCostPerColor: e.target.value })} /></label>
+          {/* Phase 132.3 — Plate rates per cm² (the engine uses these
+              over the flat "plate cost / color" above when set). */}
+          <label>
+            <span title="What we PAY for plates per cm² (private)">Plate COST / cm² (R)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.55"
+              value={costProfileForm.platePerSqCmCost}
+              onChange={(e) => setCostProfileForm({ ...costProfileForm, platePerSqCmCost: e.target.value })}
+            />
+          </label>
+          <label>
+            <span title="Default plate CHARGE per cm² on quotes — can be overridden per line">Plate CHARGE / cm² (R)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="2.65"
+              value={costProfileForm.platePerSqCmCharge}
+              onChange={(e) => setCostProfileForm({ ...costProfileForm, platePerSqCmCharge: e.target.value })}
+            />
+          </label>
           <label><span>Flexo threshold quantity</span><input type="number" min="0" value={costProfileForm.flexoThresholdQty} onChange={(e) => setCostProfileForm({ ...costProfileForm, flexoThresholdQty: e.target.value })} /></label>
         </div>
       ),

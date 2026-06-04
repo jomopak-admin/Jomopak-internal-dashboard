@@ -644,6 +644,9 @@ function mapCostProfile(row: any): CostProfile {
     screenPrintCostPerColor: Number(row.screen_print_cost_per_color ?? 0),
     flexoInkCostPer1000PerColor: Number(row.flexo_ink_cost_per_1000_per_color ?? 0),
     plateCostPerColor: Number(row.plate_cost_per_color ?? 0),
+    // Phase 132.3 — Plate per-cm² rates.
+    platePerSqCmCost: row.plate_per_sq_cm_cost == null ? undefined : Number(row.plate_per_sq_cm_cost),
+    platePerSqCmCharge: row.plate_per_sq_cm_charge == null ? undefined : Number(row.plate_per_sq_cm_charge),
     labourCostPer1000: Number(row.labour_cost_per_1000 ?? 0),
     packagingCostPer1000: Number(row.packaging_cost_per_1000 ?? 0),
     transportCostPerJob: Number(row.transport_cost_per_job ?? 0),
@@ -3313,6 +3316,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       screen_print_cost_per_color: profile.screenPrintCostPerColor,
       flexo_ink_cost_per_1000_per_color: profile.flexoInkCostPer1000PerColor,
       plate_cost_per_color: profile.plateCostPerColor,
+      // Phase 132.3 — Plate per-cm² rates.
+      plate_per_sq_cm_cost: profile.platePerSqCmCost ?? null,
+      plate_per_sq_cm_charge: profile.platePerSqCmCharge ?? null,
       labour_cost_per_1000: profile.labourCostPer1000,
       packaging_cost_per_1000: profile.packagingCostPer1000,
       transport_cost_per_job: profile.transportCostPerJob,

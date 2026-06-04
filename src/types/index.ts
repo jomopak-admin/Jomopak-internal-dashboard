@@ -2151,6 +2151,19 @@ export interface CostProfile {
   screenPrintCostPerColor: number;
   flexoInkCostPer1000PerColor: number;
   plateCostPerColor: number;
+  /**
+   * Phase 132.3 — Plate cost we PAY per cm² (admin-set, private).
+   * Default R0.55/cm². Used by the engine to compute the internal plate
+   * cost = printArea × colours × platePerSqCmCost.
+   */
+  platePerSqCmCost?: number;
+  /**
+   * Phase 132.3 — Plate charge we QUOTE per cm² (default — per-line
+   * override on the calculator can change this for one specific quote).
+   * Default R2.65/cm². Used by the engine to compute the customer-facing
+   * plate charge total = printArea × colours × platePerSqCmCharge.
+   */
+  platePerSqCmCharge?: number;
   labourCostPer1000: number;
   packagingCostPer1000: number;
   transportCostPerJob: number;
@@ -8927,6 +8940,10 @@ export interface CostProfileFormState {
   screenPrintCostPerColor: string;
   flexoInkCostPer1000PerColor: string;
   plateCostPerColor: string;
+  /** Phase 132.3 — Plate cost per cm² (private). Defaults R0.55. */
+  platePerSqCmCost: string;
+  /** Phase 132.3 — Plate charge per cm² (default for quotes). Defaults R2.65. */
+  platePerSqCmCharge: string;
   labourCostPer1000: string;
   packagingCostPer1000: string;
   transportCostPerJob: string;
@@ -9072,6 +9089,13 @@ export interface CalculatorLineItem {
   printAreaCm2: string;
   /** Coverage band drives the per-bag ink/print charge. */
   coverageBand: PrintCoverageBand;
+  /**
+   * Phase 132.3 — Per-line plate charge per cm² override.
+   * Empty string → inherits from the active CostProfile (default R2.65).
+   * Quote builder can change this for one specific quote without
+   * affecting the Cost Profile master.
+   */
+  platePerSqCmChargeOverride: string;
   /** Per-line cost-master overrides. Empty string = inherit from shared. */
   paperRateIdOverride: string;
   costProfileIdOverride: string;

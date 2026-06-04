@@ -750,6 +750,9 @@ const createInitialCostProfileForm = (): CostProfileFormState => ({
   screenPrintCostPerColor: '0',
   flexoInkCostPer1000PerColor: '0',
   plateCostPerColor: '0',
+  // Phase 132.3 — Plate per-cm² defaults. R0.55 cost / R2.65 charge.
+  platePerSqCmCost: '0.55',
+  platePerSqCmCharge: '2.65',
   labourCostPer1000: '0',
   packagingCostPer1000: '0',
   transportCostPerJob: '0',
@@ -7307,6 +7310,9 @@ function App() {
       screenPrintCostPerColor: Number(costProfileForm.screenPrintCostPerColor || 0),
       flexoInkCostPer1000PerColor: Number(costProfileForm.flexoInkCostPer1000PerColor || 0),
       plateCostPerColor: Number(costProfileForm.plateCostPerColor || 0),
+      // Phase 132.3 — Plate per-cm² rates (default 0.55 / 2.65 when blank).
+      platePerSqCmCost: Number(costProfileForm.platePerSqCmCost || 0.55),
+      platePerSqCmCharge: Number(costProfileForm.platePerSqCmCharge || 2.65),
       labourCostPer1000: Number(costProfileForm.labourCostPer1000 || 0),
       packagingCostPer1000: Number(costProfileForm.packagingCostPer1000 || 0),
       transportCostPerJob: Number(costProfileForm.transportCostPerJob || 0),
@@ -11209,6 +11215,9 @@ function App() {
       screenPrintCostPerColor: String(profile.screenPrintCostPerColor),
       flexoInkCostPer1000PerColor: String(profile.flexoInkCostPer1000PerColor),
       plateCostPerColor: String(profile.plateCostPerColor),
+      // Phase 132.3 — Plate per-cm² rates. Default 0.55 / 2.65 when blank.
+      platePerSqCmCost: String(profile.platePerSqCmCost ?? 0.55),
+      platePerSqCmCharge: String(profile.platePerSqCmCharge ?? 2.65),
       labourCostPer1000: String(profile.labourCostPer1000),
       packagingCostPer1000: String(profile.packagingCostPer1000),
       transportCostPerJob: String(profile.transportCostPerJob),

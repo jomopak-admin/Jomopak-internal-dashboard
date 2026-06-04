@@ -237,13 +237,19 @@ function computeLine(
   const resolvedPrintMethod = resolvePrintMethod(line, costProfile);
   const isPrinted = resolvedPrintMethod !== 'Plain' && colors > 0;
 
-  // Plates: billed by area, one plate per colour. Sell at R2.65/cm²,
-  // cost R0.55/cm². The total plate charge is the same either way; the
-  // billing mode decides whether it's a separate one-off line (upfront) or
-  // spread across the run into the per-bag price (amortized).
+  // Phase 132.3 — Plates: billed by area, one plate per colour.
+  //   Cost  rate (we pay)   → CostProfile.platePerSqCmCost (default 0.55)
+  //   Charge rate (we quote) → per-line override OR CostProfile.platePerSqCmCharge (default 2.65)
+  // Quote-builder can override the charge for one specific quote without
+  // touching the Cost Profile master.
   const plateAreaCm2 = num(line.printAreaCm2);
-  const plateChargeTotal = isPrinted ? plateAreaCm2 * colors * PLATE_SELL_RATE_PER_CM2 : 0;
-  const plateCost = isPrinted ? plateAreaCm2 * colors * PLATE_COST_RATE_PER_CM2 : 0;
+  const plateCostRate = costProfile?.platePerSqCmCost ?? PLATE_COST_RATE_PER_CM2;
+  const lineChargeRateOverride = num((line as { platePerSqCmChargeOverride?: string }).platePerSqCmChargeOverride);
+  const plateChargeRate = lineChargeRateOverride > 0
+    ? lineChargeRateOverride
+    : (costProfile?.platePerSqCmCharge ?? PLATE_SELL_RATE_PER_CM2);
+  const plateChargeTotal = isPrinted ? plateAreaCm2 * colors * plateChargeRate : 0;
+  const plateCost = isPrinted ? plateAreaCm2 * colors * plateCostRate : 0;
   const platesAmortized = state.shared.plateBilling === 'amortized';
   const platePerBagAmortized = platesAmortized && qty > 0 ? plateChargeTotal / qty : 0;
   const plateSetupFee = platesAmortized ? 0 : plateChargeTotal;
@@ -398,6 +404,8 @@ export function emptyCalculatorLine(id: string): CalculatorLineItem {
     colors: '0',
     printAreaCm2: '',
     coverageBand: 'None',
+    // Phase 132.3 — empty = inherit CostProfile / default R2.65/cm².
+    platePerSqCmChargeOverride: '',
     paperRateIdOverride: '',
     costProfileIdOverride: '',
     customMarginPercent: '',
