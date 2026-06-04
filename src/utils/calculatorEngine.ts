@@ -199,11 +199,27 @@ function computeLine(
   const qty = num(line.quantity);
   const colors = num(line.colors);
 
-  const recommendedPaperWidthMm = costProfile
-    ? bagW * 2 + gusset * 2 + costProfile.sideSeamAllowanceMm
+  // Phase 132.1 — Aman's bag formula.
+  //
+  //   Sheet width  = (face + gusset) × 2 + glue allowance  (default 30mm)
+  //   Sheet length = (gusset / 2) + 20 + height
+  //
+  // The glue allowance is the PAPER STRIP for the side glue seam (default
+  // 30mm; sometimes adjusted ±10mm based on bag size + paper). It is NOT
+  // the cost of glue itself — that's in CostProfile.
+  //
+  // The +20 in the length formula is a fixed allowance for the bottom seal
+  // overlap (gusset/2 already covers the bottom fold).
+  //
+  // Legacy CostProfile fields (sideSeamAllowanceMm / topFoldAllowanceMm /
+  // bottomFoldAllowanceMm) are no longer consumed by the engine but stay
+  // on the schema until we drop them in a later phase.
+  const glueAllowance = num((line as { glueAllowanceMm?: string }).glueAllowanceMm) || 30;
+  const recommendedPaperWidthMm = (bagW > 0 && gusset >= 0)
+    ? (bagW + gusset) * 2 + glueAllowance
     : 0;
-  const recommendedSheetHeightMm = costProfile
-    ? bagH + gusset + costProfile.topFoldAllowanceMm + costProfile.bottomFoldAllowanceMm
+  const recommendedSheetHeightMm = (bagH > 0 && gusset >= 0)
+    ? (gusset / 2) + 20 + bagH
     : 0;
 
   const areaPerBagSqM = (recommendedPaperWidthMm / 1000) * (recommendedSheetHeightMm / 1000);
@@ -351,6 +367,8 @@ export function emptyCalculatorLine(id: string): CalculatorLineItem {
     bagWidthMm: '',
     bagHeightMm: '',
     gussetMm: '',
+    // Phase 132.1 — Default glue allowance to Aman's standard 30mm.
+    glueAllowanceMm: '30',
     quantity: '',
     handleType: 'None',
     printMethod: 'Auto',

@@ -750,17 +750,32 @@ function LineCard({
 
         {(!line.productId || showSpecOverride) ? (
           <>
+            {/* Phase 132.1 — Aman's bag dimensions: Face / Gusset / Height.
+                Engine derives the cut sheet via:
+                  width  = (face + gusset) × 2 + glue allowance
+                  length = (gusset / 2) + 20 + height */}
             <label>
-              <span>Bag width (mm)</span>
-              <input type="number" inputMode="decimal" min="0" value={line.bagWidthMm} onChange={(e) => onChange({ bagWidthMm: e.target.value })} />
-            </label>
-            <label>
-              <span>Bag height (mm)</span>
-              <input type="number" inputMode="decimal" min="0" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
+              <span>Face (mm)</span>
+              <input type="number" inputMode="decimal" min="0" placeholder="e.g. 300" value={line.bagWidthMm} onChange={(e) => onChange({ bagWidthMm: e.target.value })} />
             </label>
             <label>
               <span>Gusset (mm)</span>
-              <input type="number" inputMode="decimal" min="0" value={line.gussetMm} onChange={(e) => onChange({ gussetMm: e.target.value })} />
+              <input type="number" inputMode="decimal" min="0" placeholder="e.g. 150" value={line.gussetMm} onChange={(e) => onChange({ gussetMm: e.target.value })} />
+            </label>
+            <label>
+              <span>Height (mm)</span>
+              <input type="number" inputMode="decimal" min="0" placeholder="e.g. 350" value={line.bagHeightMm} onChange={(e) => onChange({ bagHeightMm: e.target.value })} />
+            </label>
+            <label>
+              <span>Glue allowance (mm)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                placeholder="30"
+                value={line.glueAllowanceMm}
+                onChange={(e) => onChange({ glueAllowanceMm: e.target.value })}
+              />
             </label>
             <label>
               <span>Handle</span>
@@ -776,12 +791,18 @@ function LineCard({
           <input type="number" inputMode="numeric" min="0" value={line.quantity} onChange={(e) => onChange({ quantity: e.target.value })} />
         </label>
 
-        <label>
-          <span>Print method</span>
-          <select value={line.printMethod} onChange={(e) => onChange({ printMethod: e.target.value as PrintMethod })}>
-            {PRINT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
+        {/* Phase 132.1 — Print method is auto-resolved from quantity by
+            default (small qty → Screen Print, large qty → Flexo, threshold
+            in Cost Profile). Salespeople don't see the picker. Admins
+            can force a method via the per-line overrides toggle below. */}
+        {canEditPricing ? (
+          <label>
+            <span>Print method</span>
+            <select value={line.printMethod} onChange={(e) => onChange({ printMethod: e.target.value as PrintMethod })}>
+              {PRINT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+        ) : null}
         <label>
           <span>Colours</span>
           <input type="number" inputMode="numeric" min="0" value={line.colors} onChange={(e) => onChange({ colors: e.target.value })} />

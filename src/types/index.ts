@@ -9023,9 +9023,22 @@ export interface CalculatorLineItem {
   /** Free-text override if the user wants to describe a custom SKU. */
   productName: string;
   description: string;
+  /** Bag face width (mm). The width of the front face when the bag is flat. */
   bagWidthMm: string;
+  /** Bag height (mm). Finished bag's standing height. */
   bagHeightMm: string;
+  /** Gusset width (mm). The side bellows / fold. */
   gussetMm: string;
+  /**
+   * Phase 132.1 — Glue line allowance (mm) on the sheet width.
+   *
+   * Aman's formula:  sheet width = (face + gusset) × 2 + glueAllowanceMm
+   *
+   * Default 30mm. He sometimes adjusts ±10mm (so 20 / 30 / 40) based on
+   * bag size + paper. This is the PAPER ALLOWANCE for the glue overlap
+   * seam, NOT the cost of glue itself.
+   */
+  glueAllowanceMm: string;
   quantity: string;
   handleType: HandleType;
   printMethod: PrintMethod;

@@ -113,6 +113,8 @@ function buildState(spec: ProductPricingSpec, quantity: number, marginPercent: n
         bagWidthMm: String(spec.bagWidthMm ?? ''),
         bagHeightMm: String(spec.bagHeightMm ?? ''),
         gussetMm: String(spec.gussetMm ?? ''),
+        // Phase 132.1 — default glue allowance.
+        glueAllowanceMm: '30',
         quantity: String(quantity),
         handleType: spec.handleType,
         printMethod: spec.printMethod,
