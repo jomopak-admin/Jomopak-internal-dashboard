@@ -104,6 +104,7 @@ import { SalesDeskPage } from './pages/Sales/SalesDeskPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
+import { ClientStockTakeSheetPage } from './pages/ClientStockTakeSheet/ClientStockTakeSheetPage';
 import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
 import { uploadDocumentFile } from './utils/documentStorage';
 import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType, LedgerAccount, SupplierBill, SarsFiling, AppSettingsSarsConfig } from './types';
@@ -14148,6 +14149,21 @@ function App() {
           message={stockCountMessage}
           onSave={handleSaveStockCount}
           onReconcile={handleReconcileStockCount}
+        />
+      )}
+
+      {/* Phase 135.1 — Client stock-take sheet (printable). For clients
+          under a Stock Holding Agreement: pulls all quoted-and-converted
+          items committed to them, computes expected on-hand = made −
+          drawdowns (via invoice line item description matching), prints
+          a clean sheet with blank columns for actual count + variance. */}
+      {view === 'clientStockTakeSheet' && (
+        <ClientStockTakeSheetPage
+          clients={data.clients}
+          invoices={data.invoices}
+          quoteEstimates={data.quoteEstimates}
+          company={data.appSettings.company}
+          today={getToday()}
         />
       )}
 

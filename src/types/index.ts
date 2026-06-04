@@ -57,6 +57,7 @@ export type View =
   | 'driverPod'
   | 'invoiceInbox'
   | 'stockTake'
+  | 'clientStockTakeSheet'
   | 'documentVault'
   | 'shipments'
   | 'chartOfAccounts'
@@ -211,6 +212,7 @@ export const VIEW_LABELS: Record<View, string> = {
   driverPod: 'Driver POD',
   invoiceInbox: 'Supplier Invoice Inbox',
   stockTake: 'Stock Take',
+  clientStockTakeSheet: 'Client Stock-Take Sheet',
   documentVault: 'Document Vault',
   shipments: 'Imports & Shipments',
   chartOfAccounts: 'Chart of Accounts',
@@ -298,6 +300,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'finishedStock',
     'tradedGoods',
     'stockTake',
+    'clientStockTakeSheet',
     'spares',
     'materials',
     'shipments',
@@ -395,6 +398,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'finishedStock',
     'tradedGoods',
     'stockTake',
+    'clientStockTakeSheet',
     'spares',
     'materials',
     'shipments',

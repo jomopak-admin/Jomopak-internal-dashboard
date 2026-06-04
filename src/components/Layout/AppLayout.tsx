@@ -39,7 +39,7 @@ const NAV_GROUPS: Array<{ title: string; views: View[] }> = [
   // the single capture point for material consumption + slitting transformation.
   // Existing PaperLog rows remain queryable in the DB for legacy audits.
   { title: 'Materials', views: ['materials', 'shipments', 'invoiceInbox', 'foodSafeMaterials', 'chemicalRegister'] },
-  { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'stockMovements', 'labels', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
+  { title: 'Stock', views: ['finishedStock', 'customerStock', 'stockStatements', 'reorderReminders', 'stockTake', 'clientStockTakeSheet', 'stockMovements', 'labels', 'dispatchRuns', 'dispatch', 'driverPod', 'deliveryNotes', 'spares', 'stockRequests', 'products', 'suppliers'] },
   { title: 'Finance', views: ['sarsCentre', 'financeSummary', 'financialStatements', 'financialProjections', 'customerStatements', 'accountsPayable', 'bankRec', 'generalLedger', 'fixedAssets', 'currencies', 'chartOfAccounts'] },
   // HR sits as its own group — leave, loans, claims, warnings, payroll are
   // all HR-ish concerns the admin (currently Aman) does daily.
