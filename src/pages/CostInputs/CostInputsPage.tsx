@@ -369,6 +369,30 @@ export function CostInputsPage({
               onChange={(e) => setCostProfileForm({ ...costProfileForm, platePerSqCmCharge: e.target.value })}
             />
           </label>
+          {/* Phase 132.8 — Screen-print plate fee formula. The flexo
+              plate cost above is area-based; screen-print is flat. */}
+          <label>
+            <span title="Screen-print plate base fee (one-off per design)">Screen-print BASE fee (R)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="450"
+              value={costProfileForm.screenPrintPlateBaseFee}
+              onChange={(e) => setCostProfileForm({ ...costProfileForm, screenPrintPlateBaseFee: e.target.value })}
+            />
+          </label>
+          <label>
+            <span title="Screen-print plate fee per colour per side. Engine multiplies by (colours × sides)">Screen-print / colour / side (R)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="300"
+              value={costProfileForm.screenPrintPlatePerColorPerSide}
+              onChange={(e) => setCostProfileForm({ ...costProfileForm, screenPrintPlatePerColorPerSide: e.target.value })}
+            />
+          </label>
           <label><span>Flexo threshold quantity</span><input type="number" min="0" value={costProfileForm.flexoThresholdQty} onChange={(e) => setCostProfileForm({ ...costProfileForm, flexoThresholdQty: e.target.value })} /></label>
         </div>
       ),

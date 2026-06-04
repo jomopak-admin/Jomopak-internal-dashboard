@@ -647,6 +647,9 @@ function mapCostProfile(row: any): CostProfile {
     // Phase 132.3 — Plate per-cm² rates.
     platePerSqCmCost: row.plate_per_sq_cm_cost == null ? undefined : Number(row.plate_per_sq_cm_cost),
     platePerSqCmCharge: row.plate_per_sq_cm_charge == null ? undefined : Number(row.plate_per_sq_cm_charge),
+    // Phase 132.8 — Screen-print plate fee formula.
+    screenPrintPlateBaseFee: row.screen_print_plate_base_fee == null ? undefined : Number(row.screen_print_plate_base_fee),
+    screenPrintPlatePerColorPerSide: row.screen_print_plate_per_color_per_side == null ? undefined : Number(row.screen_print_plate_per_color_per_side),
     labourCostPer1000: Number(row.labour_cost_per_1000 ?? 0),
     packagingCostPer1000: Number(row.packaging_cost_per_1000 ?? 0),
     transportCostPerJob: Number(row.transport_cost_per_job ?? 0),
@@ -3319,6 +3322,9 @@ export async function syncAppData(data: AppData): Promise<void> {
       // Phase 132.3 — Plate per-cm² rates.
       plate_per_sq_cm_cost: profile.platePerSqCmCost ?? null,
       plate_per_sq_cm_charge: profile.platePerSqCmCharge ?? null,
+      // Phase 132.8 — Screen-print plate fee formula.
+      screen_print_plate_base_fee: profile.screenPrintPlateBaseFee ?? null,
+      screen_print_plate_per_color_per_side: profile.screenPrintPlatePerColorPerSide ?? null,
       labour_cost_per_1000: profile.labourCostPer1000,
       packaging_cost_per_1000: profile.packagingCostPer1000,
       transport_cost_per_job: profile.transportCostPerJob,

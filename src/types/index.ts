@@ -2149,6 +2149,18 @@ export interface CostProfile {
   rollHandleCostPerBag: number;
   screenPrintSetupCost: number;
   screenPrintCostPerColor: number;
+  /**
+   * Phase 132.8 — Screen-print plate fee formula.
+   *   Screen-print plate fee = base + (perColorPerSide × colours × sides)
+   *
+   * Defaults: base R450, perColorPerSide R300.
+   *
+   * Examples:
+   *   1 colour, 1 side  → 450 + (300 × 1 × 1) = R750
+   *   2 colours, 2 sides → 450 + (300 × 2 × 2) = R1,650
+   */
+  screenPrintPlateBaseFee?: number;
+  screenPrintPlatePerColorPerSide?: number;
   flexoInkCostPer1000PerColor: number;
   plateCostPerColor: number;
   /**
@@ -8944,6 +8956,10 @@ export interface CostProfileFormState {
   platePerSqCmCost: string;
   /** Phase 132.3 — Plate charge per cm² (default for quotes). Defaults R2.65. */
   platePerSqCmCharge: string;
+  /** Phase 132.8 — Screen-print plate base fee. Defaults R450. */
+  screenPrintPlateBaseFee: string;
+  /** Phase 132.8 — Screen-print plate per-colour-per-side fee. Defaults R300. */
+  screenPrintPlatePerColorPerSide: string;
   labourCostPer1000: string;
   packagingCostPer1000: string;
   transportCostPerJob: string;
@@ -9089,6 +9105,18 @@ export interface CalculatorLineItem {
   printAreaCm2: string;
   /** Coverage band drives the per-bag ink/print charge. */
   coverageBand: PrintCoverageBand;
+  /**
+   * Phase 132.8 — Print sides. '1' = single-side print, '2' = double-sided.
+   * Drives plate count (one set of plates per side) and screen-print
+   * per-colour-per-side multiplier.
+   */
+  printSides: string;
+  /**
+   * Phase 132.8 — Plates already made? Admin checkbox for re-orders
+   * where artwork hasn't changed. When true, plate charge AND plate
+   * cost both zero out — client isn't billed for plates already paid.
+   */
+  platesAlreadyMade?: boolean;
   /**
    * Phase 132.3 — Per-line plate charge per cm² override.
    * Empty string → inherits from the active CostProfile (default R2.65).

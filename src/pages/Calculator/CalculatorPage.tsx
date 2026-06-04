@@ -865,6 +865,16 @@ function LineCard({
           <span>Colours</span>
           <input type="number" inputMode="numeric" min="0" value={line.colors} onChange={(e) => onChange({ colors: e.target.value })} />
         </label>
+        {/* Phase 132.8 — Print sides. Only relevant when there's printing. */}
+        {Number(line.colors) > 0 ? (
+          <label>
+            <span>Print sides</span>
+            <select value={line.printSides || '1'} onChange={(e) => onChange({ printSides: e.target.value })}>
+              <option value="1">1 side</option>
+              <option value="2">2 sides</option>
+            </select>
+          </label>
+        ) : null}
         <label>
           <span>Coverage</span>
           <select value={line.coverageBand} onChange={(e) => onChange({ coverageBand: e.target.value as PrintCoverageBand })}>
@@ -889,6 +899,19 @@ function LineCard({
               onChange={(e) => onChange({ platePerSqCmChargeOverride: e.target.value })}
               placeholder="2.65 (default)"
             />
+          </label>
+        ) : null}
+        {/* Phase 132.8 — Plates already made (re-order waive). Admin-only.
+            When ticked, plate cost AND charge both zero out — client
+            already paid for plates on a previous run. */}
+        {canEditPricing && Number(line.colors) > 0 ? (
+          <label className="checkbox-row" style={{ alignSelf: 'end' }}>
+            <input
+              type="checkbox"
+              checked={Boolean(line.platesAlreadyMade)}
+              onChange={(e) => onChange({ platesAlreadyMade: e.target.checked })}
+            />
+            Plates already made (re-order)
           </label>
         ) : null}
       </div>

@@ -254,13 +254,50 @@ function computeLine(
   const plateWidthMm = recommendedPaperWidthMm > 0 ? recommendedPaperWidthMm + PLATE_BORDER_MM : 0;
   const plateLengthMm = recommendedSheetHeightMm > 0 ? recommendedSheetHeightMm + PLATE_BORDER_MM : 0;
   const plateAreaCm2 = (plateWidthMm * plateLengthMm) / 100;
+  // Phase 132.8 — Print sides (1 = single, 2 = double). Each side
+  // needs its own set of plates (one per colour per side).
+  const printSides = Math.max(1, num((line as { printSides?: string }).printSides) || 1);
+  // Phase 132.8 — Plates already made? Admin re-order waive — both
+  // plate charge AND plate cost zero out.
+  const platesAlreadyMade = Boolean((line as { platesAlreadyMade?: boolean }).platesAlreadyMade);
   const plateCostRate = costProfile?.platePerSqCmCost ?? PLATE_COST_RATE_PER_CM2;
   const lineChargeRateOverride = num((line as { platePerSqCmChargeOverride?: string }).platePerSqCmChargeOverride);
   const plateChargeRate = lineChargeRateOverride > 0
     ? lineChargeRateOverride
     : (costProfile?.platePerSqCmCharge ?? PLATE_SELL_RATE_PER_CM2);
-  const plateChargeTotal = isPrinted ? plateAreaCm2 * colors * plateChargeRate : 0;
-  const plateCost = isPrinted ? plateAreaCm2 * colors * plateCostRate : 0;
+
+  // Phase 132.8 — Plate charge / cost depends on the resolved print method:
+  //
+  //   FLEXO         : plateAreaCm² × colours × sides × ratePerCm²
+  //                   (area-derived; one plate per colour per side; cost
+  //                    and charge use the same area, different rates)
+  //
+  //   SCREEN PRINT  : baseFee + (perColorPerSide × colours × sides)
+  //                   (flat formula, not area-based)
+  //                   Cost is half the charge by default (rough rule of
+  //                   thumb — admin can adjust by editing the rates).
+  //
+  //   PLAIN         : 0
+  //
+  // platesAlreadyMade waives BOTH cost and charge for re-orders.
+  const isScreenPrint = resolvedPrintMethod === 'Screen Print';
+  const screenBase = costProfile?.screenPrintPlateBaseFee ?? 450;
+  const screenPerColPerSide = costProfile?.screenPrintPlatePerColorPerSide ?? 300;
+  let plateChargeTotal = 0;
+  let plateCost = 0;
+  if (isPrinted && !platesAlreadyMade) {
+    if (isScreenPrint) {
+      plateChargeTotal = screenBase + (screenPerColPerSide * colors * printSides);
+      // Internal cost for screen-print plates ≈ half the charge as a
+      // rough margin assumption. CostProfile.screenPrintSetupCost is
+      // legacy and ignored under the new formula.
+      plateCost = plateChargeTotal * 0.5;
+    } else {
+      // Flexo (or any other method): area-based, multiplied by sides.
+      plateChargeTotal = plateAreaCm2 * colors * printSides * plateChargeRate;
+      plateCost = plateAreaCm2 * colors * printSides * plateCostRate;
+    }
+  }
   const platesAmortized = state.shared.plateBilling === 'amortized';
   const platePerBagAmortized = platesAmortized && qty > 0 ? plateChargeTotal / qty : 0;
   const plateSetupFee = platesAmortized ? 0 : plateChargeTotal;
@@ -415,6 +452,9 @@ export function emptyCalculatorLine(id: string): CalculatorLineItem {
     colors: '0',
     printAreaCm2: '',
     coverageBand: 'None',
+    // Phase 132.8 — Default to single-side print.
+    printSides: '1',
+    platesAlreadyMade: false,
     // Phase 132.3 — empty = inherit CostProfile / default R2.65/cm².
     platePerSqCmChargeOverride: '',
     paperRateIdOverride: '',

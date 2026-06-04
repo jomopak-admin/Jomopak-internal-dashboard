@@ -753,6 +753,9 @@ const createInitialCostProfileForm = (): CostProfileFormState => ({
   // Phase 132.3 — Plate per-cm² defaults. R0.55 cost / R2.65 charge.
   platePerSqCmCost: '0.55',
   platePerSqCmCharge: '2.65',
+  // Phase 132.8 — Screen-print plate fee defaults.
+  screenPrintPlateBaseFee: '450',
+  screenPrintPlatePerColorPerSide: '300',
   labourCostPer1000: '0',
   packagingCostPer1000: '0',
   transportCostPerJob: '0',
@@ -7313,6 +7316,9 @@ function App() {
       // Phase 132.3 — Plate per-cm² rates (default 0.55 / 2.65 when blank).
       platePerSqCmCost: Number(costProfileForm.platePerSqCmCost || 0.55),
       platePerSqCmCharge: Number(costProfileForm.platePerSqCmCharge || 2.65),
+      // Phase 132.8 — Screen-print plate fee (default 450 / 300 when blank).
+      screenPrintPlateBaseFee: Number(costProfileForm.screenPrintPlateBaseFee || 450),
+      screenPrintPlatePerColorPerSide: Number(costProfileForm.screenPrintPlatePerColorPerSide || 300),
       labourCostPer1000: Number(costProfileForm.labourCostPer1000 || 0),
       packagingCostPer1000: Number(costProfileForm.packagingCostPer1000 || 0),
       transportCostPerJob: Number(costProfileForm.transportCostPerJob || 0),
@@ -11218,6 +11224,9 @@ function App() {
       // Phase 132.3 — Plate per-cm² rates. Default 0.55 / 2.65 when blank.
       platePerSqCmCost: String(profile.platePerSqCmCost ?? 0.55),
       platePerSqCmCharge: String(profile.platePerSqCmCharge ?? 2.65),
+      // Phase 132.8 — Screen-print plate fee. Defaults 450 / 300 when blank.
+      screenPrintPlateBaseFee: String(profile.screenPrintPlateBaseFee ?? 450),
+      screenPrintPlatePerColorPerSide: String(profile.screenPrintPlatePerColorPerSide ?? 300),
       labourCostPer1000: String(profile.labourCostPer1000),
       packagingCostPer1000: String(profile.packagingCostPer1000),
       transportCostPerJob: String(profile.transportCostPerJob),
