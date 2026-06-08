@@ -105,6 +105,7 @@ import { SettingsPage } from './pages/Settings/SettingsPage';
 import { SparePartsPage } from './pages/SpareParts/SparePartsPage';
 import { StockTakePage } from './pages/StockTake/StockTakePage';
 import { ClientStockTakeSheetPage } from './pages/ClientStockTakeSheet/ClientStockTakeSheetPage';
+import { ClientDetailPage } from './pages/ClientDetail/ClientDetailPage';
 import { DocumentVaultPage } from './pages/DocumentVault/DocumentVaultPage';
 import { uploadDocumentFile } from './utils/documentStorage';
 import { DocumentRecord, Shipment, MaterialReceipt as MaterialReceiptType, LedgerAccount, SupplierBill, SarsFiling, AppSettingsSarsConfig } from './types';
@@ -1701,6 +1702,11 @@ function App() {
   // The nonce changes every call so clicking the same button twice still
   // re-triggers the consumer's useEffect.
   const [pageIntent, setPageIntent] = useState<{ view: View; intent: string; nonce: number } | null>(null);
+  // Phase 136 — when navigating into the Client 360 page from another
+  // page (Clients list, Customer Statements etc.), the source page sets
+  // this id so ClientDetailPage opens pre-selected. Default empty = show
+  // the client picker.
+  const [selectedClientDetailId, setSelectedClientDetailId] = useState<string>('');
   function goToWithIntent(next: View, intent: string) {
     setView(next);
     setPageIntent({ view: next, intent, nonce: Date.now() });
@@ -14163,6 +14169,22 @@ function App() {
           invoices={data.invoices}
           quoteEstimates={data.quoteEstimates}
           company={data.appSettings.company}
+          today={getToday()}
+        />
+      )}
+
+      {/* Phase 136.1 — Client 360. Single screen consolidating revenue,
+          AR, deposits, stock committed, drawdowns, traded goods, margin
+          (admin/cost-view gated), and activity for one client. */}
+      {view === 'clientDetail' && (
+        <ClientDetailPage
+          clients={data.clients}
+          invoices={data.invoices}
+          deposits={data.customerDeposits ?? []}
+          quoteEstimates={data.quoteEstimates}
+          tradedGoodsItems={data.tradedGoodsItems ?? []}
+          selectedClientId={selectedClientDetailId}
+          canViewCosts={profile?.role === 'admin' || !!profile?.pricingEditor || !!profile?.canViewCosts}
           today={getToday()}
         />
       )}

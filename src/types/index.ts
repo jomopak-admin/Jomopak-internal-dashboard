@@ -58,6 +58,7 @@ export type View =
   | 'invoiceInbox'
   | 'stockTake'
   | 'clientStockTakeSheet'
+  | 'clientDetail'
   | 'documentVault'
   | 'shipments'
   | 'chartOfAccounts'
@@ -213,6 +214,7 @@ export const VIEW_LABELS: Record<View, string> = {
   invoiceInbox: 'Supplier Invoice Inbox',
   stockTake: 'Stock Take',
   clientStockTakeSheet: 'Client Stock-Take Sheet',
+  clientDetail: 'Client 360',
   documentVault: 'Document Vault',
   shipments: 'Imports & Shipments',
   chartOfAccounts: 'Chart of Accounts',
@@ -301,6 +303,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'tradedGoods',
     'stockTake',
     'clientStockTakeSheet',
+    'clientDetail',
     'spares',
     'materials',
     'shipments',
@@ -399,6 +402,7 @@ export const ROLE_DEFAULT_VIEWS: Record<UserRole, View[]> = {
     'tradedGoods',
     'stockTake',
     'clientStockTakeSheet',
+    'clientDetail',
     'spares',
     'materials',
     'shipments',
@@ -2460,6 +2464,12 @@ export interface UserProfile {
    *  staff (e.g. a senior sales lead) so they can see costs, set margin,
    *  and quote discounts. Defaults false. */
   pricingEditor?: boolean;
+  /** Phase 136 — explicit grant to see cost + margin data on the Client 360
+   *  page (and other places that surface profitability). Admin always has it
+   *  implicitly; pricingEditor also implies it. The CEO can grant this to
+   *  trusted finance/sales-lead staff so they can read margins without
+   *  needing full pricing-editor rights. Defaults false. */
+  canViewCosts?: boolean;
   permissions: View[];
   dashboardWidgets: DashboardWidget[];
   /** Phase 40 — staff portal. Links this login to an Employee row so the
